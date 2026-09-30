@@ -232,7 +232,7 @@ def test_asset_write_rejects_managed_path_aliases(local_app, path):
     write_bytes(root / ".aw/identity.json", b"original")
     write_bytes(root / "source.json", b"original")
     with pytest.raises(Error, match="managed metadata|portable asset"):
-        commands.assets(local_app, "sea", "alice", "write", path=path,
+        commands.assets(local_app, "write", "sea", "alice", path=path,
                         content="replacement", revision=digest(b"original"))
     assert (root / ".aw/identity.json").read_bytes() == b"original"
     assert (root / "source.json").read_bytes() == b"original"
@@ -248,24 +248,24 @@ def test_asset_write_rejects_symlink_into_managed_directory(local_app, protected
     except (OSError, NotImplementedError):
         pytest.skip("This environment cannot create directory symlinks.")
     with pytest.raises(Error):
-        commands.assets(local_app, "sea", "alice", "write", path="alias/identity.json",
+        commands.assets(local_app, "write", "sea", "alice", path="alias/identity.json",
                         content="replacement", revision=digest(b"original"))
     assert target.read_bytes() == b"original"
 
 
 def test_asset_path_normalization_preserves_user_write_and_conflict_check(local_app):
-    result = commands.assets(local_app, "sea", "alice", "write", path="./notes//entry.md", content="first")
+    result = commands.assets(local_app, "write", "sea", "alice", path="./notes//entry.md", content="first")
     assert result["path"] == "notes/entry.md"
     with pytest.raises(Conflict):
-        commands.assets(local_app, "sea", "alice", "write", path="notes/entry.md", content="second")
-    assert commands.assets(local_app, "sea", "alice", "read", path="notes/entry.md")["content"] == "first"
-    commands.assets(local_app, "sea", "alice", "write", path="notes/entry.md",
+        commands.assets(local_app, "write", "sea", "alice", path="notes/entry.md", content="second")
+    assert commands.assets(local_app, "read", "sea", "alice", path="notes/entry.md")["content"] == "first"
+    commands.assets(local_app, "write", "sea", "alice", path="notes/entry.md",
                     content="second", revision=result["revision"])
     assert (local_app.root() / "notes/entry.md").read_text() == "second"
 
 
 def test_managed_assets_remain_readable(local_app):
     write_bytes(local_app.root() / ".aw/identity.json", b"identity")
-    result = commands.assets(local_app, "sea", "alice", "read", path="./.aw/identity.json")
+    result = commands.assets(local_app, "read", "sea", "alice", path="./.aw/identity.json")
     assert result["content"] == "identity"
     assert result["path"] == ".aw/identity.json"

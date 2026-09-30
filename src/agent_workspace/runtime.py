@@ -13,7 +13,6 @@ import urllib.parse
 import webbrowser
 
 from . import __version__
-from .app import App
 from .messages import Messages
 from .rpc import Rpc
 from .util import Conflict, Error, Unavailable, encode, locked, now, read_json, slug, uid, write_bytes, write_json
@@ -266,7 +265,13 @@ def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="u
                     text, agent["current"], delivery, purpose):
                 raise Conflict("Input request ID has different content or belongs to an old entry.")
             return previous
-        sequence = 1 + max((read_json(p).get("sequence", 0) for p in path.parent.glob("*.json")), default=0)
+        sequence_path = root / ".aw-local/input-sequence.json"
+        sequence = read_json(sequence_path)
+        if sequence is None:
+            sequence = max((read_json(p).get("sequence", 0) for p in path.parent.glob("*.json")), default=0)
+        sequence += 1
+        # Reserve before publishing the input. A failed write may leave a gap, never a duplicate.
+        write_json(sequence_path, sequence)
         record = {"id": identifier, "binding": agent["current"], "text": text, "delivery": delivery,
                   "purpose": purpose, "state": "queued", "created_at": now(), "sequence": sequence}
         write_json(path, record)
@@ -399,8 +404,9 @@ class Runner:
                         bridges.stop_all()
                     else:
                         bridges.tick()
-                    self._complete_inputs()
-                    self._inputs()
+                    records = self._read_inputs()
+                    self._complete_inputs(records)
+                    self._inputs(records)
                     setting = read_json(self.root / ".aw-local/watch.json", {"enabled": False})
                     if not handoff_requested and setting.get("enabled") and setting.get("binding") == self.binding and time.monotonic() >= next_poll:
                         result = Messages(app).poll(workspace, aid, self.binding, adapter=self.adapter, directory=str(self.root))
@@ -408,14 +414,20 @@ class Runner:
                         next_poll = time.monotonic() + setting.get("interval", 5)
                     failures = 0
                 except Conflict:
-                    # Shared state may have advanced to stopping while this iteration was in flight.
-                    continue
+                    # Only an observed ownership transition is a reason to continue the loop.
+                    latest = app.store(workspace).snapshot()
+                    owner = app.agent(workspace, aid, latest)
+                    if owner["current"] != self.binding:
+                        break
+                    if latest.json(f"bindings/{self.binding}.json")["phase"] == "stopping":
+                        continue
+                    raise
                 except (Unavailable, OSError) as exc:
                     failures += 1
                     self.status(state="connection_failed", reason=str(exc), attempts=failures)
                     if entry["kind"] != "desktop" or failures >= 5:
                         break
-                    if self.stop_event.wait(min(2 ** failures, 30)):
+                    if self.stop_event.wait(min(2 **failures, 30)):
                         break
                     latest = app.store(workspace).snapshot()
                     owner = app.agent(workspace, aid, latest)
@@ -468,24 +480,32 @@ class Runner:
                     return None
         return None
 
-    def _complete_inputs(self):
-        if not isinstance(self.adapter, Codex):
-            return
-        while not self.adapter.completed.empty():
-            turn = self.adapter.completed.get_nowait()
-            for path in (self.root / ".aw-local/inputs").glob("*.json"):
-                item = read_json(path)
-                turn_id = item.get("result", {}).get("turn", {}).get("id")
-                if item["binding"] != self.binding or item["state"] != "submitted" or turn_id != turn.get("id"):
-                    continue
-                item["state"] = "completed" if turn.get("status") == "completed" else "failed"
-                write_json(path, item)
-        # Completion and checkpoint publication are separate durable facts. Reconcile
-        # completed initial inputs even after the event queue or runner has been lost.
+    def _read_inputs(self):
+        records = []
         for path in (self.root / ".aw-local/inputs").glob("*.json"):
             item = read_json(path)
-            if (item["binding"] != self.binding or item["purpose"] != "initial"
-                    or item["state"] != "completed" or item.get("checkpoint_revision")):
+            if item["binding"] == self.binding and (
+                    item["state"] in ("queued", "submitted") or
+                    (item["purpose"] == "initial" and item["state"] == "completed" and not item.get("checkpoint_revision"))):
+                records.append((path, item))
+        return records
+
+    def _complete_inputs(self, records=None):
+        if not isinstance(self.adapter, Codex):
+            return
+        records = self._read_inputs() if records is None else records
+        completed = {}
+        while not self.adapter.completed.empty():
+            turn = self.adapter.completed.get_nowait()
+            completed[turn["id"]] = turn
+        for path, item in records:
+            turn_id = item.get("result", {}).get("turn", {}).get("id")
+            if item["state"] == "submitted" and turn_id in completed:
+                item["state"] = "completed" if completed[turn_id].get("status") == "completed" else "failed"
+                write_json(path, item)
+        # Persist all observed completions before attempting any checkpoint publication.
+        for path, item in records:
+            if item["purpose"] != "initial" or item["state"] != "completed" or item.get("checkpoint_revision"):
                 continue
             point = self.app.checkpoint(self.workspace, self.agent_id,
                 "首次进入已结束。实际职责与资料以此快照中的文件为准。",
@@ -494,13 +514,12 @@ class Runner:
             item["checkpoint_revision"] = point["revision"]
             write_json(path, item)
 
-    def _inputs(self):
-        inputs = [(path, read_json(path)) for path in (self.root / ".aw-local/inputs").glob("*.json")]
+    def _inputs(self, records=None):
+        records = self._read_inputs() if records is None else records
+        queued = [(path, item) for path, item in records if item["state"] == "queued"]
         # Legacy records have no sequence; keep them first in recorded timestamp order.
-        inputs.sort(key=lambda pair: (pair[1].get("sequence", 0), pair[1]["created_at"], pair[1]["id"]))
-        for path, item in inputs:
-            if item["binding"] != self.binding or item["state"] != "queued":
-                continue
+        queued.sort(key=lambda pair: (pair[1].get("sequence", 0), pair[1]["created_at"], pair[1]["id"]))
+        for path, item in queued:
             if self.adapter.status() == "busy" and item["delivery"] == "normal":
                 return
             self.app.require_binding(self.workspace, self.agent_id, self.binding)

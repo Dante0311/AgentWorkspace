@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import queue
 import subprocess
 import threading
@@ -60,9 +59,12 @@ class BridgeManager:
             self.events.put((name, {"event": "error", "reason": "bridge_protocol_error", "fatal": True}))
 
     def tick(self):
-        self.app.require_binding(self.workspace, self.agent_id, self.binding)
         folder = self.root / ".aw-local/bridges"
-        for path in folder.glob("*.json"):
+        paths = list(folder.glob("*.json"))
+        if not paths and not self.processes and self.events.empty():
+            return
+        self.app.require_binding(self.workspace, self.agent_id, self.binding)
+        for path in paths:
             name, config = path.stem, read_json(path)
             if not config.get("enabled"):
                 self.stop(name)

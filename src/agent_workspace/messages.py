@@ -5,7 +5,6 @@ Publication receipts are local mechanical journals, not a second mutable Message
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import time
 
 from .gitstore import open_store
@@ -115,8 +114,10 @@ class Messages:
             return receipt
 
     def list(self, workspace, agent_id=None, direction="in", unacked=False):
-        store, meta = self._own(workspace)
-        snap = store.snapshot()
+        return self._list(self.app.store(workspace).snapshot(), agent_id, direction, unacked)
+
+    def _list(self, snap, agent_id=None, direction="in", unacked=False):
+        meta = snap.json("workspace.json")
         result = []
         for path in snap.entries:
             if not path.startswith("message-index/"):
@@ -185,7 +186,7 @@ class Messages:
         store = self.app.store(workspace)
         snap = store.snapshot()
         self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
-        messages = self.list(workspace, agent_id, unacked=True)
+        messages = self._list(snap, agent_id, unacked=True)
         if not messages:
             return {"state": "empty"}
         message = messages[0]

@@ -255,17 +255,20 @@ def start(app, workspace, agent_id, directory=None, open_app=False):
 def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="user", directory=None, request_id=None):
     root = app.root(workspace, agent_id, directory)
     agent = app.agent(workspace, agent_id)
-    app.require_binding(workspace, agent_id, agent["current"])
     identifier = slug(request_id or uid("i"))
     path = root / ".aw-local/inputs" / f"{identifier}.json"
-    record = {"id": identifier, "binding": agent["current"], "text": text, "delivery": delivery,
-              "purpose": purpose, "state": "queued", "created_at": now()}
-    with locked(path.with_suffix(".lock")):
+    # Serialize producers, not model turns. IDs identify requests; they do not order them.
+    with locked(root / ".aw-local/inputs.lock"):
+        app.require_binding(workspace, agent_id, agent["current"])
         previous = read_json(path)
         if previous:
-            if previous["text"] != text or previous["binding"] != agent["current"]:
+            if (previous["text"], previous["binding"], previous["delivery"], previous["purpose"]) != (
+                    text, agent["current"], delivery, purpose):
                 raise Conflict("Input request ID has different content or belongs to an old entry.")
             return previous
+        sequence = 1 + max((read_json(p).get("sequence", 0) for p in path.parent.glob("*.json")), default=0)
+        record = {"id": identifier, "binding": agent["current"], "text": text, "delivery": delivery,
+                  "purpose": purpose, "state": "queued", "created_at": now(), "sequence": sequence}
         write_json(path, record)
     return record
 
@@ -477,16 +480,25 @@ class Runner:
                     continue
                 item["state"] = "completed" if turn.get("status") == "completed" else "failed"
                 write_json(path, item)
-                if item["purpose"] == "initial" and item["state"] == "completed":
-                    self.app.checkpoint(self.workspace, self.agent_id,
-                        "首次进入已结束。实际职责与资料以此快照中的文件为准。",
-                        content="原生事件按记录段保存；此记录不宣称执行了任何未安排的产品任务。",
-                        binding=self.binding, directory=str(self.root), checkpoint_id="initial-" + self.binding)
+        # Completion and checkpoint publication are separate durable facts. Reconcile
+        # completed initial inputs even after the event queue or runner has been lost.
+        for path in (self.root / ".aw-local/inputs").glob("*.json"):
+            item = read_json(path)
+            if (item["binding"] != self.binding or item["purpose"] != "initial"
+                    or item["state"] != "completed" or item.get("checkpoint_revision")):
+                continue
+            point = self.app.checkpoint(self.workspace, self.agent_id,
+                "首次进入已结束。实际职责与资料以此快照中的文件为准。",
+                content="原生事件按记录段保存；此记录不宣称执行了任何未安排的产品任务。",
+                binding=self.binding, directory=str(self.root), checkpoint_id="initial-" + self.binding)
+            item["checkpoint_revision"] = point["revision"]
+            write_json(path, item)
 
     def _inputs(self):
-        paths = sorted((self.root / ".aw-local/inputs").glob("*.json"))
-        for path in paths:
-            item = read_json(path)
+        inputs = [(path, read_json(path)) for path in (self.root / ".aw-local/inputs").glob("*.json")]
+        # Legacy records have no sequence; keep them first in recorded timestamp order.
+        inputs.sort(key=lambda pair: (pair[1].get("sequence", 0), pair[1]["created_at"], pair[1]["id"]))
+        for path, item in inputs:
             if item["binding"] != self.binding or item["state"] != "queued":
                 continue
             if self.adapter.status() == "busy" and item["delivery"] == "normal":

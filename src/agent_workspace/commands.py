@@ -8,7 +8,7 @@ import webbrowser
 
 from . import bridges, runtime
 from .messages import Messages
-from .util import Conflict, Error, digest, inside, locked, read_json, write_bytes, write_json
+from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
 
 READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
@@ -22,13 +22,19 @@ def assets(app, workspace, agent_id, operation, path=None, content=None, revisio
         content_map, skipped = app.collect(root)
         return {"files": [{"path": p, "bytes": len(data), "revision": digest(data)} for p, data in content_map.items()],
                 "excluded": skipped}
+    path = relpath(path)
+    if any(":" in part or part.endswith((".", " ")) for part in path.split("/")):
+        raise Error("Use portable asset paths without drive/stream syntax or trailing dots/spaces.")
     target = inside(root, path)
     if operation == "read":
         data = target.read_bytes()
         return {"path": path, "content": data.decode("utf-8"), "revision": digest(data)}
-    if path.startswith(".aw/") or path == "source.json":
-        raise Error("Use platform operations to change managed metadata; asset.write edits user assets.")
     with locked(root / ".aw-local/files.lock"):
+        # Check both the normalized name and its destination, including directory symlinks.
+        resolved = relpath(target.resolve().relative_to(root.resolve()).as_posix())
+        for candidate in (path, resolved):
+            if candidate.split("/", 1)[0].casefold() == ".aw" or candidate.casefold() == "source.json":
+                raise Error("Use platform operations to change managed metadata; asset.write edits user assets.")
         existing = target.read_bytes() if target.exists() else None
         if (digest(existing) if existing is not None else None) != revision:
             raise Conflict("Asset changed; read it before replacing it.")

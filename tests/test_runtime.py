@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 import threading
 import time
+import traceback
 import pytest
 from agent_workspace import bridges, runtime
 from agent_workspace.commands import execute
@@ -55,21 +56,45 @@ def test_runner_bootstrap_and_initial_checkpoint(app):
     b=app.reserve('sea','alice')['binding']
     runner=runtime.Runner(app,'sea','alice')
     errors=[]
+    initial_path = root / '.aw-local/inputs' / f'boot-{b}.json'
+
     def target():
-        try: runner.run()
-        except Exception as exc: errors.append(exc)
-    t=threading.Thread(target=target);t.start()
-    deadline=time.monotonic()+8
+        try:
+            runner.run()
+        except Exception:
+            errors.append(traceback.format_exc())
+
+    def diagnostics():
+        rpc = getattr(runner.adapter, 'rpc', None)
+        events = root / 'records' / b / 'runtime.jsonl'
+        return json.dumps({
+            'errors': errors,
+            'runner_alive': t.is_alive(),
+            'status': read_json(root / '.aw-local/status.json'),
+            'initial_input': read_json(initial_path),
+            'rpc_stderr': getattr(rpc, 'stderr_tail', ''),
+            'events_tail': events.read_text(encoding='utf-8', errors='replace')[-4000:] if events.exists() else '',
+        }, ensure_ascii=False, indent=2)
+
+    t=threading.Thread(target=target, daemon=True);t.start()
+    deadline=time.monotonic()+60
     try:
-        while time.monotonic()<deadline:
-            if app.checkpoints('sea','alice'): break
+        # Poll durable local progress, not Git. A slow platform gets a bounded
+        # budget; a failed runner reports its actual cause without waiting it out.
+        while t.is_alive() and not errors and time.monotonic()<deadline:
+            if read_json(initial_path, {}).get('checkpoint_revision'):
+                break
             time.sleep(.1)
-        assert app.checkpoints('sea','alice')
+        assert not errors, diagnostics()
+        initial = read_json(initial_path, {})
+        assert initial.get('checkpoint_revision'), diagnostics()
+        points = app.checkpoints('sea','alice')
+        assert any(point['revision'] == initial['checkpoint_revision'] for point in points), diagnostics()
         assert app.agent('sea','alice')['current']==b
         assert not app.work_list('sea')
     finally:
-        runner.stop_event.set();t.join(timeout=5)
-    assert not errors and not t.is_alive()
+        runner.stop_event.set();t.join(timeout=60)
+    assert not errors and not t.is_alive(), diagnostics()
 
 
 def test_watch_stop_does_not_release_entry(pair):

@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+import hmac
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.resources import files
+import json
+import os
+import secrets
+import sys
+import urllib.parse
+import webbrowser
+
+from .commands import command_map, execute
+from .runtime import TOOL_SCHEMA
+from .util import Error
+
+
+def make_server(app, port=8765, token=None):
+    token = token or secrets.token_urlsafe(32)
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            pass  # Never log bearer tokens or request bodies.
+
+        def reply(self, status, value, content_type="application/json; charset=utf-8"):
+            data = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def authorized(self):
+            expected_host = f"127.0.0.1:{self.server.server_port}"
+            allowed = {expected_host, f"localhost:{self.server.server_port}"}
+            if self.headers.get("Host", "") not in allowed:
+                self.reply(403, {"error": "Invalid local host."})
+                return False
+            origin = self.headers.get("Origin")
+            if origin and urllib.parse.urlsplit(origin).netloc not in allowed:
+                self.reply(403, {"error": "Cross-origin control is not allowed."})
+                return False
+            supplied = self.headers.get("Authorization", "").removeprefix("Bearer ")
+            if not hmac.compare_digest(supplied, token):
+                self.reply(401, {"error": "A local bearer token is required."})
+                return False
+            return True
+
+        def do_GET(self):
+            if self.path == "/":
+                page = (files("agent_workspace") / "resources" / "index.html").read_bytes()
+                self.reply(200, page, "text/html; charset=utf-8")
+                return
+            if not self.authorized():
+                return
+            try:
+                if self.path == "/api/commands":
+                    result = list(command_map(app))
+                elif self.path == "/api/state":
+                    result = {"workspaces": app.workspace_list(), "agents": [], "errors": []}
+                    for workspace in result["workspaces"]:
+                        try:
+                            for agent in app.agents(workspace["alias"]):
+                                result["agents"].append({"workspace": workspace["alias"], **app.show(workspace["alias"], agent["id"])})
+                        except Error as exc:
+                            result["errors"].append({"workspace": workspace["alias"], "error": str(exc)})
+                else:
+                    self.reply(404, {"error": "Not found"})
+                    return
+                self.reply(200, {"ok": True, "result": result})
+            except (Error, ValueError, OSError) as exc:
+                self.reply(400, {"ok": False, "error": str(exc)})
+
+        def do_POST(self):
+            if not self.authorized():
+                return
+            if self.path != "/api/execute":
+                self.reply(404, {"error": "Not found"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 2 * 1024 * 1024 or not self.headers.get("Content-Type", "").startswith("application/json"):
+                    raise Error("Send a JSON request of at most 2 MiB.")
+                payload = json.loads(self.rfile.read(length))
+                result = execute(app, payload["command"], payload.get("arguments", {}))
+                self.reply(200, {"ok": True, "result": result})
+            except (Error, ValueError, OSError, KeyError, TypeError) as exc:
+                self.reply(409 if getattr(exc, "code", "") == "conflict" else 400,
+                           {"ok": False, "code": getattr(exc, "code", "invalid_input"), "error": str(exc)})
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.control_token = token
+    server.daemon_threads = True
+    return server
+
+
+def serve(app, port=8765, open_browser=False):
+    server = make_server(app, port)
+    url = f"http://127.0.0.1:{server.server_port}/#token={server.control_token}"
+    print("本机工作台（地址包含控制凭据，请勿分享）：\n" + url, flush=True)
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+
+
+def mcp(app):
+    actor = None
+    if os.environ.get("AW_AGENT") and os.environ.get("AW_BINDING"):
+        actor = (os.environ["AW_WORKSPACE"], os.environ["AW_AGENT"], os.environ["AW_BINDING"])
+    for line in sys.stdin:
+        try:
+            message = json.loads(line)
+            identifier, method, params = message.get("id"), message.get("method"), message.get("params", {})
+            if identifier is None:
+                continue
+            if method == "initialize":
+                result = {"protocolVersion": params.get("protocolVersion", "2024-11-05"),
+                          "capabilities": {"tools": {}}, "serverInfo": {"name": "agent-workspace", "version": "0.1.0a1"}}
+            elif method == "tools/list":
+                result = {"tools": [{"name": "aw_execute", "description": "Agent Workspace operations. Commands: " + ", ".join(command_map(app)),
+                                     "inputSchema": TOOL_SCHEMA}]}
+            elif method == "tools/call":
+                if params["name"] != "aw_execute":
+                    raise Error("Unknown tool")
+                values = params.get("arguments", {})
+                output = execute(app, values["command"], values.get("arguments", {}), actor=actor)
+                result = {"content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]}
+            elif method == "ping":
+                result = {}
+            else:
+                raise Error("Unsupported MCP method")
+            response = {"jsonrpc": "2.0", "id": identifier, "result": result}
+        except Exception as exc:
+            response = {"jsonrpc": "2.0", "id": locals().get("identifier"), "error": {"code": -32603, "message": str(exc)}}
+        print(json.dumps(response, ensure_ascii=False), flush=True)

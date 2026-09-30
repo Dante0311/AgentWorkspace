@@ -1,0 +1,19 @@
+# Local-only configuration and temporary data; do not hide product fixtures globally.
+/.local/
+/.cache/
+/.env
+/.env.*
+!/.env.example
+/secrets/
+.DS_Store
+Thumbs.db
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Local isolated quickstart data
+.aw-demo/

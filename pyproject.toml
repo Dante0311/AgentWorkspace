@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "git-native-agent-workspace"
+version = "0.1.0a1"
+description = "Persistent workspace-scoped agents, Git collaboration and explicit handoff"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/Dante0311/AgentWorkspace"
+Documentation = "https://github.com/Dante0311/AgentWorkspace/blob/main/docs/usage.md"
+Issues = "https://github.com/Dante0311/AgentWorkspace/issues"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+wecom = ["wecom-aibot-python-sdk>=1.0,<2"]
+
+[project.scripts]
+aw = "agent_workspace.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agent_workspace = ["resources/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

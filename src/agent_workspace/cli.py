@@ -1,0 +1,215 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+
+from . import __version__
+from .app import App
+from .commands import execute
+from .util import Error
+
+
+def parser():
+    p = argparse.ArgumentParser(prog="aw", description="Persistent agents, explicit handoff, Git collaboration.")
+    p.add_argument("--version", action="version", version=__version__)
+    p.add_argument("--home", default=os.environ.get("AW_HOME"))
+    p.add_argument("--workspace", "-w", default=os.environ.get("AW_WORKSPACE"))
+    domains = p.add_subparsers(dest="domain", required=True)
+    call = domains.add_parser("call", help="Invoke the same JSON operation used by HTTP/MCP.")
+    call.add_argument("command")
+    call.add_argument("--arguments", default="{}", help="JSON object, or @file.json")
+    serve = domains.add_parser("serve", help="Local workbench and authenticated HTTP tools.")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--open", action="store_true")
+    domains.add_parser("mcp", help="MCP stdio tools; use AW_* environment to bind model identity.")
+
+    def actions(domain, names):
+        sub = domains.add_parser(domain).add_subparsers(dest="action", required=True)
+        return {name: sub.add_parser(name) for name in names}
+
+    ws = actions("workspace", ["init", "connect", "bootstrap-remote", "list", "show", "friend", "project"])
+    for key in ("init", "connect", "bootstrap-remote"):
+        ws[key].add_argument("name")
+        ws[key].add_argument("directory" if key == "init" else "address")
+    for key in ("friend", "project"):
+        ws[key].add_argument("operation", choices=["add", "list", "remove"])
+        ws[key].add_argument("--alias")
+        ws[key].add_argument("--address")
+        ws[key].add_argument("--content", default="")
+
+    ag = actions("agent", ["create", "import", "list", "show", "connect", "configure", "versions", "update",
+        "promote", "archive", "unarchive", "start", "bind", "stop", "handoff", "renew", "fork", "input",
+        "capture-desktop", "sync", "upgrade-tools"])
+    for key, sub in ag.items():
+        if key != "list":
+            sub.add_argument("name" if key in ("create", "import") else "agent_id")
+            sub.add_argument("--directory")
+    for key in ("create", "import"):
+        ag[key].add_argument("--id", dest="agent_id")
+        ag[key].add_argument("--description", default="")
+        ag[key].add_argument("--definition")
+        ag[key].add_argument("--revision")
+    ag["import"].add_argument("--from-directory", dest="import_directory", required=True)
+    ag["import"].add_argument("--asset", dest="assets", action="append", required=True)
+    ag["configure"].add_argument("--config", dest="value", required=True, help="JSON or @file.json")
+    ag["update"].add_argument("--revision")
+    ag["promote"].add_argument("--path", dest="paths", action="append", required=True)
+    ag["promote"].add_argument("--destination", required=True)
+    ag["start"].add_argument("--open", dest="open_app", action="store_true")
+    ag["bind"].add_argument("--binding", required=True)
+    ag["bind"].add_argument("--session", required=True)
+    ag["stop"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
+    ag["stop"].add_argument("--checkpoint", required=True)
+    ag["stop"].add_argument("--confirm-stopped", action="store_true", help="Current owner attestation for manual adapters only.")
+    ag["fork"].add_argument("--checkpoint", required=True)
+    ag["fork"].add_argument("--name", required=True)
+    ag["fork"].add_argument("--new-id")
+    ag["input"].add_argument("--text", required=True)
+    ag["input"].add_argument("--delivery", choices=["normal", "insert"], default="normal")
+    ag["capture-desktop"].add_argument("--command", help="JSON argv array of the actual desktop MCP server.")
+
+    cp = actions("checkpoint", ["create", "list", "show"])
+    for sub in cp.values():
+        sub.add_argument("agent_id")
+    cp["create"].add_argument("--summary", required=True)
+    cp["create"].add_argument("--content", default="")
+    cp["create"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
+    cp["create"].add_argument("--directory")
+    cp["create"].add_argument("--id", dest="checkpoint_id")
+    cp["show"].add_argument("--id", dest="checkpoint", required=True)
+
+    wk = actions("work", ["create", "list", "show", "update", "deliver"])
+    wk["create"].add_argument("--owner", required=True)
+    wk["create"].add_argument("--parent", dest="parent_id")
+    wk["list"].add_argument("--owner")
+    wk["list"].add_argument("--tree", action="store_true")
+    wk["list"].add_argument("--parent", dest="parent_id")
+    for key in ("create", "update", "deliver"):
+        wk[key].add_argument("--content")
+        wk[key].add_argument("--content-file")
+    for key in ("show", "update", "deliver"):
+        wk[key].add_argument("work_id")
+    for key in ("update", "deliver"):
+        wk[key].add_argument("--revision", required=True)
+    wk["update"].add_argument("--owner")
+    wk["update"].add_argument("--parent", dest="parent_id")
+    wk["deliver"].add_argument("--ref", dest="refs", action="append", required=True)
+
+    msg = actions("message", ["send", "list", "show", "receive", "poll", "watch", "reconcile"])
+    for key in ("send", "receive", "poll", "watch"):
+        msg[key].add_argument("agent_id")
+    for key in ("send", "receive", "poll"):
+        msg[key].add_argument("--binding", default=os.environ.get("AW_BINDING"))
+    msg["send"].add_argument("--to", required=True)
+    msg["send"].add_argument("--content")
+    msg["send"].add_argument("--content-file")
+    msg["send"].add_argument("--delivery", choices=["normal", "insert"], required=True)
+    msg["send"].add_argument("--ref", dest="message_refs", action="append")
+    msg["send"].add_argument("--request-id")
+    msg["list"].add_argument("--agent", dest="agent_id")
+    msg["list"].add_argument("--direction", choices=["in", "out"], default="in")
+    msg["list"].add_argument("--unacked", action="store_true")
+    for key in ("show", "receive"):
+        msg[key].add_argument("--id", dest="message_id", required=True)
+    msg["receive"].add_argument("--directory")
+    msg["poll"].add_argument("--directory")
+    msg["watch"].add_argument("operation", choices=["start", "stop", "status"])
+    msg["watch"].add_argument("--interval", type=float, default=5)
+    msg["watch"].add_argument("--directory")
+    msg["reconcile"].add_argument("operation_id")
+
+    rt = actions("runtime", ["run", "start", "stop", "status"])
+    for sub in rt.values():
+        sub.add_argument("agent_id")
+        sub.add_argument("--directory")
+    bridge = actions("bridge", ["configure", "start", "stop", "status", "send"])
+    for key, sub in bridge.items():
+        sub.add_argument("agent_id")
+        sub.add_argument("--directory")
+        if key != "status":
+            sub.add_argument("--name", required=True)
+    bridge["configure"].add_argument("--config", dest="value", required=True)
+    bridge["send"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
+    bridge["send"].add_argument("--target", required=True)
+    bridge["send"].add_argument("--text", required=True)
+    bridge["send"].add_argument("--request-id")
+    asset = actions("asset", ["list", "read", "write"])
+    for key, sub in asset.items():
+        sub.add_argument("agent_id")
+        sub.add_argument("--directory")
+        if key != "list":
+            sub.add_argument("--path", required=True)
+    asset["write"].add_argument("--content", required=True)
+    asset["write"].add_argument("--revision")
+    return p
+
+
+def parse_json(value):
+    if value.startswith("@"):
+        value = Path(value[1:]).read_text(encoding="utf-8")
+    return json.loads(value)
+
+
+def main(argv=None):
+    options = vars(parser().parse_args(argv))
+    home, workspace = options.pop("home"), options.pop("workspace")
+    domain, action = options.pop("domain"), options.pop("action", None)
+    app = App(home)
+    try:
+        if domain == "serve":
+            from .server import serve
+            serve(app, options["port"], options["open"])
+            return 0
+        if domain == "mcp":
+            from .server import mcp
+            mcp(app)
+            return 0
+        if domain == "runtime" and action == "run":
+            from .runtime import Runner
+            Runner(app, workspace, **options).run()
+            return 0
+        if domain == "call":
+            command, args = options["command"], parse_json(options["arguments"])
+        else:
+            command, args = domain + "." + action, options
+            file = args.pop("content_file", None)
+            if file:
+                if args.get("content") is not None:
+                    raise Error("Choose either --content or --content-file.")
+                args["content"] = Path(file).read_text(encoding="utf-8")
+            if "value" in args:
+                args["value"] = parse_json(args["value"])
+            if command == "agent.capture-desktop" and args.get("command"):
+                args["command"] = parse_json(args["command"])
+            if command in ("workspace.friend", "workspace.project"):
+                args["kind"] = "friends" if action == "friend" else "projects"
+                command = "workspace.relation"
+            if command == "agent.import":
+                command = "agent.create"
+            if command == "agent.unarchive":
+                command, args["archived"] = "agent.archive", False
+            if command == "agent.renew":
+                command, args["renew"] = "agent.handoff", True
+            if domain == "bridge" and action in ("start", "stop"):
+                command, args["enabled"] = "bridge.switch", action == "start"
+        if command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+            if not workspace and not args.get("workspace"):
+                raise Error("Select --workspace or set AW_WORKSPACE.")
+            args.setdefault("workspace", workspace)
+        # A model's inherited identity never silently becomes an administrator.
+        actor = None
+        if os.environ.get("AW_BINDING") and os.environ.get("AW_AGENT"):
+            actor = (workspace, os.environ["AW_AGENT"], os.environ["AW_BINDING"])
+        result = execute(app, command, args, actor=actor)
+        print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
+        if isinstance(result, dict) and result.get("state") in ("pending", "outcome_unknown"):
+            return 2
+        return 0
+    except (Error, ValueError, OSError) as exc:
+        print(json.dumps({"ok": False, "code": getattr(exc, "code", "invalid_input"), "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        return 130

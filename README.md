@@ -6,6 +6,14 @@ AgentWorkspace 是一个 Git-native 的持久 Agent 协作工作空间：每个�
 
 > **当前版本：`0.1.0a1`，开发预览版。** 已有可安装代码、CLI、本机工作台和七个 Skill。真实 Codex Desktop、真实模型、企业微信及生产 GitHub Backend 尚未完成实机验收，请先用隔离数据试用。这不是正式 V1 Release，也未发布到 PyPI。
 
+## 已确认的 V1 目标（待实现）
+
+2026-10-02 确认：Workspace 创建时建立 Steward、Sentinel、Maintainer 三个真实管家实例。Steward 帮用户处理 Workspace 事务，巡检与维修由下属成员承担；不是业务中央调度者。小组与用户实例共用运行能力。
+
+V1 就要支持“选择 Harness 与模型配置 → 创建真实会话 → 持续通信 → 自动交接”。首批目标为 Codex、Claude Code、WorkBuddy 的 Desktop/CLI，以及企业微信渠道；各入口分别验收。支持在协议兼容前提下使用自有模型服务，尤其是指定 URL/API 凭据但沿用 Codex Harness。手动 handoff/relay 是保底，不替代自动化；自己的统一聊天界面留到 V3。
+
+这些是已确认目标，**当前预览版尚未实现管家小组和完整通用接入流程**。以下能力表、安装示例和 [使用说明](docs/usage.md) 仍描述当前实现；完整合同见 [设计基线](docs/design.md)，新增差距见 [实现进展](docs/implementation.md)。本次只落档，不添加运行依赖，也未选定 ACP、配置管理产品或模型网关。
+
 ## 核心能力
 
 | 能力 | 当前范围 |
@@ -89,7 +97,7 @@ V1 的实例身份归属一个 Shared Workspace，但实例有独立的持久工
 
 七个 Skill 随软件在 `src/agent_workspace/resources/skills/` 中维护：`workspace`、`work`、`message`、`agent`、`handoff`、`relay`、`fork`。不在 Playbook 另维护一份。
 
-后续先把 V1 的真实 Desktop、收发与换会话路径跑稳；V2 研究独立身份参与多个 Workspace，V3 研究统一工作台和同一身份的多事务会话。后两者没有在当前代码中实现，完整边界见 [设计后续方向](docs/design.md#14-后续方向与来源)。
+后续按设计中的 V1 验收项实现管家小组、通用配置和真实会话自动化；V2 研究独立身份参与多个 Workspace，V3 研究统一工作台和同一身份的多事务会话。后两者没有在当前代码中实现，也不是 V1 自动化的前置条件，完整边界见 [设计后续方向](docs/design.md#14-后续方向与来源)。
 
 ## 项目归属与许可证
 

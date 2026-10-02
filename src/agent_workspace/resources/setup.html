@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Workspace · 首次配置</title>
+<style>
+:root{color-scheme:light;--ink:#162b2b;--muted:#627370;--line:#dce5df;--green:#196d55}
+*{box-sizing:border-box}body{margin:0;background:#f5f7f3;color:var(--ink);font:15px/1.65 system-ui,"Microsoft YaHei",sans-serif}main{max-width:900px;margin:32px auto;padding:0 22px 60px}h1{font-size:26px;margin-bottom:6px}h2{font-size:19px;margin-top:0}p{margin:6px 0 16px}section{background:white;border:1px solid var(--line);border-radius:12px;padding:23px;margin:20px 0}label{display:block;margin:13px 0 4px}input,select,button{font:inherit}input,select{width:100%;padding:9px;border:1px solid #c8d7cd;border-radius:6px}button,a.button{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:8px 13px;background:white;color:var(--ink);cursor:pointer;text-decoration:none;margin:8px 8px 0 0}button.primary{background:var(--green);color:white}button:disabled{opacity:.5;cursor:not-allowed}a{color:var(--green)}.muted{color:var(--muted);font-size:13px}.notice{padding:10px;background:#fff7e8;border-left:3px solid #d29c51}.row{display:flex;gap:14px;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0}.row span{overflow-wrap:anywhere}.fields{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}[hidden]{display:none!important}#error{color:#923c2c;white-space:pre-wrap}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;font:13px/1.6 ui-monospace,monospace}small{display:block} @media(max-width:600px){.fields{grid-template-columns:1fr}section{padding:17px}.row{align-items:flex-start}h1{font-size:23px}}
+</style>
+</head>
+<body><main>
+<h1>Agent Workspace · 首次配置</h1>
+<p class="muted">先准备环境，再建立身份，最后选择是否启动。检测不会安装软件或执行模型任务。</p>
+<section id="auth" hidden><h2>连接本机工作台</h2><label for="token">启动地址中的控制 Token</label><input id="token" type="password" autocomplete="off"><button id="login">连接</button></section>
+<div id="error" role="alert"></div>
+<div id="app" hidden>
+<section><h2>1 · 检测运行环境</h2><p class="muted">只检查 PATH 和部分标准安装位置；未发现不等于未安装，发现也不等于已登录。安装后重新打开工作台，或重新检测。</p><div id="dependencies"></div><p id="recommendation" class="notice" hidden></p><button id="scan">重新检测</button></section>
+<section><h2>2 · 创建或接入 Workspace</h2>
+<p class="muted">需要 Git。远端仓库请自行准备专用私有空仓；凭据使用本机 Git 配置，不在此填写密码或 Token。仅本机存储不代表模型调用离线。</p>
+<form id="workspace-form">
+<label for="mode">方式</label><select id="mode"><option value="local">新建本机 Git Workspace</option><option value="remote">初始化用户提供的空远端仓库</option><option value="connect">接入已有 Workspace，不重建管家</option></select>
+<label for="name">本环境简称</label><input id="name" required pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}" placeholder="my-workspace" autocomplete="off">
+<label for="address">本机目录或 Git 地址</label><input id="address" required placeholder="/path/to/workspace.git 或 https://host/owner/workspace.git" autocomplete="off" spellcheck="false">
+<p class="muted">“检查访问”只读，不验证写权限。点击创建后才写入仓库和三个实例；遇到部分失败，用原简称、地址和方式继续。</p>
+<button type="button" id="check">检查访问（只读）</button><button id="create" class="primary" disabled>创建 / 接入，不启动模型</button>
+</form></section>
+<section><h2>3 · 配置实例的模型运行环境</h2>
+<p class="notice">本批提供 Codex CLI 原生配置入口。Claude Code、WorkBuddy 和 Desktop 完整自动化尚待接入，不能用 CLI 冒充。创建管家身份不等于已经启用巡检。</p>
+<div class="fields"><div><label for="workspace">Workspace</label><select id="workspace"></select></div><div><label for="agent">实例</label><select id="agent"></select></div></div>
+<button id="reload">刷新实例</button><button id="prepare">在本机准备选中实例目录</button>
+<form id="profile-form">
+<label for="executable">Codex CLI 可执行路径（留空则从 PATH 查找）</label><input id="executable" autocomplete="off" spellcheck="false">
+<div class="fields"><div><label for="base_url">自有模型服务 URL（可选）</label><input id="base_url" placeholder="留空使用 Codex 已有配置" autocomplete="off" spellcheck="false"></div><div><label for="env_key">持有凭据的环境变量名（不是 API 密钥）</label><input id="env_key" placeholder="MY_MODEL_API_KEY" autocomplete="off" spellcheck="false"></div></div>
+<p class="muted">自有服务须支持 Codex 所需的 Responses 协议。环境变量必须在启动工作台的进程中可用，不会写入共享仓。此处不会修改用户全局 Codex 配置。</p>
+<button type="button" id="models">查询 Codex 认证与模型元数据</button>
+<small class="muted">仅此按钮会短暂启动 Codex 控制进程，不创建会话、不登录、不运行模型。自定义服务的模型目录未确认时，请自行填写原生 ID。</small>
+<div class="fields"><div><label for="model">模型 ID（留空使用原生默认）</label><input id="model" list="model-options" autocomplete="off"><datalist id="model-options"></datalist></div><div><label for="effort">推理强度（留空使用原生默认）</label><input id="effort" list="effort-options" autocomplete="off"><datalist id="effort-options"></datalist></div></div>
+<p class="muted" id="capability">尚未查询能力；不会凭空生成模型或强度选项。配置保存成功不等于模型调用已验证。</p>
+<button type="submit" class="primary">只保存选中实例配置</button><button type="button" id="save-group">将此配置分别保存到三名管家</button>
+</form>
+<p class="muted">保存失败会列出已完成的实例，不撤销或覆盖其他工作。启动会话请回工作台明确操作；运行中的实例必须先交接再换配置。</p>
+<a class="button" href="/">打开工作台</a>
+</section>
+<section id="result" hidden><h2>实际操作结果</h2><pre id="output"></pre></section>
+</div></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+let token=new URLSearchParams(location.hash.slice(1)).get('token')||sessionStorage.getItem('aw-token')||'';
+if(token)sessionStorage.setItem('aw-token',token);
+if(location.hash)history.replaceState(null,'',location.pathname);
+let agents=[],catalog=[],gitReady=false,busy=false;
+const labels={available:'可用',missing:'未安装',unavailable:'不可用',found:'已发现，待确认',not_found_in_path:'PATH 未发现',location_unconfirmed:'安装位置未确认',preview:'预览接入',not_implemented:'自动接入待实现',manual_capture:'需手动捕获控制入口'};
+async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok||v.ok===false)throw new Error(v.error||'请求失败');return v.result}
+const command=(name,args={})=>api('/api/execute',{command:name,arguments:args});
+function show(value){$('result').hidden=false;$('output').textContent=JSON.stringify(value,null,2)}
+async function action(button,fn){if(busy)return;busy=true;for(const b of $('app').querySelectorAll('button'))b.disabled=true;$('error').textContent='';try{return await fn()}catch(e){$('error').textContent=e.message}finally{busy=false;for(const b of $('app').querySelectorAll('button'))b.disabled=false;$('create').disabled=!gitReady}}
+function link(url){const a=document.createElement('a');a.textContent='官方说明';a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a}
+async function scan(){const result=await command('setup.scan');gitReady=result.can_create_workspace;$('dependencies').replaceChildren();for(const item of [{name:'Git',...result.git},...result.harnesses]){const row=document.createElement('div');row.className='row';const text=document.createElement('span');text.textContent=item.name+(item.entry?' · '+item.entry:'')+'：'+(labels[item.state]||item.state)+(item.adapter?'；'+(labels[item.adapter]||item.adapter):'');row.append(text,link(item.install_url));$('dependencies').append(row)}$('create').disabled=!gitReady;const found=result.harnesses.some(x=>x.state==='found');$('recommendation').hidden=found;$('recommendation').textContent='未确认可用 Harness。可先自行安装 Codex CLI 并登录，再重新检测。当前接入仍为开发预览，尚未完成真实模型验收。';$('auth').hidden=true;$('app').hidden=false}
+async function loadAgents(){const data=await api('/api/state');agents=data.agents;const old=$('workspace').value;$('workspace').replaceChildren(...data.workspaces.map(w=>new Option(w.alias,w.alias)));if(data.workspaces.some(w=>w.alias===old))$('workspace').value=old;chooseAgents();if(data.errors?.length)$('error').textContent=data.errors.map(x=>x.workspace+'：'+x.error).join('\n')}
+function chooseAgents(){const old=$('agent').value;const list=agents.filter(a=>a.workspace===$('workspace').value);$('agent').replaceChildren(...list.map(a=>new Option(a.name+' / '+a.id,a.id)));if(list.some(a=>a.id===old))$('agent').value=old}
+function target(){const workspace=$('workspace').value,agent_id=$('agent').value;if(!workspace||!agent_id)throw new Error('请先创建/接入 Workspace 并选择实例。');return {workspace,agent_id}}
+function profile(){const args={};for(const name of ['executable','base_url','env_key','model','effort'])if($(name).value.trim())args[name]=$(name).value.trim();return args}
+async function boot(){try{await scan();await loadAgents()}catch(e){$('auth').hidden=false;$('error').textContent=e.message}}
+$('login').onclick=()=>{token=$('token').value;sessionStorage.setItem('aw-token',token);boot()};
+$('scan').onclick=()=>action($('scan'),scan);$('reload').onclick=()=>action($('reload'),loadAgents);$('workspace').onchange=chooseAgents;
+$('check').onclick=()=>action($('check'),async()=>show(await command('setup.check-git',{address:$('address').value})));
+$('workspace-form').onsubmit=e=>{e.preventDefault();action($('create'),async()=>{const result=await command('setup.create',{name:$('name').value,address:$('address').value,mode:$('mode').value});show(result);if(result.state!=='pending'){await loadAgents();$('workspace').value=$('name').value;chooseAgents()}})};
+$('prepare').onclick=()=>action($('prepare'),async()=>{show(await command('setup.prepare-instance',target()));await loadAgents()});
+$('models').onclick=()=>action($('models'),async()=>{const args=profile();delete args.model;delete args.effort;const result=await command('setup.inspect-codex',args);catalog=result.models||[];$('model-options').replaceChildren(...catalog.map(m=>new Option(m.displayName||m.model||m.id,m.model||m.id)));$('effort-options').replaceChildren();$('capability').textContent='认证：'+(result.authentication||result.state)+'；目录：'+(result.catalog||'未确认')+'。只查询元数据，不代表模型调用成功。';show(result)});
+$('model').oninput=()=>{const item=catalog.find(m=>(m.model||m.id)===$('model').value);$('effort-options').replaceChildren(...(item?.supportedReasoningEfforts||[]).map(x=>new Option(x.description||x.reasoningEffort,x.reasoningEffort)))};
+for(const name of ['base_url','env_key','executable'])$(name).oninput=()=>{catalog=[];$('model-options').replaceChildren();$('effort-options').replaceChildren();$('capability').textContent='连接配置已改变，请重新查询或按服务说明填写。'};
+$('profile-form').onsubmit=e=>{e.preventDefault();action(e.submitter,async()=>show(await command('agent.configure-codex',{...target(),...profile()})))};
+$('save-group').onclick=()=>action($('save-group'),async()=>{const workspace=target().workspace,config=profile();const info=await command('workspace.show',{workspace});if(!info.caretakers)throw new Error('此 Workspace 没有管家角色登记，不会按名称接管用户实例。');const results=[];for(const agent_id of Object.values(info.caretakers)){try{results.push({agent_id,result:await command('agent.configure-codex',{workspace,agent_id,...config})})}catch(e){results.push({agent_id,error:e.message});break}}show({results,sessions_started:false})});
+if(token)boot();else $('auth').hidden=false;
+</script>
+</body></html>

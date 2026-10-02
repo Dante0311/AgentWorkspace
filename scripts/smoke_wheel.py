@@ -28,7 +28,7 @@ def main() -> None:
 
         def run(*arguments: str) -> str:
             result = subprocess.run(arguments, cwd=root, env=env, text=True,
-                                    capture_output=True, timeout=120)
+                                    capture_output=True, encoding="utf-8", timeout=120)
             if result.returncode:
                 raise RuntimeError(result.stdout + result.stderr)
             return result.stdout
@@ -46,6 +46,9 @@ def main() -> None:
             if not result.get("ok"):
                 raise RuntimeError(f"CLI operation failed: {result}")
 
+        ids = {item["id"] for item in result["result"]}
+        assert ids == {"helper", "steward", "sentinel", "maintainer"}
+
         resource_check = """
 from importlib.resources import files
 root = files('agent_workspace').joinpath('resources')
@@ -53,7 +56,10 @@ for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork'
     assert root.joinpath('skills', name, 'SKILL.md').read_text(encoding='utf-8')
 for name in ('checkpoints', 'entry', 'handoff', 'initialization'):
     assert root.joinpath('prompts', name + '.md').read_text(encoding='utf-8')
-assert root.joinpath('index.html').read_text(encoding='utf-8')
+for name in ('steward', 'sentinel', 'maintainer'):
+    assert root.joinpath('definitions', name + '.md').read_text(encoding='utf-8')
+for name in ('index.html', 'setup.html'):
+    assert root.joinpath(name).read_text(encoding='utf-8')
 """
         run(str(python), "-I", "-c", resource_check)
     print("PASS: clean wheel install, CLI, local Git, seven skills and bundled resources")

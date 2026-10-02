@@ -24,6 +24,9 @@ def parser():
     serve = domains.add_parser("serve", help="Local workbench and authenticated HTTP tools.")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--open", action="store_true")
+    setup = domains.add_parser("setup", help="Open first-use setup; detect dependencies, never install them.")
+    setup.add_argument("--port", type=int, default=8765)
+    setup.add_argument("--open", action="store_true")
     domains.add_parser("mcp", help="MCP stdio tools; use AW_* environment to bind model identity.")
 
     def actions(domain, names):
@@ -52,6 +55,7 @@ def parser():
         ag[key].add_argument("--description", default="")
         ag[key].add_argument("--definition")
         ag[key].add_argument("--revision")
+    ag["create"].add_argument("--request-id", help="Resume an exact creation request; requires --id.")
     ag["import"].add_argument("--from-directory", dest="import_directory", required=True)
     ag["import"].add_argument("--asset", dest="assets", action="append", required=True)
     ag["configure"].add_argument("--config", dest="value", required=True, help="JSON or @file.json")
@@ -154,14 +158,18 @@ def parse_json(value):
 
 
 def main(argv=None):
+    # Machine-readable JSON uses UTF-8 even when redirected on Windows.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     options = vars(parser().parse_args(argv))
     home, workspace = options.pop("home"), options.pop("workspace")
     domain, action = options.pop("domain"), options.pop("action", None)
     app = App(home)
     try:
-        if domain == "serve":
+        if domain in ("serve", "setup"):
             from .server import serve
-            serve(app, options["port"], options["open"])
+            serve(app, options["port"], options["open"], setup=domain == "setup")
             return 0
         if domain == "mcp":
             from .server import mcp
@@ -195,7 +203,7 @@ def main(argv=None):
                 command, args["renew"] = "agent.handoff", True
             if domain == "bridge" and action in ("start", "stop"):
                 command, args["enabled"] = "bridge.switch", action == "start"
-        if command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+        if not command.startswith("setup.") and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)

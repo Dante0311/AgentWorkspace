@@ -17,6 +17,14 @@ import urllib.request
 from .util import Conflict, Error, Uncertain, digest, encode, locked, relpath, run
 
 
+def git_env(env=None):
+    # Reuse the user's Git credential helpers and SSH agent, but never initiate login.
+    return dict(os.environ if env is None else env, GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="never",
+                GIT_ASKPASS="", SSH_ASKPASS="", GIT_SSH_VARIANT="ssh",
+                GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes")
+
+
+
 class Snapshot:
     def __init__(self, store, revision: str, entries: dict[str, str]):
         self.store, self.revision, self.entries = store, revision, entries
@@ -44,7 +52,8 @@ class GitStore:
                 self.git("remote", "add", "origin", address)
 
     def git(self, *args, **kwargs):
-        return run(["git", "--git-dir", str(self.root), *args], **kwargs)
+        kwargs["env"] = git_env(kwargs.get("env"))
+        return run(["git", "-c", "credential.interactive=false", "--git-dir", str(self.root), *args], **kwargs)
 
     @staticmethod
     def initialize(path: Path):

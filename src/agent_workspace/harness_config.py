@@ -1,0 +1,116 @@
+"""Use native Harness configuration; never edit the user's global configuration.
+
+This first implementation configures Codex CLI. Other entries are not emulated.
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import tempfile
+import urllib.parse
+
+from . import __version__
+from .rpc import Rpc
+from .util import Conflict, Error, locked
+
+
+def codex_config(model="", effort="", base_url="", env_key="", executable=None):
+    for name, value in (("model", model), ("effort", effort), ("env_key", env_key)):
+        if not isinstance(value, str) or (value and not re.fullmatch(r"[A-Za-z0-9_./:@+-]+", value)):
+            raise Error(f"Invalid {name}; use a native identifier, not a command or credential.")
+    if env_key and (not base_url or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", env_key)):
+        raise Error("An environment variable name requires a custom service URL.")
+    command = executable or shutil.which("codex")
+    if not command or not Path(command).is_file():
+        raise Error("Codex CLI 未发现；请自行安装，或提供可执行文件的绝对路径。")
+    command = str(Path(command).resolve())
+    if any(c in command for c in '\r\n\0"&|<>^%!'):
+        raise Error("Executable path contains unsupported shell characters.")
+    overrides = {}
+    if model:
+        overrides["model"] = model
+    if effort:
+        overrides["model_reasoning_effort"] = effort
+    if base_url:
+        url = urllib.parse.urlsplit(base_url)
+        if (url.scheme not in ("https", "http") or not url.hostname or url.username is not None
+                or url.password is not None or url.query or url.fragment
+                or any(c in base_url for c in '\r\n\0"&|<>^%! ')
+                or (url.scheme == "http" and url.hostname not in ("localhost", "127.0.0.1", "::1"))):
+            raise Error("Use an HTTPS service URL (HTTP only for loopback), without credentials or query parameters.")
+        overrides["model_provider"] = "aw_custom"
+        provider = {"name": "AgentWorkspace", "base_url": base_url, "wire_api": "responses",
+                    "requires_openai_auth": False}
+        if env_key:
+            provider["env_key"] = env_key
+        # Replace this provider table, rather than inherit headers from a global entry.
+        overrides["model_providers.aw_custom"] = provider
+    args = [command]
+    for key, value in overrides.items():
+        encoded = ("{" + ",".join(k + "=" + json.dumps(v) for k, v in value.items()) + "}"
+                   if isinstance(value, dict) else json.dumps(value))
+        args.extend(["-c", key + "=" + encoded])
+    args.append("app-server")
+    config = {"kind": "codex", "command": args, "sandbox": "workspace-write"}
+    if model:
+        config["model"] = model
+    if base_url:
+        config["modelProvider"] = "aw_custom"
+    return config
+
+
+def inspect_codex(base_url="", env_key="", executable=None):
+    """Explicit metadata probe: no thread/start, turn/start, login or configuration write."""
+    config = codex_config(base_url=base_url, env_key=env_key, executable=executable)
+    if env_key and not os.environ.get(env_key):
+        return {"state": "credential_missing", "env_key": env_key, "models": [], "model_invoked": False}
+    with tempfile.TemporaryDirectory(prefix="aw-codex-probe-") as directory:
+        rpc = None
+        try:
+            rpc = Rpc(config["command"], cwd=Path(directory), env=dict(os.environ))
+            rpc.request("initialize", {"clientInfo": {"name": "agent_workspace_setup", "version": __version__}}, timeout=10)
+            rpc.send({"method": "initialized", "params": {}})
+            account = rpc.request("account/read", {"refreshToken": False}, timeout=10)
+            auth = "configured_unverified" if account.get("account") else (
+                "login_required" if account.get("requiresOpenaiAuth") else "provider_managed_unverified")
+            if base_url:
+                # Codex's built-in catalog is not evidence of a custom gateway's model list.
+                return {"state": "connected", "authentication": auth, "models": [], "model_invoked": False,
+                        "catalog": "custom_provider_unconfirmed", "hint": "自定义服务的模型 ID 与强度请按服务实际能力填写。"}
+            models, cursor, seen = [], None, set()
+            for _ in range(5):
+                page = rpc.request("model/list", {"limit": 100, "cursor": cursor}, timeout=10)
+                for item in page["data"]:
+                    models.append({key: item[key] for key in ("id", "model", "displayName", "defaultReasoningEffort",
+                                  "supportedReasoningEfforts", "isDefault") if key in item})
+                cursor = page.get("nextCursor")
+                if not cursor:
+                    break
+                if cursor in seen:
+                    raise Error("Model catalog repeated a pagination cursor.")
+                seen.add(cursor)
+            return {"state": "connected", "authentication": auth, "models": models,
+                    "catalog": "partial" if cursor else "reported_by_codex", "model_invoked": False}
+        except (Error, OSError, ValueError, KeyError, TypeError):
+            # Native error payloads may contain account details; do not expose them to the UI.
+            return {"state": "capability_unconfirmed", "models": [], "model_invoked": False,
+                    "hint": "无法确认当前 Codex 版本的接口或认证；请在本机完成配置后重试。"}
+        finally:
+            if rpc is not None:
+                rpc.close()
+
+
+def configure_codex(app, workspace, agent_id, model="", effort="", base_url="", env_key="", executable=None):
+    config = codex_config(model, effort, base_url, env_key, executable)
+    root = app.root(workspace, agent_id)
+    # Lifecycle operations remain explicit. Saving a profile never starts a session.
+    with locked(root / ".aw-local/runner.lock", wait=0):
+        if app.agent(workspace, agent_id)["current"]:
+            raise Conflict("先完成 handoff，再改变此实例的 Harness 或模型服务配置。")
+        result = app.configure(workspace, agent_id, config)
+    return {**result, "model_access": "unchecked", "effort_support": "unchecked",
+            "credential_state": "missing" if env_key and not os.environ.get(env_key) else "not_validated",
+            "sessions_started": False, "global_configuration_changed": False}

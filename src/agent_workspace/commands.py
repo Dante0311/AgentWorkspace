@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import bridges, runtime
+from . import bridges, runtime, onboarding, harness_config
 from .messages import Messages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
@@ -13,7 +13,9 @@ READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "ag
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show",
              "asset.list", "asset.read", "runtime.status", "bridge.status"}
 
-USER_MANAGEMENT = {"agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure"}
+USER_MANAGEMENT = {"agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
+                   "workspace.init", "setup.scan", "setup.check-git", "setup.create",
+                   "setup.inspect-codex", "setup.prepare-instance", "agent.configure-codex"}
 CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send"}
 
 
@@ -132,10 +134,15 @@ def bridge_status(app, workspace, agent_id, directory=None):
 def command_map(app):
     messages = Messages(app)
     return {
-        "workspace.init": app.workspace_init, "workspace.connect": app.workspace_connect,
+        "workspace.init": partial(onboarding.init_workspace, app), "workspace.connect": app.workspace_connect,
         "workspace.bootstrap-remote": app.workspace_bootstrap_remote,
         "workspace.list": app.workspace_list, "workspace.show": app.workspace_show,
         "workspace.relation": app.relation,
+        "setup.scan": onboarding.scan, "setup.check-git": onboarding.check_git,
+        "setup.create": partial(onboarding.create_workspace, app),
+        "setup.inspect-codex": harness_config.inspect_codex,
+        "setup.prepare-instance": partial(onboarding.prepare_instance, app),
+        "agent.configure-codex": partial(harness_config.configure_codex, app),
         "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show,
         "agent.connect": app.connect_agent, "agent.configure": app.configure,
         "agent.update": app.update, "agent.versions": app.versions, "agent.promote": app.promote,

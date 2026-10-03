@@ -52,3 +52,10 @@ jobs:
         run: python -m build
       - name: Test wheel outside checkout
         run: python scripts/smoke_wheel.py dist
+      - name: Retain verified development packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: development-packages
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7

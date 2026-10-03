@@ -52,3 +52,19 @@ jobs:
         run: python -m build
       - name: Test wheel outside checkout
         run: python scripts/smoke_wheel.py dist
+      - name: Checksum installation artifacts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root = Path('dist')
+          packages = sorted(p for p in root.iterdir() if p.suffix == '.whl' or p.name.endswith('.tar.gz'))
+          root.joinpath('SHA256SUMS').write_text(''.join(
+              hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in packages), encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agent-workspace-${{ github.sha }}
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error

@@ -79,7 +79,7 @@ class Codex:
                 self.rpc.request("thread/resume", {"threadId": session})
             else:
                 params = {"cwd": str(root), "approvalPolicy": "never", "sandbox": config.get("sandbox", "workspace-write"),
-                          "dynamicTools": [{"name": "aw_execute", "description": "Operate the Agent Workspace platform; not a shell.",
+                          "dynamicTools": [{"type": "function", "name": "aw_execute", "description": "Operate the Agent Workspace platform; not a shell.",
                                             "inputSchema": TOOL_SCHEMA}]}
                 if config.get("model"):
                     params["model"] = config["model"]
@@ -102,7 +102,7 @@ class Codex:
         if method == "turn/started":
             self.busy, self.turn_id = True, params["turn"]["id"]
         if method == "turn/completed":
-            self.busy = False
+            self.busy, self.turn_id = False, None
             self.completed.put(params["turn"])
 
     def tool_call(self, request):
@@ -124,7 +124,8 @@ class Codex:
             return {"success": False, "contentItems": [{"type": "inputText", "text": str(exc)}]}
 
     def status(self):
-        result = self.rpc.request("thread/read", {"threadId": self.session, "includeTurns": True})
+        # Status does not require a full history export. Turn IDs come from native events.
+        result = self.rpc.request("thread/read", {"threadId": self.session, "includeTurns": False})
         thread = result["thread"]
         state = thread.get("status", {}).get("type")
         turns = thread.get("turns", [])
@@ -213,7 +214,9 @@ def spawn_runner(app, workspace, agent_id, directory=None):
         args = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "--workspace", workspace,
                 "runtime", "run", agent_id, "--directory", str(root)]
         kwargs = {"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}
-        proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output, stderr=output, **kwargs)
+        env = {key: value for key, value in os.environ.items()
+               if key not in ("AW_HOME", "AW_WORKSPACE", "AW_AGENT", "AW_BINDING")}
+        proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output, stderr=output, env=env, **kwargs)
     return {"pid": proc.pid, "state": "starting_runner"}
 
 
@@ -265,9 +268,14 @@ def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=N
     return {**result, **spawn_runner(app, workspace, agent_id, str(root))}
 
 
-def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="user", directory=None, request_id=None):
+def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="user", directory=None, request_id=None,
+                expected_binding=None):
     root = app.root(workspace, agent_id, directory)
     agent = app.agent(workspace, agent_id)
+    if expected_binding is not None and agent["current"] != expected_binding:
+        raise Conflict("The intended input binding changed; inspect the new entry before retrying.")
+    if not isinstance(text, str) or not text.strip() or delivery not in ("normal", "insert"):
+        raise Error("Input requires non-empty text and normal/insert delivery.")
     identifier = slug(request_id or uid("i"))
     path = root / ".aw-local/inputs" / f"{identifier}.json"
     # Serialize producers, not model turns. IDs identify requests; they do not order them.
@@ -332,6 +340,12 @@ class Runner:
         self.renew_after_exit = False
         self.runtime_kind = None
         self.controller = None
+        self.adapter_closed = False
+
+    def _close_adapter(self):
+        if self.adapter is not None and not self.adapter_closed:
+            self.adapter.close()
+            self.adapter_closed = True
 
     def status(self, **values):
         write_json(self.root / ".aw-local/status.json", {"pid": os.getpid(), "binding": self.binding,
@@ -420,6 +434,8 @@ class Runner:
                     bridges.stop_all()
                     self.status(state="handoff_waiting_idle", session=self.adapter.session)
                     if self.adapter.status() == "idle":
+                        # Release ownership only after the managed writer is confirmed closed.
+                        self._close_adapter()
                         result = app.finish_stop(workspace, aid, self.binding, observed_idle=True)
                         self.status(state="released", handoff=result["id"])
                         break
@@ -471,8 +487,7 @@ class Runner:
         finally:
             if bridges:
                 bridges.stop_all()
-            if self.adapter:
-                self.adapter.close()
+            self._close_adapter()
         renew = read_json(self.root / ".aw-local/renew.json", {})
         if renew.get("requested") and renew.get("binding") == self.binding and app.agent(workspace, aid)["current"] is None:
             write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
@@ -482,7 +497,7 @@ class Runner:
     def _release_controller(self):
         if self.controller is None:
             return
-        if self.adapter is not None and getattr(self.adapter, "stopped", True) is False:
+        if self.adapter is not None and not self.adapter_closed:
             self.status(state="native_stop_unconfirmed", entry_automatically_released=False)
             return
         store = self.app.store(self.workspace)
@@ -553,7 +568,8 @@ class Runner:
         queued.sort(key=lambda pair: (pair[1].get("sequence", 0), pair[1]["created_at"], pair[1]["id"]))
         for path, item in queued:
             if item["delivery"] == "insert" and getattr(self.adapter, "supports_insert", True) is False:
-                raise Error("This entry cannot steer a busy turn; the input was not submitted.")
+                self.status(state="input_blocked", message_id=item["id"], reason="insert_not_supported")
+                return
             if self.adapter.status() == "busy" and item["delivery"] == "normal":
                 return
             self.app.require_binding(self.workspace, self.agent_id, self.binding)

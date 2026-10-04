@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import sys
+import threading
 import urllib.parse
 import webbrowser
 
@@ -105,9 +106,15 @@ def serve(app, port=8765, open_browser=False, setup=False):
     print("本机工作台（地址包含控制凭据，请勿分享）：\n" + url, flush=True)
     if open_browser:
         webbrowser.open(url)
+    from .maintenance import run
+    stop = threading.Event()
+    worker = threading.Thread(target=run, args=(app, stop), name="aw-maintenance", daemon=True)
+    worker.start()
     try:
         server.serve_forever()
     finally:
+        stop.set()
+        worker.join(timeout=5)
         server.server_close()
 
 

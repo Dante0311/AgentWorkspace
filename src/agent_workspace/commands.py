@@ -4,18 +4,21 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import bridges, runtime, onboarding, harness_config
+from . import bridges, runtime, onboarding, harness_config, maintenance, transfer
 from .messages import Messages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
 
 READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show",
-             "asset.list", "asset.read", "runtime.status", "bridge.status"}
+             "asset.list", "asset.read", "runtime.status", "bridge.status",
+             "agent.transfer-status", "maintenance.status", "workspace.doctor"}
 
 USER_MANAGEMENT = {"agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
-                   "setup.inspect-codex", "setup.prepare-instance", "agent.configure-codex"}
+                   "setup.inspect-codex", "setup.prepare-instance", "agent.configure-codex",
+                   "agent.configure-sdk", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
+                   "maintenance.grant", "maintenance.schedule", "maintenance.repair"}
 CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send"}
 
 
@@ -96,7 +99,7 @@ def message_poll(app, workspace, agent_id, binding, directory=None):
             adapter.close()
     # Never start another app-server just to poll a managed CLI thread.
     result = Messages(app).poll(workspace, agent_id, binding, directory=directory)
-    if entry["kind"] == "codex":
+    if entry["kind"] in ("codex", "claude", "codebuddy"):
         result["hint"] = "The owning runner performs push polling. This invocation only reports the pending notification."
     return result
 
@@ -143,6 +146,16 @@ def command_map(app):
         "setup.inspect-codex": harness_config.inspect_codex,
         "setup.prepare-instance": partial(onboarding.prepare_instance, app),
         "agent.configure-codex": partial(harness_config.configure_codex, app),
+        "agent.configure-sdk": partial(harness_config.configure_sdk, app),
+        "agent.transfer": partial(transfer.request, app),
+        "agent.transfer-profile": partial(transfer.request_profile, app),
+        "agent.transfer-continue": partial(transfer.advance, app),
+        "agent.transfer-status": partial(transfer.status, app),
+        "workspace.doctor": partial(maintenance.doctor, app),
+        "maintenance.grant": partial(maintenance.grant, app),
+        "maintenance.schedule": partial(maintenance.schedule, app),
+        "maintenance.status": partial(maintenance.status, app),
+        "maintenance.repair": partial(maintenance.repair, app),
         "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show,
         "agent.connect": app.connect_agent, "agent.configure": app.configure,
         "agent.update": app.update, "agent.versions": app.versions, "agent.promote": app.promote,
@@ -181,13 +194,19 @@ def execute(app, command, arguments, *, actor=None):
     args = dict(arguments)
     if actor:
         workspace, aid, binding = actor
-        if command in USER_MANAGEMENT:
-            raise Error("Runtime lifecycle/configuration is a user-management operation, not a model tool.")
         # Signatures supply defaults, never authorization. A new agent's ID is a target.
         if "workspace" in signature.parameters:
             args.setdefault("workspace", workspace)
         if "agent_id" in signature.parameters and command != "agent.create":
             args.setdefault("agent_id", aid)
+        if command in USER_MANAGEMENT and not maintenance.allowed(app, actor, command, args):
+            raise Error("This is a user-management operation; a scoped caretaker grant is required.")
+        # Ordinary agents may act on their own assets; another instance is a management target.
+        if (command not in READ_ONLY and command in maintenance.GRANTABLE
+                and command not in USER_MANAGEMENT
+                and (args.get("workspace", workspace) != workspace or args.get("agent_id", aid) != aid)
+                and not maintenance.allowed(app, actor, command, args)):
+            raise Error("Managing another instance requires an explicit caretaker grant.")
         if command in CALLER_BOUND:
             for name, value in (("workspace", workspace), ("agent_id", aid), ("binding", binding)):
                 if args.get(name, value) != value:

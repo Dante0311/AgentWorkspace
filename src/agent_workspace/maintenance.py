@@ -13,7 +13,7 @@ import time
 from .util import Conflict, Error, digest, encode, locked, now, read_json, slug, uid, write_json
 
 
-GRANTABLE = {"agent.start", "runtime.stop", "agent.transfer-profile", "agent.transfer", "agent.transfer-continue",
+GRANTABLE = {"agent.start", "runtime.stop", "agent.transfer-profile", "agent.transfer-continue",
              "agent.configure-codex", "agent.configure-sdk", "setup.prepare-instance",
              "maintenance.schedule", "maintenance.repair", "agent.input", "agent.handoff", "message.watch",
              "agent.archive", "agent.sync", "agent.update", "agent.upgrade-tools", "bridge.switch"}
@@ -48,6 +48,9 @@ def allowed(app, actor, command, arguments):
     workspace, agent_id, binding = actor
     if command not in GRANTABLE or arguments.get("workspace", workspace) != workspace:
         return False
+    if command in ("agent.configure-codex", "agent.configure-sdk", "agent.transfer-profile"):
+        if arguments.get("executable") or arguments.get("allowed_tools"):
+            return False  # Executables and native tool permission changes stay with the user.
     value = read_json(folder(app, workspace) / "grants.json", {}).get(agent_id, {})
     if command not in value.get("commands", []):
         return False
@@ -106,6 +109,9 @@ def doctor(app, workspace):
             record = read_json(p)
             if record["state"] in ("dispatching", "outcome_unknown"):
                 issue("input_outcome_unknown", aid, operation=record["id"])
+            if (record.get("binding") == binding and record.get("purpose") == "initial"
+                    and record["state"] == "completed" and not record.get("checkpoint_revision")):
+                issue("initial_checkpoint_pending", aid, operation=record["id"])
         for p in (root / ".aw-local/bridges").glob("*.json"):
             config = read_json(p)
             if config.get("enabled"):
@@ -131,6 +137,7 @@ def doctor(app, workspace):
             if f"acks/{item['id']}.json" not in snap.entries and item["to"]["workspace"] == meta["locator"]:
                 aid = item["to"]["agent"]
                 waiting[aid] = waiting.get(aid, 0) + 1
+    issues.sort(key=lambda item: (item["code"], item.get("agent", ""), item.get("operation", ""), item.get("bridge", "")))
     return {"state": "degraded" if issues else "partial" if remote_agents else "healthy", "observed_at": observed,
             "revision": snap.revision, "issues": issues, "unacknowledged_notifications": waiting,
             "coverage": {"local": local_agents, "unobserved_remote": remote_agents}}
@@ -141,6 +148,10 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
     """No arbitrary shell, no automatic reset of a native writer or uncertain send."""
     if action not in ("publication-reconcile", "bridge-retry", "sync-idle"):
         raise Error("Only publication-reconcile, bridge-retry and sync-idle are repair operations.")
+    if action == "publication-reconcile" and not operation_id:
+        raise Error("Publication repair requires the original operation_id.")
+    if action == "bridge-retry" and not (bridge and expected_binding and expected_generation):
+        raise Error("Bridge repair requires bridge, expected_binding and expected_generation.")
     root = app.root(workspace, agent_id)
     path = folder(app, workspace) / "repairs" / (slug(request_id) + ".json")
     payload = {"agent_id": agent_id, "action": action, "operation_id": operation_id, "bridge": bridge,
@@ -173,9 +184,13 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
                 result = Messages(app).reconcile(operation_id)
             elif action == "bridge-retry":
                 from .bridges import configure
-                result = configure(app, workspace, agent_id, bridge, config)
+                result = configure(app, workspace, agent_id, bridge, config, expected_generation=expected_generation)
             else:
-                result = app.sync_agent(workspace, agent_id)
+                # Prevent a local managed writer from entering during the file update.
+                with locked(root / ".aw-local/runner.lock", wait=0):
+                    if app.agent(workspace, agent_id)["current"]:
+                        raise Conflict("An entry was acquired before sync repair; no files were changed.")
+                    result = app.sync_agent(workspace, agent_id)
             receipt.update(state="applied", result=result, verification=doctor(app, workspace))
             # "Applied" is not "healthy". The report states the observed remaining issues.
         except (Error, OSError, ValueError, KeyError) as exc:
@@ -264,7 +279,7 @@ def tick(app, workspace):
                 queue_input(app, workspace, sentinel,
                             "Workspace 巡检发现异常。读取 maintenance.status；需要诊断时发送 Message 给登记的 Maintainer。"
                             "只在授权范围内修复；禁止重放不明业务。",
-                            purpose="maintenance", request_id=run["notice"]["id"])
+                            purpose="maintenance", request_id=run["notice"]["id"], expected_binding=binding)
                 run["notice"]["state"] = "queued"
         write_json(root / "run.json", run)
         return run
@@ -272,7 +287,13 @@ def tick(app, workspace):
 
 def status(app, workspace):
     root = folder(app, workspace)
-    return {"schedule": app.store(workspace).snapshot().json("maintenance/schedule.json"),
+    try:
+        with locked(app.home / "maintenance/worker.lock", wait=0):
+            worker_running = False
+    except Conflict:
+        worker_running = True
+    return {"worker_running": worker_running,
+            "schedule": app.store(workspace).snapshot().json("maintenance/schedule.json"),
             "local_run": read_json(root / "run.json"),
             "worker_error": read_json(root / "worker-error.json"), "grants": read_json(root / "grants.json", {})}
 

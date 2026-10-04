@@ -194,6 +194,8 @@ class Messages:
                         "binding": binding, "delivery": message["delivery"]}
         if adapter is None:
             return {"state": "awaiting_manual_receive", "notification": notification}
+        if message["delivery"] == "insert" and getattr(adapter, "supports_insert", True) is False:
+            return {"state": "delivery_unsupported", "message_id": message["id"], "delivery": "insert"}
         state = adapter.status()
         if state == "unknown":
             return {"state": "entry_state_unknown"}

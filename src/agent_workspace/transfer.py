@@ -95,7 +95,7 @@ def advance(app, workspace, agent_id, directory=None):
         handoff = snap.json(f"handoffs/{agent['handoff']}.json") if agent["handoff"] else None
         if not old or old["phase"] != "released" or not handoff or handoff["entry"] != record["old_binding"]:
             raise Conflict("The original entry has not published a usable handoff.")
-        if record["state"] in ("launching", "starting"):
+        if record["state"] in ("launching", "starting", "outcome_unknown"):
             raise Conflict("The original launch needs reconciliation; no replacement session was created.")
         preflight(app, workspace, agent_id, record["target_config"], root)
         # This lock also proves the original local runner has finished its cleanup.

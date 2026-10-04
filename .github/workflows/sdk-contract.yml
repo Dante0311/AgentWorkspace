@@ -19,6 +19,16 @@ jobs:
       - run: python scripts/check_native_sdks.py
       - run: python -m pip install -e ".[test]"
       - run: python -m pytest tests/test_native_sdk.py -q
+      - name: Exercise the SDK's installed Claude binary against an isolated local API
+        run: |
+          export AW_TEST_CLAUDE="$(python -c 'from pathlib import Path; import claude_agent_sdk; print(Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude")')"
+          test -x "$AW_TEST_CLAUDE"
+          python -m pytest tests/test_claude_native.py -q
+      - name: Exercise the SDK's installed CodeBuddy binary against an isolated local API
+        run: |
+          export AW_TEST_CODEBUDDY="$(python -c 'from pathlib import Path; import codebuddy_agent_sdk; print(Path(codebuddy_agent_sdk.__file__).parent / "bin" / "codebuddy-headless")')"
+          test -x "$AW_TEST_CODEBUDDY"
+          python -m pytest tests/test_codebuddy_native.py -q
       - name: Preserve dependencies for offline protocol tests
         run: |
           python -m pip freeze --exclude git-native-agent-workspace > native-test-requirements.txt

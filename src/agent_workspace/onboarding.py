@@ -5,6 +5,7 @@ No installer, credential store, model task or background scheduler lives here.
 from __future__ import annotations
 
 from importlib.resources import files
+from importlib.util import find_spec
 from pathlib import Path
 import re
 import shutil
@@ -43,7 +44,8 @@ def scan():
         path = shutil.which(name)
         harnesses.append({"id": name + "-cli", "name": label, "entry": "cli", "path": path,
                           "state": "found" if path else "not_found_in_path", "authentication": "unchecked",
-                          "adapter": "preview" if name == "codex" else "not_implemented",
+                          "adapter": "preview", "sdk": ("not_required" if name == "codex" else
+                              "installed" if find_spec(name + "_agent_sdk") else "missing"),
                           "install_url": INSTALL_HELP[name]})
     for name, label in (("codex", "Codex"), ("claude", "Claude"), ("workbuddy", "WorkBuddy")):
         path = None

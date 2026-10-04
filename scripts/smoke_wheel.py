@@ -49,6 +49,15 @@ def main() -> None:
         ids = {item["id"] for item in result["result"]}
         assert ids == {"helper", "steward", "sentinel", "maintainer"}
 
+        for command in (
+            ("-w", "smoke", "workspace", "doctor"),
+            ("-w", "smoke", "maintenance", "schedule", "--enabled", "--interval", "60"),
+            ("-w", "smoke", "maintenance", "status"),
+            ("-w", "smoke", "maintenance", "schedule", "--no-enabled"),
+            ("-w", "smoke", "agent", "transfer-status", "helper"),
+        ):
+            assert json.loads(run(*args, *command))["ok"]
+
         resource_check = """
 from importlib.resources import files
 root = files('agent_workspace').joinpath('resources')

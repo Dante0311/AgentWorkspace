@@ -5,35 +5,40 @@
 ## 接续位置
 
 - 日期：2026-10-04。唯一实现分支 `feat/native-runtime-maintenance`，草稿 [PR #4](https://github.com/Dante0311/AgentWorkspace/pull/4)，基于 PR #3。不另开平行实现、不合并 main、不改写历史、不发布版本。
-- 本次基线 `d2edfacc8742e1b2fb9c41916a367658e4197fb8` 已同步文档 PR #2 的确定设计与开发约定。此前 `9c24ff8` 保存跨实例授权及原生 MCP 测试，`298c2ce` 保存维修恢复及原生 Codex → Claude 自动交接；均已推送。
-- 本提交增加 Claude 原生模型/强度元数据查询，复用 SDK 初始化握手和已有凭据路由，接入首次配置页面和统一命令分发。没有新增运行依赖、网关或架构层。
-- 源码恢复制品 `11299570873` SHA256：`2a3d30f165c5faeb88008568072ea8307db89a0c65950cb17beef3371c3f6f88`；固定 SDK 制品 `11290682699` SHA256：`63136e1021fa96af12458f8195ddfd41858697ca017363958d7b30f4c15cc777`。已校验。制品有期限，长期恢复以 Git 提交为准。
+- 最新生产代码 `1d17c4c9edec0c5bfcffbd7d509861dc17382f4c`，树 `9e303a2fc364a442fa571728df57c2381c372a3e`。本提交补齐六向交接验证和本记录，不改变该运行实现。实际恢复使用包含本文件的分支提交，不把上述父提交误作最新测试版本。
+- 本轮从 `7261ceb4c61d36e3a0aef37a053f462e0d8f9616` 的完整源码制品恢复，重建树与远端 `3534a41de2cb517d7f04a84199dc1531bfe5a389` 完全一致。此前实现和产品文档都已保留，不重复开发。
+- 恢复制品：源码 `11303042447`，SHA256 `d88f02d03b0ebed84c98f3538a72539730f457f18779fc3c80eb68f383cef69f`；原生测试依赖 `11303530657`，SHA256 `97acf3f66b0bba0c1179610a66ee34fc74aef9841487bfd550db47872856ff2d`。已校验，制品会过期；长期恢复以 Git 和工作流固定版本为准。
 
 ## 已完成与本轮补齐
 
-已有三种受管 CLI 持续会话、独立模型服务配置、真实 Binding、Message/ACK、固定后继自动交接、三名管家、作用域授权、持久巡检、有限维修和隔离安装入口。运行说明在 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
+已有三种受管 CLI 持续会话、独立模型服务配置、真实 Binding、Message/ACK、固定后继自动交接、三名管家、作用域授权、持久巡检、有限维修和隔离安装入口。Codex/Claude 原生模型元数据探测不调用模型；CodeBuddy 目录仍明确报告未支持。运行说明在 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
 
-本轮四个单元：
+本轮三个可回退单元：
 
-1. 所有跨实例写操作检查明确授权，`asset.write` 可限定目标且可撤销。原生 Claude/CodeBuddy 通过平台 MCP 创建 Git 检查点，并在同会话第二轮接收 Message，形成真实 ACK 和本机副本。
-2. 维修动作成功先保存，再独立健康复查；复查失败、退出或复查落盘失败不重做动作。损坏本机记录报告并保留，不阻断其他实例巡检。
-3. 原生 Codex 通过动态工具执行 checkpoint/stop，Runner 确认停妥并创建原生 Claude 后继；用户资产和接手材料保留，旧 Binding released，后续自动 Message 投递到新会话并保存 ACK。对齐产品设计、README、操作和验收文档。
-4. Claude SDK 握手返回实际模型/强度选项，无需模型输入。探测明确由用户触发，不暴露账号详情或密钥，不使用内置目录冒充自有服务模型。CodeBuddy 未验证目录接口时明确报告 unsupported，不启动探测客户端。首次配置支持三种受管配置，并复用相同候选展示逻辑。
+1. `a951b56`：修复 Windows 首次并发加锁时的 PermissionError。删除获取锁前对锁文件的初始化写入，仍用同一个 OS 锁，不换文件、不延长超时；新增空锁文件、已有文件、线程/进程竞争和异常释放测试。
+2. `1d17c4c`：保存 CodeBuddy 独立终止 ErrorMessage 后关闭客户端；SDK 断连在没有输入、未启用 watch 或正在交接时也报告失败，不继续显示运行正常。不生成成功检查点、不重放任务、不释放原 Binding。新增三项回归并加入原生 SDK 工作流。
+3. 本提交：原生交接矩阵扩到 Codex、Claude、CodeBuddy 两两互换的六个方向。每一对均验证旧端工具创建检查点和 stop、唯一新入口、接手材料与用户文件保留，以及新会话接收后续 Message/ACK。只扩充现有模型协议夹具，不添加生产抽象或依赖。
 
 ## 本提交验证
 
-- 本机完整套件，启用固定三种真实原生客户端：**248 passed in 199.86s，0 skipped / 0 failed / 0 errors**。JUnit 与 pytest 输出一致。
-- 此前同一代码未设置原生可执行文件测试变量时：243 passed，5 skipped；已通过上项完整组合覆盖跳过项，不将两个结果相加。
-- 定向元数据/配置/SDK 组：35 passed；真实 Claude 客户端工具与无模型调用的元数据测试：2 passed；分发/配置/HTTP 组：85 passed。均已包含于完整结果，不额外累加。
-- 原生测试使用真实 Codex 0.160.0、Claude SDK 0.2.163、CodeBuddy SDK 0.3.267 及对应客户端，模型响应来自回环协议夹具。验证真实 SDK、平台工具、Runner 与 Git 副作用；不是付费模型、真实账号、Desktop 或生产服务验收。
-- Python 编译、setup 页面 JavaScript 语法、Markdown 围栏/空白/相对文件链接及 20 条新 CLI 示例参数解析检查通过。没有把静态语法检查冒充完整浏览器验收。
-- 所有上传的生产代码和测试内容按 Git blob SHA 对照本机已测试副本。完整本机运行的结果取代此前因命令执行超时而未取得全套结论的状态。
-- 基线 d2edfac 的 Native SDK 工作流 `37200646955` 已成功；CI `37200646887` 最后读取仍在运行。本提交的 GitHub CI/Windows 和 SDK 工作流必须单独查看，不能沿用基线成功结论。
+- 本机完整套件，启用三个固定原生客户端：**261 passed in 183.26s，0 skipped / 0 failed / 0 errors**。JUnit 和 pytest 输出一致，不是分组结果累加。
+- 新六向交接组先独立执行：6 passed in 78.10s，随后纳入上述完整套件。测试实际运行 Codex 0.160.0、Claude SDK 0.2.163、CodeBuddy SDK 0.3.267 及其原生客户端；模型响应来自隔离的回环 HTTP 服务。
+- 锁的“不在获取锁前写入”回归在旧代码失败；修复后的锁/输入/分发组 88 passed。SDK 三项新故障回归在旧代码全部失败，修复后原生故障/SDK/交接安全组 19 passed。它们均包含于完整结果，不额外累计。
+- 从本轮源码构建 wheel，通过 `scripts/smoke_wheel.py` 的干净环境安装、CLI、本地 Git、管家定义及七个 Skill/页面资源检查。不依赖保留源码目录。
+- Python 编译、打包页面的 JavaScript 语法、Markdown 围栏/空白/相对文件链接与 20 条 CLI 示例参数解析通过。静态检查不是浏览器或真实 Desktop 验收。
+- 上传内容按 Git blob SHA 和完整树核对本机测试副本。未使用付费模型、真实账号、生产 Git 凭据或企业微信 Bot。
+
+## CI 状态与重入
+
+- 基线 `7261ceb` 的 CI `37201915247` 在 Windows 3.11 锁竞争处失败，不是测试期限不足；由 `a951b56` 修复，必须看后续 Windows 结果确认。
+- `1d17c4c` 的原生 SDK 工作流 `37204575082` 已成功。CI `37204575088` 已确认 Linux 3.11、3.13 与打包/隔离安装成功，最后读取时 Windows 两组仍在执行。更早 `a951b56` 的 Windows 任务被后续提交取消，不算通过或失败。
+- 本提交会运行包含六向矩阵的新版 SDK 工作流。不同提交结果分开核对；取消和跳过不算通过，不沿用父提交的成功结论。
+- 重入时先读取 PR #4 的实际 head、工作流和本文件，再恢复准确源码。安装测试 extra 与两项固定 SDK，并设置 `AW_TEST_CODEX`、`AW_TEST_CLAUDE`、`AW_TEST_CODEBUDDY` 指向对应实际程序，才能运行所有原生测试；未设置时 pytest 会明确跳过。
 
 ## 剩余事项
 
 - 已有实现待实机验收：真实账号、自有 API 的模型/强度能力、生产 Git 凭据与分支策略、企业微信 Bot、新机器安装和长期运行体验。
-- 仍需开发/核实原生接口：Claude/WorkBuddy Desktop 的会话创建、持续投递和停工观测；Codex Desktop 从深链准备到完整自动建立/跨端接手。不把 CLI 当作 Desktop，不把缺接口称作仅待用户验收。
+- 仍需接入开发及原生能力证据：Claude/WorkBuddy Desktop 的会话创建、持续投递和停工观测；Codex Desktop 从深链准备到完整自动建立/跨端接手。接口核对和具体缺口见运行说明第 5.1 节。不把 CLI 当作 Desktop，也不把尚未接入称作仅待用户验收。
 - 当前 SDK 入口未实现已验证 insert/steer；CodeBuddy 目录查询仍不提供。不能以中断/重开轮次冒充 insert，不将 unchecked 配置当成服务支持。
 - 查看当前提交 CI，失败先定位。正式合并、发布、许可证和生产变更仍需单独授权。
 

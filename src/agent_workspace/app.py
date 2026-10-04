@@ -465,8 +465,8 @@ class App:
 
     def configure(self, workspace, agent_id, value, directory=None):
         root = self.root(workspace, agent_id, directory)
-        if value.get("kind", "manual") not in ("manual", "desktop", "codex"):
-            raise Error("Runtime kind must be manual, desktop or codex.")
+        if value.get("kind", "manual") not in ("manual", "desktop", "codex", "claude", "codebuddy"):
+            raise Error("Runtime kind must be manual, desktop, codex, claude or codebuddy.")
         write_json(root / ".aw-local/runtime.json", value)
         return {"configured": True, "entry_changed": False}
 
@@ -500,7 +500,7 @@ class App:
         store.change("main", {path: encode(item)}, {path: snap.entries[path]}, f"Archive={archived} {agent_id}")
         return item
 
-    def reserve(self, workspace, agent_id, directory=None):
+    def reserve(self, workspace, agent_id, directory=None, binding_id=None):
         root = self.root(workspace, agent_id, directory)
         config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
         store = self.store(workspace)
@@ -510,7 +510,7 @@ class App:
             raise Conflict("Agent already has an entry or is archived; relay cannot take it over.")
         if item["has_run"] and not item["handoff"]:
             raise Conflict("No handoff is available. A crash is not a release of ownership.")
-        binding = uid("b")
+        binding = slug(binding_id) if binding_id else uid("b")
         entry = {"id": binding, "agent": agent_id, "kind": config.get("kind", "manual"),
                  "phase": "starting", "session": None, "created_at": now(), "handoff": item["handoff"]}
         changes = {f"bindings/{binding}.json": encode(entry)}

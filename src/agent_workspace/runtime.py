@@ -15,6 +15,7 @@ import webbrowser
 from . import __version__
 from .messages import Messages
 from .rpc import Rpc
+from .native_sdk import NativeSDK, SDK_TYPES, sdk_options
 from .util import Conflict, Error, Unavailable, encode, locked, now, read_json, slug, uid, write_bytes, write_json
 
 
@@ -58,6 +59,8 @@ def configure_desktop(app, workspace, agent_id, command=None, directory=None):
 
 
 class Codex:
+    supports_insert = True
+
     def __init__(self, app, workspace, agent_id, binding, root, config, session=None):
         self.app, self.workspace, self.agent_id, self.binding, self.root = app, workspace, agent_id, binding, root
         self.session = session
@@ -75,7 +78,7 @@ class Codex:
             if session:
                 self.rpc.request("thread/resume", {"threadId": session})
             else:
-                params = {"cwd": str(root), "approvalPolicy": "never", "sandbox": config.get("sandbox", "workspaceWrite"),
+                params = {"cwd": str(root), "approvalPolicy": "never", "sandbox": config.get("sandbox", "workspace-write"),
                           "dynamicTools": [{"name": "aw_execute", "description": "Operate the Agent Workspace platform; not a shell.",
                                             "inputSchema": TOOL_SCHEMA}]}
                 if config.get("model"):
@@ -149,6 +152,8 @@ class Codex:
 
 
 class Desktop:
+    supports_insert = True
+
     """Attach to the desktop-owned MCP control endpoint; never spawn a competing writer."""
     def __init__(self, root, config, session):
         self.root, self.session = root, session
@@ -212,16 +217,25 @@ def spawn_runner(app, workspace, agent_id, directory=None):
     return {"pid": proc.pid, "state": "starting_runner"}
 
 
-def start(app, workspace, agent_id, directory=None, open_app=False):
+def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None):
     root = app.root(workspace, agent_id, directory)
     config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
+    if config.get("credential_env") and not os.environ.get(config["credential_env"]):
+        raise Unavailable("Configured credential environment variable is missing; no execution entry was reserved.")
     if config.get("kind") == "codex":
         command = config.get("command", ["codex", "app-server"])
         if not command or not (Path(command[0]).is_file() or shutil.which(command[0])):
             raise Unavailable("Codex command is unavailable; no execution entry was reserved.")
+    if config.get("kind") in SDK_TYPES:
+        executable = config.get("executable")
+        if not executable or not Path(executable).is_file():
+            raise Unavailable("Native CLI is missing; install it before starting a session.")
+        sdk_options(config, app, workspace, agent_id, "", root)
     item = app.agent(workspace, agent_id)
     existing = read_json(root / ".aw-local/entry.json", {})
     if item["current"]:
+        if binding_id and item["current"] != binding_id:
+            raise Conflict("Another entry already owns this instance.")
         entry = app.store(workspace).snapshot().json(f"bindings/{item['current']}.json")
         if entry["phase"] != "starting" or existing.get("binding") != item["current"] or entry["kind"] != config.get("kind", "manual"):
             raise Conflict("Entry is already owned. Start cannot resume or take over an active session.")
@@ -231,7 +245,7 @@ def start(app, workspace, agent_id, directory=None, open_app=False):
         result = {"agent": agent_id, "binding": item["current"], "phase": "starting", "kind": entry["kind"]}
     else:
         app.sync_agent(workspace, agent_id, str(root))
-        result = app.reserve(workspace, agent_id, str(root))
+        result = app.reserve(workspace, agent_id, str(root), binding_id=binding_id)
     binding = result["binding"]
     prompt = entry_prompt(app, workspace, agent_id, binding, root)
     bind_args = ["aw", "--home", str(app.home), "--workspace", workspace, "agent", "bind", agent_id,
@@ -288,7 +302,8 @@ def handoff_request(app, workspace, agent_id, *, renew=False, directory=None):
     if renew:
         write_json(root / ".aw-local/renew.json", {"binding": agent["current"], "requested": True})
     text = (root / ".aw/prompts/handoff.md").read_text(encoding="utf-8")
-    return queue_input(app, workspace, agent_id, text, delivery="insert", purpose="handoff", directory=str(root),
+    kind = app.store(workspace).snapshot().json(f"bindings/{agent['current']}.json")["kind"]
+    return queue_input(app, workspace, agent_id, text, delivery="normal" if kind in SDK_TYPES else "insert", purpose="handoff", directory=str(root),
                        request_id="handoff-" + agent["current"])
 
 
@@ -331,7 +346,11 @@ class Runner:
                 raise
             finally:
                 self._release_controller()
-        if self.renew_after_exit:
+        transfer = read_json(self.root / ".aw-local/transfer.json")
+        if transfer and transfer["old_binding"] == self.binding:
+            from .transfer import advance
+            advance(self.app, self.workspace, self.agent_id, str(self.root))
+        elif self.renew_after_exit:
             result = start(self.app, self.workspace, self.agent_id, str(self.root), open_app=self.runtime_kind == "desktop")
             write_json(self.root / ".aw-local/renew-result.json", result)
 
@@ -374,6 +393,16 @@ class Runner:
                     app.bind(workspace, aid, self.binding, self.adapter.session, str(self.root))
                     queue_input(app, workspace, aid, entry_prompt(app, workspace, aid, self.binding, self.root),
                                 purpose="initial", directory=str(self.root), request_id="boot-" + self.binding)
+            elif entry["kind"] in SDK_TYPES:
+                launch_path = self.root / ".aw-local/launch.json"
+                if entry["session"] is None and read_json(launch_path, {}).get("attempted"):
+                    raise Unavailable("The original native launch is unresolved; do not repeat it.")
+                if entry["session"] is None:
+                    write_json(launch_path, {"binding": self.binding, "attempted": True})
+                self.adapter = NativeSDK(app, workspace, aid, self.binding, self.root, config, entry["session"])
+                self.adapter.connect()
+                if entry["session"] is None:
+                    self.adapter.bootstrap(entry_prompt(app, workspace, aid, self.binding, self.root))
             else:
                 if entry["session"] is None:
                     raise Unavailable("Open the new Desktop session and bind its actual ID first.")
@@ -453,6 +482,9 @@ class Runner:
     def _release_controller(self):
         if self.controller is None:
             return
+        if self.adapter is not None and getattr(self.adapter, "stopped", True) is False:
+            self.status(state="native_stop_unconfirmed", entry_automatically_released=False)
+            return
         store = self.app.store(self.workspace)
         snap = store.snapshot()
         path = f"bindings/{self.binding}.json"
@@ -491,7 +523,7 @@ class Runner:
         return records
 
     def _complete_inputs(self, records=None):
-        if not isinstance(self.adapter, Codex):
+        if not isinstance(self.adapter, (Codex, NativeSDK)):
             return
         records = self._read_inputs() if records is None else records
         completed = {}
@@ -520,6 +552,8 @@ class Runner:
         # Legacy records have no sequence; keep them first in recorded timestamp order.
         queued.sort(key=lambda pair: (pair[1].get("sequence", 0), pair[1]["created_at"], pair[1]["id"]))
         for path, item in queued:
+            if item["delivery"] == "insert" and getattr(self.adapter, "supports_insert", True) is False:
+                raise Error("This entry cannot steer a busy turn; the input was not submitted.")
             if self.adapter.status() == "busy" and item["delivery"] == "normal":
                 return
             self.app.require_binding(self.workspace, self.agent_id, self.binding)

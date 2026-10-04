@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib.resources import files
 import json
 import os
 from pathlib import Path
@@ -13,9 +14,9 @@ import urllib.parse
 import webbrowser
 
 from . import __version__
-from .app import App
 from .messages import Messages
 from .rpc import Rpc
+from .native_sdk import NativeSDK, SDK_TYPES, sdk_options
 from .util import Conflict, Error, Unavailable, encode, locked, now, read_json, slug, uid, write_bytes, write_json
 
 
@@ -27,9 +28,11 @@ def entry_prompt(app, workspace, agent_id, binding, root):
     snap = app.store(workspace).snapshot()
     entry = snap.json(f"bindings/{binding}.json")
     item = app.agent(workspace, agent_id, snap)
-    lines = [(root / ".aw/prompts/entry.md").read_text(encoding="utf-8"),
+    # Read installed guidance, not a potentially stale copy from an older checkpoint.
+    capabilities = (files("agent_workspace") / "resources" / "prompts" / "capabilities.md").read_text(encoding="utf-8")
+    lines = [(root / ".aw/prompts/entry.md").read_text(encoding="utf-8"), capabilities,
              json.dumps({"workspace": workspace, "agent": agent_id, "binding": binding,
-                         "instance_root": str(root)}, ensure_ascii=False),
+                         "runtime_kind": entry["kind"], "instance_root": str(root)}, ensure_ascii=False),
              "平台命令使用 aw_execute 动态工具，或运行 aw。调用参数中的 workspace、agent_id、binding 必须使用上述值。"]
     if entry["handoff"]:
         handoff = snap.json(f"handoffs/{entry['handoff']}.json")
@@ -59,6 +62,8 @@ def configure_desktop(app, workspace, agent_id, command=None, directory=None):
 
 
 class Codex:
+    supports_insert = True
+
     def __init__(self, app, workspace, agent_id, binding, root, config, session=None):
         self.app, self.workspace, self.agent_id, self.binding, self.root = app, workspace, agent_id, binding, root
         self.session = session
@@ -76,8 +81,8 @@ class Codex:
             if session:
                 self.rpc.request("thread/resume", {"threadId": session})
             else:
-                params = {"cwd": str(root), "approvalPolicy": "never", "sandbox": config.get("sandbox", "workspaceWrite"),
-                          "dynamicTools": [{"name": "aw_execute", "description": "Operate the Agent Workspace platform; not a shell.",
+                params = {"cwd": str(root), "approvalPolicy": "never", "sandbox": config.get("sandbox", "workspace-write"),
+                          "dynamicTools": [{"type": "function", "name": "aw_execute", "description": "Operate the Agent Workspace platform; not a shell.",
                                             "inputSchema": TOOL_SCHEMA}]}
                 if config.get("model"):
                     params["model"] = config["model"]
@@ -100,7 +105,7 @@ class Codex:
         if method == "turn/started":
             self.busy, self.turn_id = True, params["turn"]["id"]
         if method == "turn/completed":
-            self.busy = False
+            self.busy, self.turn_id = False, None
             self.completed.put(params["turn"])
 
     def tool_call(self, request):
@@ -122,7 +127,8 @@ class Codex:
             return {"success": False, "contentItems": [{"type": "inputText", "text": str(exc)}]}
 
     def status(self):
-        result = self.rpc.request("thread/read", {"threadId": self.session, "includeTurns": True})
+        # Status does not require a full history export. Turn IDs come from native events.
+        result = self.rpc.request("thread/read", {"threadId": self.session, "includeTurns": False})
         thread = result["thread"]
         state = thread.get("status", {}).get("type")
         turns = thread.get("turns", [])
@@ -150,6 +156,8 @@ class Codex:
 
 
 class Desktop:
+    supports_insert = True
+
     """Attach to the desktop-owned MCP control endpoint; never spawn a competing writer."""
     def __init__(self, root, config, session):
         self.root, self.session = root, session
@@ -209,20 +217,31 @@ def spawn_runner(app, workspace, agent_id, directory=None):
         args = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "--workspace", workspace,
                 "runtime", "run", agent_id, "--directory", str(root)]
         kwargs = {"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}
-        proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output, stderr=output, **kwargs)
+        env = {key: value for key, value in os.environ.items()
+               if key not in ("AW_HOME", "AW_WORKSPACE", "AW_AGENT", "AW_BINDING")}
+        proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output, stderr=output, env=env, **kwargs)
     return {"pid": proc.pid, "state": "starting_runner"}
 
 
-def start(app, workspace, agent_id, directory=None, open_app=False):
+def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None):
     root = app.root(workspace, agent_id, directory)
     config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
+    if config.get("credential_env") and not os.environ.get(config["credential_env"]):
+        raise Unavailable("Configured credential environment variable is missing; no execution entry was reserved.")
     if config.get("kind") == "codex":
         command = config.get("command", ["codex", "app-server"])
         if not command or not (Path(command[0]).is_file() or shutil.which(command[0])):
             raise Unavailable("Codex command is unavailable; no execution entry was reserved.")
+    if config.get("kind") in SDK_TYPES:
+        executable = config.get("executable")
+        if not executable or not Path(executable).is_file():
+            raise Unavailable("Native CLI is missing; install it before starting a session.")
+        sdk_options(config, app, workspace, agent_id, "", root)
     item = app.agent(workspace, agent_id)
     existing = read_json(root / ".aw-local/entry.json", {})
     if item["current"]:
+        if binding_id and item["current"] != binding_id:
+            raise Conflict("Another entry already owns this instance.")
         entry = app.store(workspace).snapshot().json(f"bindings/{item['current']}.json")
         if entry["phase"] != "starting" or existing.get("binding") != item["current"] or entry["kind"] != config.get("kind", "manual"):
             raise Conflict("Entry is already owned. Start cannot resume or take over an active session.")
@@ -232,7 +251,7 @@ def start(app, workspace, agent_id, directory=None, open_app=False):
         result = {"agent": agent_id, "binding": item["current"], "phase": "starting", "kind": entry["kind"]}
     else:
         app.sync_agent(workspace, agent_id, str(root))
-        result = app.reserve(workspace, agent_id, str(root))
+        result = app.reserve(workspace, agent_id, str(root), binding_id=binding_id)
     binding = result["binding"]
     prompt = entry_prompt(app, workspace, agent_id, binding, root)
     bind_args = ["aw", "--home", str(app.home), "--workspace", workspace, "agent", "bind", agent_id,
@@ -252,20 +271,34 @@ def start(app, workspace, agent_id, directory=None, open_app=False):
     return {**result, **spawn_runner(app, workspace, agent_id, str(root))}
 
 
-def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="user", directory=None, request_id=None):
+def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="user", directory=None, request_id=None,
+                expected_binding=None):
     root = app.root(workspace, agent_id, directory)
     agent = app.agent(workspace, agent_id)
-    app.require_binding(workspace, agent_id, agent["current"])
+    if expected_binding is not None and agent["current"] != expected_binding:
+        raise Conflict("The intended input binding changed; inspect the new entry before retrying.")
+    if not isinstance(text, str) or not text.strip() or delivery not in ("normal", "insert"):
+        raise Error("Input requires non-empty text and normal/insert delivery.")
     identifier = slug(request_id or uid("i"))
     path = root / ".aw-local/inputs" / f"{identifier}.json"
-    record = {"id": identifier, "binding": agent["current"], "text": text, "delivery": delivery,
-              "purpose": purpose, "state": "queued", "created_at": now()}
-    with locked(path.with_suffix(".lock")):
+    # Serialize producers, not model turns. IDs identify requests; they do not order them.
+    with locked(root / ".aw-local/inputs.lock"):
+        app.require_binding(workspace, agent_id, agent["current"])
         previous = read_json(path)
         if previous:
-            if previous["text"] != text or previous["binding"] != agent["current"]:
+            if (previous["text"], previous["binding"], previous["delivery"], previous["purpose"]) != (
+                    text, agent["current"], delivery, purpose):
                 raise Conflict("Input request ID has different content or belongs to an old entry.")
             return previous
+        sequence_path = root / ".aw-local/input-sequence.json"
+        sequence = read_json(sequence_path)
+        if sequence is None:
+            sequence = max((read_json(p).get("sequence", 0) for p in path.parent.glob("*.json")), default=0)
+        sequence += 1
+        # Reserve before publishing the input. A failed write may leave a gap, never a duplicate.
+        write_json(sequence_path, sequence)
+        record = {"id": identifier, "binding": agent["current"], "text": text, "delivery": delivery,
+                  "purpose": purpose, "state": "queued", "created_at": now(), "sequence": sequence}
         write_json(path, record)
     return record
 
@@ -280,7 +313,8 @@ def handoff_request(app, workspace, agent_id, *, renew=False, directory=None):
     if renew:
         write_json(root / ".aw-local/renew.json", {"binding": agent["current"], "requested": True})
     text = (root / ".aw/prompts/handoff.md").read_text(encoding="utf-8")
-    return queue_input(app, workspace, agent_id, text, delivery="insert", purpose="handoff", directory=str(root),
+    kind = app.store(workspace).snapshot().json(f"bindings/{agent['current']}.json")["kind"]
+    return queue_input(app, workspace, agent_id, text, delivery="normal" if kind in SDK_TYPES else "insert", purpose="handoff", directory=str(root),
                        request_id="handoff-" + agent["current"])
 
 
@@ -309,6 +343,12 @@ class Runner:
         self.renew_after_exit = False
         self.runtime_kind = None
         self.controller = None
+        self.adapter_closed = False
+
+    def _close_adapter(self):
+        if self.adapter is not None and not self.adapter_closed:
+            self.adapter.close()
+            self.adapter_closed = True
 
     def status(self, **values):
         write_json(self.root / ".aw-local/status.json", {"pid": os.getpid(), "binding": self.binding,
@@ -323,7 +363,11 @@ class Runner:
                 raise
             finally:
                 self._release_controller()
-        if self.renew_after_exit:
+        transfer = read_json(self.root / ".aw-local/transfer.json")
+        if transfer and transfer["old_binding"] == self.binding:
+            from .transfer import advance
+            advance(self.app, self.workspace, self.agent_id, str(self.root))
+        elif self.renew_after_exit:
             result = start(self.app, self.workspace, self.agent_id, str(self.root), open_app=self.runtime_kind == "desktop")
             write_json(self.root / ".aw-local/renew-result.json", result)
 
@@ -366,6 +410,16 @@ class Runner:
                     app.bind(workspace, aid, self.binding, self.adapter.session, str(self.root))
                     queue_input(app, workspace, aid, entry_prompt(app, workspace, aid, self.binding, self.root),
                                 purpose="initial", directory=str(self.root), request_id="boot-" + self.binding)
+            elif entry["kind"] in SDK_TYPES:
+                launch_path = self.root / ".aw-local/launch.json"
+                if entry["session"] is None and read_json(launch_path, {}).get("attempted"):
+                    raise Unavailable("The original native launch is unresolved; do not repeat it.")
+                if entry["session"] is None:
+                    write_json(launch_path, {"binding": self.binding, "attempted": True})
+                self.adapter = NativeSDK(app, workspace, aid, self.binding, self.root, config, entry["session"])
+                self.adapter.connect()
+                if entry["session"] is None:
+                    self.adapter.bootstrap(entry_prompt(app, workspace, aid, self.binding, self.root))
             else:
                 if entry["session"] is None:
                     raise Unavailable("Open the new Desktop session and bind its actual ID first.")
@@ -379,10 +433,14 @@ class Runner:
                 if agent["current"] != self.binding:
                     break
                 current = snap.json(f"bindings/{self.binding}.json")
+                if entry["kind"] in SDK_TYPES and self.adapter.status() == "unknown":
+                    raise Unavailable("Native SDK is disconnected; inspect the original input before recovery.")
                 if current["phase"] == "stopping":
                     bridges.stop_all()
                     self.status(state="handoff_waiting_idle", session=self.adapter.session)
                     if self.adapter.status() == "idle":
+                        # Release ownership only after the managed writer is confirmed closed.
+                        self._close_adapter()
                         result = app.finish_stop(workspace, aid, self.binding, observed_idle=True)
                         self.status(state="released", handoff=result["id"])
                         break
@@ -396,8 +454,9 @@ class Runner:
                         bridges.stop_all()
                     else:
                         bridges.tick()
-                    self._complete_inputs()
-                    self._inputs()
+                    records = self._read_inputs()
+                    self._complete_inputs(records)
+                    self._inputs(records)
                     setting = read_json(self.root / ".aw-local/watch.json", {"enabled": False})
                     if not handoff_requested and setting.get("enabled") and setting.get("binding") == self.binding and time.monotonic() >= next_poll:
                         result = Messages(app).poll(workspace, aid, self.binding, adapter=self.adapter, directory=str(self.root))
@@ -405,14 +464,20 @@ class Runner:
                         next_poll = time.monotonic() + setting.get("interval", 5)
                     failures = 0
                 except Conflict:
-                    # Shared state may have advanced to stopping while this iteration was in flight.
-                    continue
+                    # Only an observed ownership transition is a reason to continue the loop.
+                    latest = app.store(workspace).snapshot()
+                    owner = app.agent(workspace, aid, latest)
+                    if owner["current"] != self.binding:
+                        break
+                    if latest.json(f"bindings/{self.binding}.json")["phase"] == "stopping":
+                        continue
+                    raise
                 except (Unavailable, OSError) as exc:
                     failures += 1
                     self.status(state="connection_failed", reason=str(exc), attempts=failures)
                     if entry["kind"] != "desktop" or failures >= 5:
                         break
-                    if self.stop_event.wait(min(2 ** failures, 30)):
+                    if self.stop_event.wait(min(2 **failures, 30)):
                         break
                     latest = app.store(workspace).snapshot()
                     owner = app.agent(workspace, aid, latest)
@@ -427,8 +492,7 @@ class Runner:
         finally:
             if bridges:
                 bridges.stop_all()
-            if self.adapter:
-                self.adapter.close()
+            self._close_adapter()
         renew = read_json(self.root / ".aw-local/renew.json", {})
         if renew.get("requested") and renew.get("binding") == self.binding and app.agent(workspace, aid)["current"] is None:
             write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
@@ -437,6 +501,9 @@ class Runner:
 
     def _release_controller(self):
         if self.controller is None:
+            return
+        if self.adapter is not None and not self.adapter_closed:
+            self.status(state="native_stop_unconfirmed", entry_automatically_released=False)
             return
         store = self.app.store(self.workspace)
         snap = store.snapshot()
@@ -465,30 +532,49 @@ class Runner:
                     return None
         return None
 
-    def _complete_inputs(self):
-        if not isinstance(self.adapter, Codex):
+    def _read_inputs(self):
+        records = []
+        for path in (self.root / ".aw-local/inputs").glob("*.json"):
+            item = read_json(path)
+            if item["binding"] == self.binding and (
+                    item["state"] in ("queued", "submitted") or
+                    (item["purpose"] == "initial" and item["state"] == "completed" and not item.get("checkpoint_revision"))):
+                records.append((path, item))
+        return records
+
+    def _complete_inputs(self, records=None):
+        if not isinstance(self.adapter, (Codex, NativeSDK)):
             return
+        records = self._read_inputs() if records is None else records
+        completed = {}
         while not self.adapter.completed.empty():
             turn = self.adapter.completed.get_nowait()
-            for path in (self.root / ".aw-local/inputs").glob("*.json"):
-                item = read_json(path)
-                turn_id = item.get("result", {}).get("turn", {}).get("id")
-                if item["binding"] != self.binding or item["state"] != "submitted" or turn_id != turn.get("id"):
-                    continue
-                item["state"] = "completed" if turn.get("status") == "completed" else "failed"
+            completed[turn["id"]] = turn
+        for path, item in records:
+            turn_id = item.get("result", {}).get("turn", {}).get("id")
+            if item["state"] == "submitted" and turn_id in completed:
+                item["state"] = "completed" if completed[turn_id].get("status") == "completed" else "failed"
                 write_json(path, item)
-                if item["purpose"] == "initial" and item["state"] == "completed":
-                    self.app.checkpoint(self.workspace, self.agent_id,
-                        "首次进入已结束。实际职责与资料以此快照中的文件为准。",
-                        content="原生事件按记录段保存；此记录不宣称执行了任何未安排的产品任务。",
-                        binding=self.binding, directory=str(self.root), checkpoint_id="initial-" + self.binding)
-
-    def _inputs(self):
-        paths = sorted((self.root / ".aw-local/inputs").glob("*.json"))
-        for path in paths:
-            item = read_json(path)
-            if item["binding"] != self.binding or item["state"] != "queued":
+        # Persist all observed completions before attempting any checkpoint publication.
+        for path, item in records:
+            if item["purpose"] != "initial" or item["state"] != "completed" or item.get("checkpoint_revision"):
                 continue
+            point = self.app.checkpoint(self.workspace, self.agent_id,
+                "首次进入已结束。实际职责与资料以此快照中的文件为准。",
+                content="原生事件按记录段保存；此记录不宣称执行了任何未安排的产品任务。",
+                binding=self.binding, directory=str(self.root), checkpoint_id="initial-" + self.binding)
+            item["checkpoint_revision"] = point["revision"]
+            write_json(path, item)
+
+    def _inputs(self, records=None):
+        records = self._read_inputs() if records is None else records
+        queued = [(path, item) for path, item in records if item["state"] == "queued"]
+        # Legacy records have no sequence; keep them first in recorded timestamp order.
+        queued.sort(key=lambda pair: (pair[1].get("sequence", 0), pair[1]["created_at"], pair[1]["id"]))
+        for path, item in queued:
+            if item["delivery"] == "insert" and getattr(self.adapter, "supports_insert", True) is False:
+                self.status(state="input_blocked", message_id=item["id"], reason="insert_not_supported")
+                return
             if self.adapter.status() == "busy" and item["delivery"] == "normal":
                 return
             self.app.require_binding(self.workspace, self.agent_id, self.binding)

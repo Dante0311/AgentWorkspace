@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import sys
+import threading
 import urllib.parse
 import webbrowser
 
@@ -50,8 +51,14 @@ def make_server(app, port=8765, token=None):
             return True
 
         def do_GET(self):
-            if self.path == "/":
-                page = (files("agent_workspace") / "resources" / "index.html").read_bytes()
+            if self.path == "/capabilities":
+                # Public, static package documentation only; no instance or account data.
+                guide = (files("agent_workspace") / "resources" / "prompts" / "capabilities.md").read_bytes()
+                self.reply(200, guide, "text/plain; charset=utf-8")
+                return
+            if self.path in ("/", "/setup"):
+                name = "setup.html" if self.path == "/setup" or not app.workspace_list() else "index.html"
+                page = (files("agent_workspace") / "resources" / name).read_bytes()
                 self.reply(200, page, "text/html; charset=utf-8")
                 return
             if not self.authorized():
@@ -60,12 +67,22 @@ def make_server(app, port=8765, token=None):
                 if self.path == "/api/commands":
                     result = list(command_map(app))
                 elif self.path == "/api/state":
-                    result = {"workspaces": app.workspace_list(), "agents": [], "errors": []}
+                    from .maintenance import installation_id
+                    result = {"installation_id": installation_id(app),
+                              "workspaces": app.workspace_list(), "agents": [], "errors": []}
                     for workspace in result["workspaces"]:
                         try:
                             for agent in app.agents(workspace["alias"]):
-                                result["agents"].append({"workspace": workspace["alias"], **app.show(workspace["alias"], agent["id"])})
-                        except Error as exc:
+                                try:
+                                    detail = app.show(workspace["alias"], agent["id"])
+                                except (Error, ValueError, OSError, KeyError) as exc:
+                                    # Keep the known identity, not invented liveness or ownership.
+                                    error = f"Instance observation failed ({type(exc).__name__}); use workspace doctor."
+                                    detail = {**agent, "observation_error": error}
+                                    result["errors"].append({"workspace": workspace["alias"], "agent": agent["id"],
+                                                             "error": f"{agent['id']}: {error}"})
+                                result["agents"].append({"workspace": workspace["alias"], **detail})
+                        except (Error, ValueError, OSError, KeyError) as exc:
                             result["errors"].append({"workspace": workspace["alias"], "error": str(exc)})
                 else:
                     self.reply(404, {"error": "Not found"})
@@ -97,15 +114,22 @@ def make_server(app, port=8765, token=None):
     return server
 
 
-def serve(app, port=8765, open_browser=False):
+def serve(app, port=8765, open_browser=False, setup=False):
     server = make_server(app, port)
-    url = f"http://127.0.0.1:{server.server_port}/#token={server.control_token}"
+    path = "/setup" if setup else "/"
+    url = f"http://127.0.0.1:{server.server_port}{path}#token={server.control_token}"
     print("本机工作台（地址包含控制凭据，请勿分享）：\n" + url, flush=True)
     if open_browser:
         webbrowser.open(url)
+    from .maintenance import run
+    stop = threading.Event()
+    worker = threading.Thread(target=run, args=(app, stop), name="aw-maintenance", daemon=True)
+    worker.start()
     try:
         server.serve_forever()
     finally:
+        stop.set()
+        worker.join(timeout=5)
         server.server_close()
 
 

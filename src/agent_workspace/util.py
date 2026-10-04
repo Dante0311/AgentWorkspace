@@ -98,10 +98,8 @@ def locked(path: Path, *, wait: float = 30):
     """OS lock, released on process death; never infer liveness from an old PID file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as stream:
-        stream.seek(0, os.SEEK_END)
-        if stream.tell() == 0:
-            stream.write(b"0")
-            stream.flush()
+        # Windows permits byte-range locks beyond EOF. Writing an initial byte
+        # before locking races another handle which has already locked that byte.
         deadline = time.monotonic() + wait
         while True:
             try:

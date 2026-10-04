@@ -24,13 +24,16 @@ def parser():
     serve = domains.add_parser("serve", help="Local workbench and authenticated HTTP tools.")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--open", action="store_true")
+    setup = domains.add_parser("setup", help="Open first-use setup; detect dependencies, never install them.")
+    setup.add_argument("--port", type=int, default=8765)
+    setup.add_argument("--open", action="store_true")
     domains.add_parser("mcp", help="MCP stdio tools; use AW_* environment to bind model identity.")
 
     def actions(domain, names):
         sub = domains.add_parser(domain).add_subparsers(dest="action", required=True)
         return {name: sub.add_parser(name) for name in names}
 
-    ws = actions("workspace", ["init", "connect", "bootstrap-remote", "list", "show", "friend", "project"])
+    ws = actions("workspace", ["init", "connect", "bootstrap-remote", "list", "show", "friend", "project", "doctor"])
     for key in ("init", "connect", "bootstrap-remote"):
         ws[key].add_argument("name")
         ws[key].add_argument("directory" if key == "init" else "address")
@@ -42,16 +45,19 @@ def parser():
 
     ag = actions("agent", ["create", "import", "list", "show", "connect", "configure", "versions", "update",
         "promote", "archive", "unarchive", "start", "bind", "stop", "handoff", "renew", "fork", "input",
-        "capture-desktop", "sync", "upgrade-tools"])
+        "capture-desktop", "sync", "upgrade-tools", "configure-codex", "configure-sdk",
+        "transfer", "transfer-profile", "transfer-continue", "transfer-status"])
     for key, sub in ag.items():
         if key != "list":
             sub.add_argument("name" if key in ("create", "import") else "agent_id")
-            sub.add_argument("--directory")
+            if key not in ("configure-codex", "configure-sdk", "transfer-profile"):
+                sub.add_argument("--directory")
     for key in ("create", "import"):
         ag[key].add_argument("--id", dest="agent_id")
         ag[key].add_argument("--description", default="")
         ag[key].add_argument("--definition")
         ag[key].add_argument("--revision")
+    ag["create"].add_argument("--request-id", help="Resume an exact creation request; requires --id.")
     ag["import"].add_argument("--from-directory", dest="import_directory", required=True)
     ag["import"].add_argument("--asset", dest="assets", action="append", required=True)
     ag["configure"].add_argument("--config", dest="value", required=True, help="JSON or @file.json")
@@ -70,6 +76,29 @@ def parser():
     ag["input"].add_argument("--text", required=True)
     ag["input"].add_argument("--delivery", choices=["normal", "insert"], default="normal")
     ag["capture-desktop"].add_argument("--command", help="JSON argv array of the actual desktop MCP server.")
+
+    for key in ("configure-codex", "configure-sdk", "transfer-profile"):
+        for field in ("model", "effort", "base-url", "env-key", "executable"):
+            ag[key].add_argument("--" + field, default=None if field == "executable" else "")
+        if key != "configure-codex":
+            ag[key].add_argument("--kind", required=True, choices=["claude", "codebuddy"] if key == "configure-sdk" else ["codex", "claude", "codebuddy"])
+            ag[key].add_argument("--allowed-tool", dest="allowed_tools", action="append")
+    ag["transfer"].add_argument("--config", dest="target_config", required=True, help="Runtime JSON or @file.json")
+    for key in ("transfer", "transfer-profile", "input"):
+        ag[key].add_argument("--request-id")
+
+    mt = actions("maintenance", ["status", "schedule", "grant", "repair", "run"])
+    mt["schedule"].add_argument("--enabled", action=argparse.BooleanOptionalAction, required=True)
+    mt["schedule"].add_argument("--interval", type=float, default=300)
+    mt["schedule"].add_argument("--notify", action="store_true")
+    mt["grant"].add_argument("agent_id")
+    mt["grant"].add_argument("--command", dest="commands", action="append", default=[])
+    mt["grant"].add_argument("--target", dest="targets", action="append", default=[])
+    mt["repair"].add_argument("agent_id")
+    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle"], required=True)
+    mt["repair"].add_argument("--request-id", required=True)
+    for field in ("operation-id", "bridge", "expected-binding", "expected-generation"):
+        mt["repair"].add_argument("--" + field)
 
     cp = actions("checkpoint", ["create", "list", "show"])
     for sub in cp.values():
@@ -154,14 +183,29 @@ def parse_json(value):
 
 
 def main(argv=None):
+    # Machine-readable JSON uses UTF-8 even when redirected on Windows.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     options = vars(parser().parse_args(argv))
     home, workspace = options.pop("home"), options.pop("workspace")
     domain, action = options.pop("domain"), options.pop("action", None)
     app = App(home)
     try:
-        if domain == "serve":
+        actor = None
+        if os.environ.get("AW_BINDING") and os.environ.get("AW_AGENT"):
+            if not os.environ.get("AW_WORKSPACE"):
+                raise Error("An inherited model identity requires AW_WORKSPACE.")
+            actor = (os.environ["AW_WORKSPACE"], os.environ["AW_AGENT"], os.environ["AW_BINDING"])
+        if actor and (domain in ("serve", "setup") or (domain in ("maintenance", "runtime") and action == "run")):
+            raise Error("Starting a server or worker is a user-management operation.")
+        if domain == "maintenance" and action == "run":
+            from .maintenance import run
+            run(app)
+            return 0
+        if domain in ("serve", "setup"):
             from .server import serve
-            serve(app, options["port"], options["open"])
+            serve(app, options["port"], options["open"], setup=domain == "setup")
             return 0
         if domain == "mcp":
             from .server import mcp
@@ -180,8 +224,11 @@ def main(argv=None):
                 if args.get("content") is not None:
                     raise Error("Choose either --content or --content-file.")
                 args["content"] = Path(file).read_text(encoding="utf-8")
-            if "value" in args:
-                args["value"] = parse_json(args["value"])
+            for key in ("value", "target_config"):
+                if key in args:
+                    args[key] = parse_json(args[key])
+            if command == "maintenance.repair":
+                args["action"] = args.pop("repair_action")
             if command == "agent.capture-desktop" and args.get("command"):
                 args["command"] = parse_json(args["command"])
             if command in ("workspace.friend", "workspace.project"):
@@ -195,14 +242,11 @@ def main(argv=None):
                 command, args["renew"] = "agent.handoff", True
             if domain == "bridge" and action in ("start", "stop"):
                 command, args["enabled"] = "bridge.switch", action == "start"
-        if command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+        if not command.startswith("setup.") and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)
         # A model's inherited identity never silently becomes an administrator.
-        actor = None
-        if os.environ.get("AW_BINDING") and os.environ.get("AW_AGENT"):
-            actor = (workspace, os.environ["AW_AGENT"], os.environ["AW_BINDING"])
         result = execute(app, command, args, actor=actor)
         print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
         if isinstance(result, dict) and result.get("state") in ("pending", "outcome_unknown"):

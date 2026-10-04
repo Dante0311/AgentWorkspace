@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import queue
 import subprocess
 import threading
@@ -12,15 +11,20 @@ import time
 from .util import Conflict, Error, child_command, digest, locked, now, read_json, slug, uid, write_json
 
 
-def configure(app, workspace, agent_id, name, value, directory=None):
+def configure(app, workspace, agent_id, name, value, directory=None, expected_generation=None):
     root = app.root(workspace, agent_id, directory)
     slug(name)
     if not isinstance(value.get("command"), list) or not value["command"]:
         raise Error("A bridge command is an explicit argv array.")
     if value.get("max_restarts", 5) < 0:
         raise Error("Unbounded bridge restarts are not supported.")
-    value = {**value, "generation": uid("g")}
-    write_json(root / ".aw-local/bridges" / f"{name}.json", value)
+    path = root / ".aw-local/bridges" / f"{name}.json"
+    with locked(path.with_suffix(".lock")):
+        previous = read_json(path, {})
+        if expected_generation is not None and previous.get("generation") != expected_generation:
+            raise Conflict("Bridge configuration changed; inspect it before retrying.")
+        value = {**value, "generation": uid("g")}
+        write_json(path, value)
     return {"name": name, "configured": True, "enabled": value.get("enabled", False)}
 
 
@@ -60,9 +64,12 @@ class BridgeManager:
             self.events.put((name, {"event": "error", "reason": "bridge_protocol_error", "fatal": True}))
 
     def tick(self):
-        self.app.require_binding(self.workspace, self.agent_id, self.binding)
         folder = self.root / ".aw-local/bridges"
-        for path in folder.glob("*.json"):
+        paths = list(folder.glob("*.json"))
+        if not paths and not self.processes and self.events.empty():
+            return
+        self.app.require_binding(self.workspace, self.agent_id, self.binding)
+        for path in paths:
             name, config = path.stem, read_json(path)
             if not config.get("enabled"):
                 self.stop(name)

@@ -1,34 +1,46 @@
 """One explicit command surface for CLI, local HTTP and model tools."""
 from __future__ import annotations
 
+from functools import partial
 import inspect
-import json
-from pathlib import Path
-import webbrowser
 
-from . import bridges, runtime
+from . import bridges, runtime, onboarding, harness_config, maintenance, transfer
 from .messages import Messages
-from .util import Conflict, Error, digest, inside, locked, read_json, write_bytes, write_json
+from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
 
 READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
-             "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show",
-             "asset.list", "asset.read", "runtime.status", "bridge.status"}
+             "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
+             "asset.list", "asset.read", "runtime.status", "bridge.status",
+             "agent.transfer-status", "maintenance.status", "workspace.doctor"}
+
+USER_MANAGEMENT = {"agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
+                   "workspace.init", "setup.scan", "setup.check-git", "setup.create",
+                   "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
+                   "agent.configure-sdk", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
+                   "maintenance.grant", "maintenance.schedule", "maintenance.repair"}
+CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send"}
 
 
-def assets(app, workspace, agent_id, operation, path=None, content=None, revision=None, directory=None):
+def assets(app, operation, workspace, agent_id, path=None, content=None, revision=None, directory=None):
     root = app.root(workspace, agent_id, directory)
     if operation == "list":
         content_map, skipped = app.collect(root)
         return {"files": [{"path": p, "bytes": len(data), "revision": digest(data)} for p, data in content_map.items()],
                 "excluded": skipped}
+    path = relpath(path)
+    if any(":" in part or part.endswith((".", " ")) for part in path.split("/")):
+        raise Error("Use portable asset paths without drive/stream syntax or trailing dots/spaces.")
     target = inside(root, path)
     if operation == "read":
         data = target.read_bytes()
         return {"path": path, "content": data.decode("utf-8"), "revision": digest(data)}
-    if path.startswith(".aw/") or path == "source.json":
-        raise Error("Use platform operations to change managed metadata; asset.write edits user assets.")
     with locked(root / ".aw-local/files.lock"):
+        # Check both the normalized name and its destination, including directory symlinks.
+        resolved = relpath(target.resolve().relative_to(root.resolve()).as_posix())
+        for candidate in (path, resolved):
+            if candidate.split("/", 1)[0].casefold() == ".aw" or candidate.casefold() == "source.json":
+                raise Error("Use platform operations to change managed metadata; asset.write edits user assets.")
         existing = target.read_bytes() if target.exists() else None
         if (digest(existing) if existing is not None else None) != revision:
             raise Conflict("Asset changed; read it before replacing it.")
@@ -87,7 +99,7 @@ def message_poll(app, workspace, agent_id, binding, directory=None):
             adapter.close()
     # Never start another app-server just to poll a managed CLI thread.
     result = Messages(app).poll(workspace, agent_id, binding, directory=directory)
-    if entry["kind"] == "codex":
+    if entry["kind"] in ("codex", "claude", "codebuddy"):
         result["hint"] = "The owning runner performs push polling. This invocation only reports the pending notification."
     return result
 
@@ -125,34 +137,50 @@ def bridge_status(app, workspace, agent_id, directory=None):
 def command_map(app):
     messages = Messages(app)
     return {
-        "workspace.init": app.workspace_init, "workspace.connect": app.workspace_connect,
+        "workspace.init": partial(onboarding.init_workspace, app), "workspace.connect": app.workspace_connect,
         "workspace.bootstrap-remote": app.workspace_bootstrap_remote,
         "workspace.list": app.workspace_list, "workspace.show": app.workspace_show,
         "workspace.relation": app.relation,
+        "setup.scan": onboarding.scan, "setup.check-git": onboarding.check_git,
+        "setup.create": partial(onboarding.create_workspace, app),
+        "setup.inspect-codex": harness_config.inspect_codex,
+        "setup.inspect-sdk": harness_config.inspect_sdk,
+        "setup.prepare-instance": partial(onboarding.prepare_instance, app),
+        "agent.configure-codex": partial(harness_config.configure_codex, app),
+        "agent.configure-sdk": partial(harness_config.configure_sdk, app),
+        "agent.transfer": partial(transfer.request, app),
+        "agent.transfer-profile": partial(transfer.request_profile, app),
+        "agent.transfer-continue": partial(transfer.advance, app),
+        "agent.transfer-status": partial(transfer.status, app),
+        "workspace.doctor": partial(maintenance.doctor, app),
+        "maintenance.grant": partial(maintenance.grant, app),
+        "maintenance.schedule": partial(maintenance.schedule, app),
+        "maintenance.status": partial(maintenance.status, app),
+        "maintenance.repair": partial(maintenance.repair, app),
         "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show,
         "agent.connect": app.connect_agent, "agent.configure": app.configure,
         "agent.update": app.update, "agent.versions": app.versions, "agent.promote": app.promote,
         "agent.archive": app.archive, "agent.fork": app.fork,
         "checkpoint.create": app.checkpoint, "checkpoint.list": app.checkpoints, "checkpoint.show": app.checkpoint_show,
         "agent.sync": app.sync_agent,
-        "agent.start": lambda **a: runtime.start(app, **a), "agent.bind": lambda **a: bind_entry(app, **a),
-        "agent.stop": lambda **a: stop_entry(app, **a), "agent.handoff": lambda **a: runtime.handoff_request(app, **a),
-        "agent.input": lambda **a: runtime.queue_input(app, **a),
-        "agent.capture-desktop": lambda **a: runtime.configure_desktop(app, **a),
-        "agent.upgrade-tools": lambda **a: upgrade_tools(app, **a),
-        "runtime.start": lambda **a: runtime_launch(app, **a), "runtime.stop": lambda **a: runtime_stop(app, **a),
+        "agent.start": partial(runtime.start, app), "agent.bind": partial(bind_entry, app),
+        "agent.stop": partial(stop_entry, app), "agent.handoff": partial(runtime.handoff_request, app),
+        "agent.input": partial(runtime.queue_input, app),
+        "agent.capture-desktop": partial(runtime.configure_desktop, app),
+        "agent.upgrade-tools": partial(upgrade_tools, app),
+        "runtime.start": partial(runtime_launch, app), "runtime.stop": partial(runtime_stop, app),
         "runtime.status": app.show,
         "work.create": app.work_create, "work.list": app.work_list, "work.show": app.work_show,
         "work.update": app.work_update, "work.deliver": app.work_deliver,
         "message.send": messages.send, "message.list": messages.list, "message.show": messages.show,
-        "message.receive": messages.receive, "message.poll": lambda **a: message_poll(app, **a),
-        "message.reconcile": messages.reconcile, "message.watch": lambda **a: runtime.watch(app, **a),
-        "asset.list": lambda **a: assets(app, operation="list", **a),
-        "asset.read": lambda **a: assets(app, operation="read", **a),
-        "asset.write": lambda **a: assets(app, operation="write", **a),
-        "bridge.configure": lambda **a: bridges.configure(app, **a),
-        "bridge.switch": lambda **a: bridge_switch(app, **a), "bridge.status": lambda **a: bridge_status(app, **a),
-        "bridge.send": lambda **a: bridges.send(app, **a),
+        "message.receive": messages.receive, "message.poll": partial(message_poll, app),
+        "message.operation": messages.operation, "message.reconcile": messages.reconcile, "message.watch": partial(runtime.watch, app),
+        "asset.list": partial(assets, app, "list"),
+        "asset.read": partial(assets, app, "read"),
+        "asset.write": partial(assets, app, "write"),
+        "bridge.configure": partial(bridges.configure, app),
+        "bridge.switch": partial(bridge_switch, app), "bridge.status": partial(bridge_status, app),
+        "bridge.send": partial(bridges.send, app),
     }
 
 
@@ -160,24 +188,35 @@ def execute(app, command, arguments, *, actor=None):
     commands = command_map(app)
     if command not in commands:
         raise Error(f"Unknown operation: {command}")
+    handler = commands[command]
+    signature = inspect.signature(handler)
+    if not isinstance(arguments, dict):
+        raise Error("Operation arguments must be a JSON object.")
     args = dict(arguments)
     if actor:
         workspace, aid, binding = actor
-        # The adapter supplies the actor; the model must not impersonate a successor entry.
-        if command not in READ_ONLY:
-            app.require_binding(workspace, aid, binding, allow_stopping=command in ("checkpoint.create", "agent.stop"))
-        if command not in ("workspace.list", "workspace.init", "workspace.connect", "workspace.bootstrap-remote", "message.reconcile"):
+        # Signatures supply defaults, never authorization. A new agent's ID is a target.
+        if "workspace" in signature.parameters:
             args.setdefault("workspace", workspace)
-        signature = inspect.signature(commands[command])
-        if "agent_id" in signature.parameters or command.split(".")[0] in ("asset", "bridge", "runtime"):
+        if "agent_id" in signature.parameters and command != "agent.create":
             args.setdefault("agent_id", aid)
-        if command in ("message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send"):
-            if args.get("agent_id", aid) != aid or args.get("binding", binding) != binding:
-                raise Conflict("This operation must use the calling instance and binding.")
-            args.update(agent_id=aid, binding=binding)
-        if command in ("agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure"):
-            raise Error("Runtime lifecycle/configuration is a user-management operation, not a model tool.")
+        if command in USER_MANAGEMENT and not maintenance.allowed(app, actor, command, args):
+            raise Error("This is a user-management operation; a scoped caretaker grant is required.")
+        # Ordinary agents may act on their own assets; another instance is a management target.
+        if (command not in READ_ONLY and command not in CALLER_BOUND
+                and (args.get("workspace", workspace) != workspace
+                     or (command != "agent.create" and args.get("agent_id", aid) != aid))
+                and not maintenance.allowed(app, actor, command, args)):
+            raise Error("Managing another instance requires an explicit caretaker grant.")
+        if command in CALLER_BOUND:
+            for name, value in (("workspace", workspace), ("agent_id", aid), ("binding", binding)):
+                if args.get(name, value) != value:
+                    raise Conflict("This operation must use the calling workspace, instance and binding.")
+                args[name] = value
     try:
-        return commands[command](**args)
+        signature.bind(**args)
     except TypeError as exc:
         raise Error(f"Invalid arguments for {command}: {exc}") from exc
+    if actor and command not in READ_ONLY:
+        app.require_binding(workspace, aid, binding, allow_stopping=command in ("checkpoint.create", "agent.stop"))
+    return handler(**args)

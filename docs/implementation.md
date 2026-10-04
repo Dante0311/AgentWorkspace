@@ -1,44 +1,56 @@
 # V1 实现进展
 
-当前代码版本 **0.1.0a1**。这是可安装的开发预览实现，不再只是项目文档。生产 V1 尚未验收；具体证据见 [validation.md](validation.md)，使用方式见 [usage.md](usage.md)。
+本页描述当前功能分支的实现事实，不替代 [design.md](design.md)。版本仍为 `0.1.0a1`，不是已完成全部目标和实机验收的正式 V1。实际恢复位置与逐次测试见 [development-checkpoint.md](development-checkpoint.md)，操作见 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
 
-## 实现位置
+## 模块
 
-| 文件 | 职责 |
+| 文件 | 当前职责 |
 | --- | --- |
-| `app.py` | Workspace、实例与资料、来源更新、检查点、Fork、控制权、可选 Work。 |
-| `gitstore.py` | 不碰用户索引的 Git 对象读写、条件提交及 GitHub REST 访问。 |
-| `messages.py` | 不可变 Message/ACK、Git 发布收据、FIFO、当前入口投递。 |
-| `runtime.py`、`rpc.py` | Desktop 拥有者 MCP、Codex app-server、输入记录、handoff/relay 和独占运行器。 |
-| `bridges.py`、`wecom.py` | 可选通道进程监督、显式发送、企微文本插件。 |
-| `commands.py`、`cli.py`、`server.py` | 一份操作实现的 CLI、HTTP、MCP 及工作台入口。 |
-| `resources/` | 七个实际 Skill、共用提示词、中文本机 UI。 |
-| `tests/` | 隔离数据的真实 Git 测试、协议 peer、接口与故障回归。 |
+| `app.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding、Work 和 Git 访问。 |
+| `onboarding.py` | 只发现和引导的首次使用、只读 Git 检查、三份管家定义/实例和本机准备。 |
+| `harness_config.py` | Codex/Claude 原生模型选项查询、三种受管入口的实例独立模型配置；凭据只保存引用。 |
+| `runtime.py`、`rpc.py`、`native_sdk.py` | 实际原生入口、持续事件、工具边界、初始接入、独占 Runner 与停工观测。 |
+| `transfer.py` | 原绑定和固定后继的持久 handoff/relay，结果未知不重新创建会话。 |
+| `messages.py` | Message/ACK、Git 发布补齐、FIFO 与当前入口通知。 |
+| `maintenance.py` | 作用域授权、健康观测、安装位置归属明确的巡检、有限维修和结果复查。 |
+| `bridges.py`、`wecom.py` | 可选外部渠道、文本收发与组件看护。 |
+| `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和七个 Skill。 |
+| `scripts/install.py`、CI | 可验证制品、空目录隔离安装、源码快照与 wheel/sdist。 |
 
-## 这版落实的使用路径
+没有引入通用调度平台、模型网关、ACP 依赖或新的 Agent Loop。SDK 是按需安装的原生客户端，不是我们自研 Harness。元数据探测与实际会话共用凭据路由；Claude 握手返回模型选项，无需发送提示词，自有服务不使用内置目录。
 
-无 Definition/Work 创建 → 独立资料根 → 预留唯一新入口 → 按实际 Adapter 绑定原生会话 → 自动收发/主动收件 → 检查点 → 明确 stop → 新会话接手。可从检查点另建实例，不过滤已有资产、不复制原执行资格。
+## 已实现的闭环
 
-没有具体任务时，初始化提示词要求简短问候与初始检查点，不自行查询产品或试做任务。CLI 运行器额外根据实际首次轮次结束事件保存初始快照，不将失败轮次报告为初始化完成。
+创建/接入 Workspace → 选择并保存运行配置 → 为实例建立真实受管会话 → 平台 MCP/动态工具与持续通信 → 保存检查点、确认原端停妥 → 固定后继在同一实例目录接手 → 后续 Message 到达新入口。
 
-轮询、模型输入与消息发送不等待整个模型轮次串行完成。Git CAS 负责共享竞争；本机 OS 锁加共享 binding controller 防止另一个目录/进程并行驱动同一实例。桥接异常可有限重启，主动关闭与 handoff 不自动拉起。
+Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试，实际创建 Git 检查点；Claude/CodeBuddy 在同会话第二轮接收 Message 并生成 ACK。本轮还让原生 Codex 通过工具执行 checkpoint/stop，由真实 Runner 自动创建原生 Claude 后继，并验证 `Message.poll` 向后继投递。模型决策由协议夹具指定，不是付费模型质量测试。
 
-## 尚待实机验收 / 明确没有实现
+三个管家共用普通实例与运行能力。Steward 处理 Workspace 请求，Sentinel 管理用户授权的巡检计划，程序计时和采集事实，Maintainer 只能执行被允许的维修。没有对应执行环境时，创建身份不会假装已启用巡检。
 
-**Desktop：** 已实现控制客户端、工具能力核对、真实 session 绑定、新会话 composer 入口、有限重连。未在真实用户版本跑通，也没有自动发现所有版本安装路径/新管道；首次仍可能需要 capture 和手动发送入口提示词。
+维修动作与复查分开持久记录：动作成功而复查失败时保留动作结果，同一请求仅补复查；不把整个操作降成未知后诱发重做。损坏的本机观测记录报告异常并保留，其他实例仍可检查。普通代理不能凭自己的 active Binding 写另一实例资产，管家也须有对应目标授权；这不是 OS 级隔离。
 
-**Codex：** 已实现 app-server 协议和动态工具，对应协议 peer 测试不等于真实模型运行。没有验证账号登录、Windows `.cmd`、当前原生权限及长期运行。
+## 验证层次
 
-**企业微信：** 已实现可选官方 SDK 文本通道代码、通用桥接协议与监督；真实 Bot 鉴权/群聊未验证。多模态、文件、卡片不是本次插件实现范围。
+- 默认 CI：Linux/Windows、Python 3.11/3.13 的完整安装与测试；独立 wheel 安装检查内置资源和三实例创建。
+- `Native SDK contracts`：固定 SDK 版本、原生客户端回环 API、平台工具与自动交接。实际测试范围以该提交的工作流和日志为准。
+- 本机定向回归：恢复、并发前提、未知结果、撤销授权、重复调度、HTTP/CLI 和原生工具副作用。
+- 用户实机：已安装 Desktop、真实登录、自有模型服务的实际能力、生产 Git 权限、企业微信、长期在线和新机器体验。
 
-**远端：** 本地 Git 远端是真实测试；GitHub REST 是协议测试，没有用生产 token 跑平台的双仓收发。限流、企业策略、生产规模仍需实测。
+被跳过的原生测试不计为通过；分组有交叉时不累加数量；当前源码不能沿用旧提交的绿色 CI。源码制品只用于准确恢复，长期成果保存在 Git 提交中。
 
-**恢复：** 原操作补齐、明确关闭和局部重连已做；完全丢失的原生会话、不明 thread 创建、硬崩溃占位都保留事实并停止，不提供强制接管或任意自动重放。日志与本机 journal 不默认承诺全部跨机恢复。
+## 剩余事项的性质
 
-**范围：** 没有 V2 多 Workspace 独立身份、V3 统一聊天与多事务会话、Merge、智能记忆筛选、复杂权限或插件市场。选定普通文件导入不是 SBP/NRCHome 全量迁移器。
+| 类别 | 内容 |
+| --- | --- |
+| 已有实现，需实机验收 | 受管三种 CLI 的真实模型/账号、自己的 API、模型和强度生效；生产 Git/凭据；企业微信 Bot；隔离安装和持续运行体验。 |
+| 接口仍需核实，不能伪装成只待验收 | Claude/WorkBuddy 原生 Desktop 自动创建、持续投递、停工观测；Codex Desktop 从准备深链到完全自动建会话/跨端接手。 |
+| 当前接入未实现的能力 | Claude/CodeBuddy SDK 的已验证 insert/steer；CodeBuddy 模型目录探测目前不提供，字段手工配置并注明 unchecked。不能用中断并重开轮次冒充 insert。 |
+| 单独授权事项 | 合并 PR/main、正式版本发布、许可证、生产环境变更。 |
 
-后续优先在用户实际 Desktop 上执行一次真实进入、收发、handoff、同 App 换会话闭环，记录对应版本与外部结果，再判断是否满足 V1 发布门槛。不得以本地测试或 CLI 成功代替 Desktop 验收。
+设计目标保留，当前未提供的 Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制交付，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。获得可靠接口后再按同一执行权合同增加支持。不静默改用后台 CLI、不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份、强制接管和通用迁移仍未实现。
 
-## 独立仓初始化
+## 设计和历史归属
 
-代码现由 `Dante0311/AgentWorkspace` 维护。迁仓保持生产代码、打包资源和已有测试内容不变，补齐项目入口、包元数据链接和开发检查配置；见 [迁仓记录](migration.md) 与 [迁仓验证](validation-migration.md)。V3 多事务会话只更新设计方向，没有改变 V1 单入口约束。
+本分支同步文档 PR #2 已确认的产品设计与开发约定，不再保留旧的“初始化不创建管家”作为当前产品合同。底层预览 `App.workspace_init`/旧远端入口仍保留原始行为，用户创建路径使用 onboarding 包装；既有空间不会因接入或升级被隐式迁移。
+
+原始 `0.1.0a1` 的迁仓和验证记录保持原文，分别见 [migration.md](migration.md)、[validation.md](validation.md) 和 [validation-migration.md](validation-migration.md)。不要把当前接入进展回写成历史已经通过的证据。

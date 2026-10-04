@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import tempfile
 
 from . import __version__
 from .gitstore import GitStore, GitHubStore, open_store
@@ -176,7 +177,7 @@ class App:
         result = {}
         for name in ("workspace", "work", "message", "agent", "handoff", "relay", "fork"):
             result[f".agents/skills/{name}/SKILL.md"] = (root / "skills" / name / "SKILL.md").read_bytes()
-        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md"):
+        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md", "capabilities.md"):
             result[f".aw/prompts/{name}"] = (root / "prompts" / name).read_bytes()
         result[".aw/software.json"] = encode({"version": __version__,
             "files": {p: digest(v) for p, v in result.items()}})
@@ -204,12 +205,35 @@ class App:
         return result, {"definition": prefix, "revision": snap.revision, "files": mapping}
 
     def create(self, workspace, name, description="", agent_id=None, directory=None,
-               definition=None, revision=None, import_directory=None, assets=None):
+               definition=None, revision=None, import_directory=None, assets=None, request_id=None):
+        if request_id and (not agent_id or import_directory):
+            raise Error("Resumable creation needs an explicit agent ID and does not support file import.")
+        creation = None
+        if request_id:
+            creation = {"request_id": slug(request_id), "fingerprint": digest(encode({
+                "name": name, "description": description, "definition": definition, "revision": revision}))}
         agent_id = slug(agent_id or (name if re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name) else uid("a")))
         store = self.store(workspace)
         snap = store.snapshot()
-        if f"agents/{agent_id}.json" in snap.entries:
-            raise Conflict("Agent ID already exists. Connect to it; do not create a duplicate.")
+        location_target = directory or str(self.home / "instances" / workspace / agent_id)
+        existing = snap.json(f"agents/{agent_id}.json")
+        if existing:
+            if creation is None or existing.get("creation") != creation:
+                raise Conflict("Agent ID already exists. Connect to it; do not create a duplicate.")
+            return {**existing, **self.connect_agent(workspace, agent_id, location_target)}
+        branch = "instance/" + agent_id
+        if creation is not None:
+            previous = store.snapshot(branch)
+            if previous.revision:
+                saved = previous.json(".aw/creation.json", {})
+                identity = previous.json(".aw/identity.json", {})
+                if (saved.get("creation") != creation or saved.get("id") != agent_id
+                        or identity != {"workspace": snap.json("workspace.json")["locator"], "agent": agent_id}):
+                    raise Conflict("Existing branch does not belong to this creation request.")
+                # Resume only registration of this exact saved creation; never replace assets.
+                store.change("main", {f"agents/{agent_id}.json": encode(saved)},
+                             {f"agents/{agent_id}.json": None}, f"Register {agent_id}")
+                return {**saved, **self.connect_agent(workspace, agent_id, location_target)}
         content = self._resources()
         content["AGENTS.md"] = f"# {name}\n\n{description or '职责待使用者逐步完善。'}\n\n工作根为本目录。平台操作参见 `.agents/skills/`；不要将没有收到的任务当作默认任务。\n".encode()
         if definition:
@@ -232,16 +256,17 @@ class App:
                     raise Conflict(f"Import overlaps managed content: {target}")
                 content[target] = source_path.read_bytes()
         content[".aw/identity.json"] = encode({"workspace": snap.json("workspace.json")["locator"], "agent": agent_id})
-        branch = "instance/" + agent_id
-        sha = store.branch(branch, content)
         item = {"id": agent_id, "name": name, "description": description, "branch": branch,
                 "archived": False, "current": None, "has_run": False, "handoff": None,
                 "created_at": now()}
+        if creation is not None:
+            item["creation"] = creation
+            content[".aw/creation.json"] = encode(item)
+        sha = store.branch(branch, content)
         store.change("main", {f"agents/{agent_id}.json": encode(item)}, {f"agents/{agent_id}.json": None},
                      f"Register {agent_id}")
-        target = directory or str(self.home / "instances" / workspace / agent_id)
         try:
-            location = self.connect_agent(workspace, agent_id, target)
+            location = self.connect_agent(workspace, agent_id, location_target)
         except Exception as exc:
             raise Error(f"Agent {agent_id} and branch {sha} are saved; directory preparation failed. Use agent connect. {exc}") from exc
         return {**item, **location}
@@ -276,12 +301,20 @@ class App:
         if root.exists() and any(root.iterdir()):
             raise Conflict("Use an empty directory. To adopt an external agent, select its assets with agent import.")
         snap = self.store(workspace).snapshot(item["branch"])
-        root.mkdir(parents=True, exist_ok=True)
-        for path, data in snap.all().items():
-            write_bytes(inside(root, path), data)
+        content = snap.all()
         context = {"workspace": workspace, "locator": locator, "agent": agent_id, "revision": snap.revision,
-                   "saved": {p: digest(data) for p, data in snap.all().items()}, "exclude": DEFAULT_EXCLUDES}
-        write_json(marker, context)
+                   "saved": {p: digest(data) for p, data in content.items()}, "exclude": DEFAULT_EXCLUDES}
+        # Prepare a complete directory before exposing it. A failed copy is safe to retry.
+        root.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".aw-connect-", dir=root.parent) as temporary:
+            staged = Path(temporary) / "instance"
+            staged.mkdir()
+            for path, data in content.items():
+                write_bytes(inside(staged, path), data)
+            write_json(staged / ".aw-local/context.json", context)
+            if root.exists():
+                root.rmdir()  # Refuse if another writer put anything in the target.
+            staged.rename(root)
         def edit(value):
             locations = value["workspaces"][workspace].setdefault("instances", {}).setdefault(agent_id, [])
             if str(root) not in locations:
@@ -432,8 +465,8 @@ class App:
 
     def configure(self, workspace, agent_id, value, directory=None):
         root = self.root(workspace, agent_id, directory)
-        if value.get("kind", "manual") not in ("manual", "desktop", "codex"):
-            raise Error("Runtime kind must be manual, desktop or codex.")
+        if value.get("kind", "manual") not in ("manual", "desktop", "codex", "claude", "codebuddy"):
+            raise Error("Runtime kind must be manual, desktop, codex, claude or codebuddy.")
         write_json(root / ".aw-local/runtime.json", value)
         return {"configured": True, "entry_changed": False}
 
@@ -467,7 +500,7 @@ class App:
         store.change("main", {path: encode(item)}, {path: snap.entries[path]}, f"Archive={archived} {agent_id}")
         return item
 
-    def reserve(self, workspace, agent_id, directory=None):
+    def reserve(self, workspace, agent_id, directory=None, binding_id=None):
         root = self.root(workspace, agent_id, directory)
         config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
         store = self.store(workspace)
@@ -477,7 +510,7 @@ class App:
             raise Conflict("Agent already has an entry or is archived; relay cannot take it over.")
         if item["has_run"] and not item["handoff"]:
             raise Conflict("No handoff is available. A crash is not a release of ownership.")
-        binding = uid("b")
+        binding = slug(binding_id) if binding_id else uid("b")
         entry = {"id": binding, "agent": agent_id, "kind": config.get("kind", "manual"),
                  "phase": "starting", "session": None, "created_at": now(), "handoff": item["handoff"]}
         changes = {f"bindings/{binding}.json": encode(entry)}

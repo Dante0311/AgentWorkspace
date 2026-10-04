@@ -5,7 +5,6 @@ Publication receipts are local mechanical journals, not a second mutable Message
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import time
 
 from .gitstore import open_store
@@ -59,6 +58,21 @@ class Messages:
                 write_json(receipt_path, {"id": mid, "type": "message", "workspace": workspace,
                     "payload": body, "destinations": list(dict.fromkeys([own.address, target.address])), "completed": [], "sender": agent_id, "binding": binding})
         return self.reconcile(mid)
+
+    def operation(self, workspace, operation_id):
+        """Inspect the existing local receipt without publishing or replaying it."""
+        if workspace not in self.app.local()["workspaces"]:
+            raise Error("Unknown workspace.")
+        identifier = slug(operation_id)
+        receipt = read_json(self.app.home / "operations" / f"{identifier}.json")
+        if receipt is None:
+            return {"id": identifier, "state": "not_recorded"}
+        if receipt["workspace"] != workspace:
+            raise Conflict("Operation belongs to a different workspace.")
+        return {"id": identifier, "state": receipt.get("state", "pending"),
+                "type": receipt["type"], "payload": receipt["payload"],
+                "binding": receipt["binding"],
+                "agent": receipt.get("sender") or receipt.get("receiver")}
 
     def reconcile(self, operation_id):
         path = self.app.home / "operations" / (slug(operation_id) + ".json")
@@ -115,8 +129,10 @@ class Messages:
             return receipt
 
     def list(self, workspace, agent_id=None, direction="in", unacked=False):
-        store, meta = self._own(workspace)
-        snap = store.snapshot()
+        return self._list(self.app.store(workspace).snapshot(), agent_id, direction, unacked)
+
+    def _list(self, snap, agent_id=None, direction="in", unacked=False):
+        meta = snap.json("workspace.json")
         result = []
         for path in snap.entries:
             if not path.startswith("message-index/"):
@@ -185,7 +201,7 @@ class Messages:
         store = self.app.store(workspace)
         snap = store.snapshot()
         self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
-        messages = self.list(workspace, agent_id, unacked=True)
+        messages = self._list(snap, agent_id, unacked=True)
         if not messages:
             return {"state": "empty"}
         message = messages[0]
@@ -193,6 +209,9 @@ class Messages:
                         "binding": binding, "delivery": message["delivery"]}
         if adapter is None:
             return {"state": "awaiting_manual_receive", "notification": notification}
+        if message["delivery"] == "insert" and getattr(adapter, "supports_insert", True) is False:
+            return {"state": "delivery_unsupported", "message_id": message["id"], "delivery": "insert",
+                    "instruction": "当前接入不支持 insert；队头与原消息保留。告知用户，按其选择主动接收原消息或交接到支持的入口；不要重发副本、改写 delivery 或伪造 ACK。"}
         state = adapter.status()
         if state == "unknown":
             return {"state": "entry_state_unknown"}

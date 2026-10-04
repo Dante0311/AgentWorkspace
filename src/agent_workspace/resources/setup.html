@@ -9,6 +9,7 @@
 </style>
 </head>
 <body><main>
+<p><a href="/sessions">新建普通会话（无需 Workspace）</a></p>
 <h1>Agent Workspace · 首次配置</h1>
 <p class="muted">先准备环境，再建立身份，最后选择是否启动。检测不会安装软件或执行模型任务。 <a href="/capabilities" target="_blank" rel="noopener noreferrer">当前版本支持范围与限制</a></p>
 <section id="auth" hidden><h2>连接本机工作台</h2><label for="token">启动地址中的控制 Token</label><input id="token" type="password" autocomplete="off"><button id="login">连接</button></section>
@@ -32,6 +33,8 @@
 <label for="kind">原生运行环境</label><select id="kind"><option value="codex">Codex CLI</option><option value="claude">Claude Code CLI / SDK</option><option value="codebuddy">CodeBuddy Code CLI / SDK</option></select>
 <label for="executable">所选 CLI 可执行路径（留空则从 PATH 查找）</label><input id="executable" autocomplete="off" spellcheck="false">
 <div class="fields"><div><label for="base_url">自有模型服务 URL（可选）</label><input id="base_url" placeholder="留空使用所选 Harness 已有配置" autocomplete="off" spellcheck="false"></div><div><label for="env_key">持有凭据的环境变量名（不是 API 密钥）</label><input id="env_key" placeholder="MY_MODEL_API_KEY" autocomplete="off" spellcheck="false"></div></div>
+<label><input id="allow_http" type="checkbox" style="width:auto"> 允许此地址使用 HTTP 明文传输</label>
+<p class="muted">仅在你确认可信网络时勾选；HTTP 不加密 API 凭据与会话内容。地址或运行环境变更后需要重新确认。</p>
 <p class="muted">自有服务须匹配 Harness 原生协议，Codex 使用 Responses；这里不做协议转换。环境变量必须在启动工作台的进程中可用，不会写入共享仓。此处不会修改用户全局配置。</p>
 <button type="button" id="models">查询所选 Harness 元数据</button>
 <small class="muted">仅点击此按钮才查询。Codex/Claude 可短暂连接原生控制接口，不发送提示词、不登录；CodeBuddy 未提供已验证目录时明确提示。自有服务不使用内置目录。</small>
@@ -62,7 +65,7 @@ async function scan(){const result=await command('setup.scan');gitReady=result.c
 async function loadAgents(){const data=await api('/api/state');agents=data.agents;const old=$('workspace').value;$('workspace').replaceChildren(...data.workspaces.map(w=>new Option(w.alias,w.alias)));if(data.workspaces.some(w=>w.alias===old))$('workspace').value=old;chooseAgents();if(data.errors?.length)$('error').textContent=data.errors.map(x=>x.workspace+'：'+x.error).join('\n')}
 function chooseAgents(){const old=$('agent').value;const list=agents.filter(a=>a.workspace===$('workspace').value);$('agent').replaceChildren(...list.map(a=>new Option(a.name+' / '+a.id,a.id)));if(list.some(a=>a.id===old))$('agent').value=old}
 function target(){const workspace=$('workspace').value,agent_id=$('agent').value;if(!workspace||!agent_id)throw new Error('请先创建/接入 Workspace 并选择实例。');return {workspace,agent_id}}
-function profile(){const args=$('kind').value==='codex'?{}:{kind:$('kind').value};for(const name of ['executable','base_url','env_key','model','effort'])if($(name).value.trim())args[name]=$(name).value.trim();return args}
+function profile(){const args=$('kind').value==='codex'?{}:{kind:$('kind').value};for(const name of ['executable','base_url','env_key','model','effort'])if($(name).value.trim())args[name]=$(name).value.trim();args.allow_http=$('allow_http').checked;return args}
 async function boot(){try{await scan();await loadAgents()}catch(e){$('auth').hidden=false;$('error').textContent=e.message}}
 $('login').onclick=()=>{token=$('token').value;sessionStorage.setItem('aw-token',token);boot()};
 $('scan').onclick=()=>action($('scan'),scan);$('reload').onclick=()=>action($('reload'),loadAgents);$('workspace').onchange=chooseAgents;
@@ -71,7 +74,7 @@ $('workspace-form').onsubmit=e=>{e.preventDefault();action($('create'),async()=>
 $('prepare').onclick=()=>action($('prepare'),async()=>{show(await command('setup.prepare-instance',target()));await loadAgents()});
 $('models').onclick=()=>action($('models'),async()=>{const args=profile();delete args.model;delete args.effort;const result=await command($('kind').value==='codex'?'setup.inspect-codex':'setup.inspect-sdk',args);catalog=result.models||[];$('model-options').replaceChildren(...catalog.map(m=>new Option(m.displayName||m.model||m.id,m.model||m.id)));$('effort-options').replaceChildren();$('capability').textContent='认证：'+(result.authentication||result.state)+'；目录：'+(result.catalog||'未确认')+'。只查询元数据，不代表模型调用成功。';show(result)});
 $('model').oninput=()=>{const item=catalog.find(m=>(m.model||m.id)===$('model').value);$('effort-options').replaceChildren(...(item?.supportedReasoningEfforts||[]).map(x=>new Option(x.description||x.reasoningEffort,x.reasoningEffort)))};
-for(const name of ['base_url','env_key','executable','kind'])$(name).oninput=()=>{catalog=[];$('models').disabled=false;$('model-options').replaceChildren();$('effort-options').replaceChildren();$('capability').textContent='连接配置已改变，请重新查询或按服务说明填写。'};
+for(const name of ['base_url','env_key','executable','kind'])$(name).oninput=()=>{if(name==='base_url'||name==='kind')$('allow_http').checked=false;catalog=[];$('models').disabled=false;$('model-options').replaceChildren();$('effort-options').replaceChildren();$('capability').textContent='连接配置已改变，请重新查询或按服务说明填写。'};
 $('profile-form').onsubmit=e=>{e.preventDefault();action(e.submitter,async()=>show(await command(profileCommand(),{...target(),...profile()})))};
 $('save-group').onclick=()=>action($('save-group'),async()=>{const workspace=target().workspace,config=profile();const info=await command('workspace.show',{workspace});if(!info.caretakers)throw new Error('此 Workspace 没有管家角色登记，不会按名称接管用户实例。');const results=[];for(const agent_id of Object.values(info.caretakers)){try{results.push({agent_id,result:await command(profileCommand(),{workspace,agent_id,...config})})}catch(e){results.push({agent_id,error:e.message});break}}show({results,sessions_started:false})});
 if(token)boot();else $('auth').hidden=false;

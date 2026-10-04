@@ -126,6 +126,16 @@ def main() -> None:
         run(str(aw), "--help")
         run(str(python), "-I", "-m", "agent_workspace", "--help")
         args = (str(aw), "--home", str(root / "home"))
+        ordinary_project = root / "ordinary-project"
+        ordinary_project.mkdir()
+        ordinary = json.loads(run(*args, "session", "prepare", "--kind", "claude",
+            "--directory", str(ordinary_project), "--executable", str(python), "--request-id", "ordinary-smoke"))["result"]
+        assert ordinary["state"] == "prepared" and not (root / "home/registry.json").exists()
+        assert not list(ordinary_project.iterdir())
+        with running_workbench(aw, root / "home", root, env) as request:
+            assert request()["workspaces"] == []
+            assert request("session.show", {"request_id": "ordinary-smoke"})["native_session"] == "not_observed"
+
         for command in (
             ("workspace", "init", "smoke", str(root / "shared.git")),
             ("-w", "smoke", "agent", "create", "helper", "--id", "helper"),
@@ -152,11 +162,11 @@ from importlib.resources import files
 root = files('agent_workspace').joinpath('resources')
 for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork'):
     assert root.joinpath('skills', name, 'SKILL.md').read_text(encoding='utf-8')
-for name in ('checkpoints', 'entry', 'handoff', 'initialization', 'capabilities'):
+for name in ('checkpoints', 'entry', 'handoff', 'initialization', 'capabilities', 'desktop-projects'):
     assert root.joinpath('prompts', name + '.md').read_text(encoding='utf-8')
 for name in ('steward', 'sentinel', 'maintainer'):
     assert root.joinpath('definitions', name + '.md').read_text(encoding='utf-8')
-for name in ('index.html', 'setup.html'):
+for name in ('index.html', 'setup.html', 'sessions.html'):
     assert root.joinpath(name).read_text(encoding='utf-8')
 """
         run(str(python), "-I", "-c", resource_check)

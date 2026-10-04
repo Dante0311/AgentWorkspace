@@ -49,8 +49,8 @@ def allowed(app, actor, command, arguments):
     if command not in GRANTABLE or arguments.get("workspace", workspace) != workspace:
         return False
     if command in ("agent.configure-codex", "agent.configure-sdk", "agent.transfer-profile"):
-        if arguments.get("executable") or arguments.get("allowed_tools"):
-            return False  # Executables and native tool permission changes stay with the user.
+        if arguments.get("executable") or arguments.get("allowed_tools") or arguments.get("allow_http"):
+            return False  # Native permissions and consent to plaintext transport stay with the user.
     value = read_json(folder(app, workspace) / "grants.json", {}).get(agent_id, {})
     if command not in value.get("commands", []):
         return False

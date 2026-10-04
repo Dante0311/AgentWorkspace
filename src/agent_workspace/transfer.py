@@ -136,12 +136,12 @@ def status(app, workspace, agent_id, directory=None):
 
 
 def request_profile(app, workspace, agent_id, kind, model="", effort="", base_url="", env_key="", executable=None,
-                    allowed_tools=None, request_id=None):
+                    allowed_tools=None, request_id=None, *, allow_http=False):
     from .harness_config import codex_config, sdk_config
     if kind == "codex":
         if allowed_tools:
             raise Error("Native SDK tool allowlists do not configure Codex permissions.")
-        config = codex_config(model, effort, base_url, env_key, executable)
+        config = codex_config(model, effort, base_url, env_key, executable, allow_http=allow_http)
     else:
-        config = sdk_config(kind, model, effort, base_url, env_key, executable, allowed_tools)
+        config = sdk_config(kind, model, effort, base_url, env_key, executable, allowed_tools, allow_http=allow_http)
     return request(app, workspace, agent_id, config, request_id)

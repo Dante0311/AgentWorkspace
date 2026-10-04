@@ -6,6 +6,10 @@ AgentWorkspace 为持久 Agent 管理独立工作根、职责、Skill、资料�
 
 > **`0.1.0a1` 开发预览。** 当前功能分支已有首次配置、三名管家、受管 Codex/Claude/CodeBuddy、自动交接与维护工具。真实账号、自有模型服务、生产 Git、企业微信和 Desktop 未完成实机验收；部分 Desktop 控制能力尚缺接口接入，不能当成只待验收。尚未发布正式 Release 或 PyPI 包。
 
+## 普通会话与桌面项目
+
+工作台和首次配置页可进入“新建普通会话”，在已有目录启动 Codex/Claude Code/CodeBuddy 交互 CLI，无需 Workspace 或 Git。对明确的内网 HTTP 模型地址提供逐配置确认，不保存密钥。持久 Agent 的桌面项目默认按 Agent 复用，Codex 分区按 Workspace 组织；当前提供本机引用与手动步骤，不宣称已自动控制桌面项目。操作及终端限制见 [普通会话与桌面项目](docs/session-projects.md)。
+
 ## 使用流程
 
 **安装软件 → 检测 Git 和 Harness → 用户自行补齐 → 创建/接入 Workspace → 配置实例 → 明确启动真实会话。**

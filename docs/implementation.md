@@ -54,3 +54,7 @@ Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试�
 本分支同步文档 PR #2 已确认的产品设计与开发约定，不再保留旧的“初始化不创建管家”作为当前产品合同。底层预览 `App.workspace_init`/旧远端入口仍保留原始行为，用户创建路径使用 onboarding 包装；既有空间不会因接入或升级被隐式迁移。
 
 原始 `0.1.0a1` 的迁仓和验证记录保持原文，分别见 [migration.md](migration.md)、[validation.md](validation.md) 和 [validation-migration.md](validation-migration.md)。不要把当前接入进展回写成历史已经通过的证据。
+
+## 普通会话与项目组织补充
+
+`sessions.py` 复用运行配置生成原生交互 CLI 参数，保存不可变的本机启动回执，不创建 Workspace/持久身份，不解析终端画面或新增对话循环。`desktop_projects.py` 只保存每实例每桌面端的项目/分区名称和产品目录引用，返回同一份随包手动说明。内网 HTTP 配置通过明确的 `allow_http` 共用检查。界面、CLI、权限边界和包装资源同步更新；未提供的原生项目/分区控制仍公开说明。具体操作见 [session-projects.md](session-projects.md)。

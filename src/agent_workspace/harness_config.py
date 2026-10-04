@@ -19,7 +19,30 @@ from .rpc import Rpc
 from .util import Conflict, Error, locked
 
 
-def codex_config(model="", effort="", base_url="", env_key="", executable=None):
+def _check_http_consent(base_url, allow_http):
+    """Validate the shared model URL boundary; consent is per explicit profile."""
+    if not isinstance(allow_http, bool):
+        raise Error("allow_http must be a boolean.")
+    if not isinstance(base_url, str):
+        raise Error("Use a model service URL string.")
+    if not base_url:
+        return
+    try:
+        url = urllib.parse.urlsplit(base_url)
+        port = url.port
+    except ValueError as exc:
+        raise Error("Invalid model service URL or port.") from exc
+    if (url.scheme not in ("https", "http") or not url.hostname or url.username is not None
+            or url.password is not None or url.query or url.fragment or port == 0
+            or any(c.isspace() or ord(c) < 32 or c in '\x7f"&|<>^%!' for c in base_url)):
+        raise Error("Use an HTTP(S) service URL without credentials or query parameters.")
+    if (url.scheme == "http" and url.hostname not in ("localhost", "127.0.0.1", "::1")
+            and not allow_http):
+        raise Error("非本机 HTTP 会明文传输凭据和会话内容；仅在确认可信网络后使用 --allow-http / allow_http=true。")
+
+
+def codex_config(model="", effort="", base_url="", env_key="", executable=None, *, allow_http=False):
+    _check_http_consent(base_url, allow_http)
     for name, value in (("model", model), ("effort", effort), ("env_key", env_key)):
         if not isinstance(value, str) or (value and not re.fullmatch(r"[A-Za-z0-9_./:@+-]+", value)):
             raise Error(f"Invalid {name}; use a native identifier, not a command or credential.")
@@ -37,12 +60,6 @@ def codex_config(model="", effort="", base_url="", env_key="", executable=None):
     if effort:
         overrides["model_reasoning_effort"] = effort
     if base_url:
-        url = urllib.parse.urlsplit(base_url)
-        if (url.scheme not in ("https", "http") or not url.hostname or url.username is not None
-                or url.password is not None or url.query or url.fragment
-                or any(c in base_url for c in '\r\n\0"&|<>^%! ')
-                or (url.scheme == "http" and url.hostname not in ("localhost", "127.0.0.1", "::1"))):
-            raise Error("Use an HTTPS service URL (HTTP only for loopback), without credentials or query parameters.")
         overrides["model_provider"] = "aw_custom"
         provider = {"name": "AgentWorkspace", "base_url": base_url, "wire_api": "responses",
                     "requires_openai_auth": False}
@@ -63,12 +80,14 @@ def codex_config(model="", effort="", base_url="", env_key="", executable=None):
         config["credential_env"] = env_key
     if base_url:
         config["modelProvider"] = "aw_custom"
+    if allow_http:
+        config["allow_http"] = True
     return config
 
 
-def inspect_codex(base_url="", env_key="", executable=None):
+def inspect_codex(base_url="", env_key="", executable=None, *, allow_http=False):
     """Explicit metadata probe: no thread/start, turn/start, login or configuration write."""
-    config = codex_config(base_url=base_url, env_key=env_key, executable=executable)
+    config = codex_config(base_url=base_url, env_key=env_key, executable=executable, allow_http=allow_http)
     if env_key and not os.environ.get(env_key):
         return {"state": "credential_missing", "env_key": env_key, "models": [], "model_invoked": False}
     with tempfile.TemporaryDirectory(prefix="aw-codex-probe-") as directory:
@@ -107,8 +126,9 @@ def inspect_codex(base_url="", env_key="", executable=None):
                 rpc.close()
 
 
-def configure_codex(app, workspace, agent_id, model="", effort="", base_url="", env_key="", executable=None):
-    config = codex_config(model, effort, base_url, env_key, executable)
+def configure_codex(app, workspace, agent_id, model="", effort="", base_url="", env_key="", executable=None,
+                    *, allow_http=False):
+    config = codex_config(model, effort, base_url, env_key, executable, allow_http=allow_http)
     root = app.root(workspace, agent_id)
     # Lifecycle operations remain explicit. Saving a profile never starts a session.
     with locked(root / ".aw-local/runner.lock", wait=0):
@@ -120,8 +140,10 @@ def configure_codex(app, workspace, agent_id, model="", effort="", base_url="", 
             "sessions_started": False, "global_configuration_changed": False}
 
 
-def sdk_config(kind, model="", effort="", base_url="", env_key="", executable=None, allowed_tools=None):
+def sdk_config(kind, model="", effort="", base_url="", env_key="", executable=None, allowed_tools=None,
+               *, allow_http=False):
     """Native SDK profiles are per instance. They never rewrite global settings."""
+    _check_http_consent(base_url, allow_http)
     if kind not in ("claude", "codebuddy"):
         raise Error("Choose claude or codebuddy for a native SDK profile.")
     for field, value in (("model", model), ("effort", effort)):
@@ -132,23 +154,20 @@ def sdk_config(kind, model="", effort="", base_url="", env_key="", executable=No
     path = executable or shutil.which(kind)
     if not path or not Path(path).is_file():
         raise Error(f"{kind} CLI 未发现；请先自行安装。")
-    if base_url:
-        url = urllib.parse.urlsplit(base_url)
-        if (url.scheme not in ("https", "http") or not url.hostname or url.username is not None
-                or url.query or url.fragment or any(c.isspace() or c == '\0' for c in base_url)
-                or (url.scheme == "http" and url.hostname not in ("localhost", "127.0.0.1", "::1"))):
-            raise Error("Use HTTPS (or loopback HTTP) without URL credentials or query parameters.")
     if allowed_tools is not None and (not isinstance(allowed_tools, list) or
                                      not all(isinstance(t, str) and t for t in allowed_tools)):
         raise Error("allowed_tools must be an explicit array of native tool names.")
-    return {"kind": kind, "executable": str(Path(path).resolve()), "model": model or None,
-            "effort": effort or None, "provider": {"base_url": base_url, "env_key": env_key},
-            "allowed_tools": allowed_tools or []}
+    config = {"kind": kind, "executable": str(Path(path).resolve()), "model": model or None,
+              "effort": effort or None, "provider": {"base_url": base_url, "env_key": env_key},
+              "allowed_tools": allowed_tools or []}
+    if allow_http:
+        config["allow_http"] = True
+    return config
 
 
 def configure_sdk(app, workspace, agent_id, kind, model="", effort="", base_url="", env_key="", executable=None,
-                  allowed_tools=None):
-    config = sdk_config(kind, model, effort, base_url, env_key, executable, allowed_tools)
+                  allowed_tools=None, *, allow_http=False):
+    config = sdk_config(kind, model, effort, base_url, env_key, executable, allowed_tools, allow_http=allow_http)
     root = app.root(workspace, agent_id)
     with locked(root / ".aw-local/runner.lock", wait=0):
         if app.agent(workspace, agent_id)["current"]:
@@ -158,9 +177,9 @@ def configure_sdk(app, workspace, agent_id, kind, model="", effort="", base_url=
             "global_configuration_changed": False}
 
 
-def inspect_sdk(kind, base_url="", env_key="", executable=None):
+def inspect_sdk(kind, base_url="", env_key="", executable=None, *, allow_http=False):
     """Read native handshake metadata without sending a prompt or starting an Agent."""
-    config = sdk_config(kind, base_url=base_url, env_key=env_key, executable=executable)
+    config = sdk_config(kind, base_url=base_url, env_key=env_key, executable=executable, allow_http=allow_http)
     result = {"state": "capability_unconfirmed", "models": [], "model_invoked": False}
     if env_key and not os.environ.get(env_key):
         return {**result, "state": "credential_missing", "env_key": env_key}

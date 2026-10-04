@@ -223,3 +223,127 @@ def test_damaged_observation_keeps_workbench_and_diagnostics_usable(ui):
     page.wait_for_function("document.getElementById('output').textContent.includes('local_observation_failed')")
     assert damaged.read_bytes() == b'{broken'
     assert app.agent('sea', 'alice')['current'] == bindings['alice']
+
+
+@pytest.mark.parametrize('setup_page', [False, True])
+def test_http_profile_consent_is_explicit_and_resets_with_destination(ui, setup_page):
+    import sys
+    from playwright.sync_api import expect
+
+    app, _, page = ui
+    app.create('sea', 'http-profile')
+    if setup_page:
+        page.goto(page.url.split('/#')[0].rstrip('/') + '/setup')
+        page.locator('#app:not([hidden])').wait_for()
+        page.locator('#agent').select_option('http-profile')
+        prefix = ''
+        submit = page.get_by_role('button', name='只保存选中实例配置', exact=True)
+    else:
+        page.locator('#refresh').click()
+        card = page.locator('article').filter(has=page.get_by_role('heading', name='http-profile', exact=True))
+        card.get_by_role('button', name='配置', exact=True).click()
+        prefix = 'f-'
+        submit = page.locator('#submit')
+    url = page.locator('#' + prefix + 'base_url')
+    consent = page.locator('#' + prefix + 'allow_http')
+    page.locator('#' + prefix + 'executable').fill(sys.executable)
+    url.fill('http://192.0.2.75:4000/v1')
+    expect(consent).not_to_be_checked()
+    submit.click()
+    expect(page.locator('#error')).to_contain_text('allow-http')
+    path = app.root('sea', 'http-profile') / '.aw-local/runtime.json'
+    assert not path.exists()
+    consent.check()
+    url.fill('http://models.internal:4000/v1')
+    expect(consent).not_to_be_checked()
+    consent.check()
+    page.locator('#' + prefix + 'kind').select_option('claude')
+    expect(consent).not_to_be_checked()
+    page.locator('#' + prefix + 'kind').select_option('codex')
+    consent.check()
+    submit.click()
+    if setup_page:
+        expect(page.locator('#output')).to_contain_text('"configured": true')
+    else:
+        expect(page.locator('#dialog')).not_to_be_visible()
+    assert read_json(path)['allow_http'] is True
+    assert app.agent('sea', 'http-profile')['current'] is None
+
+
+def test_desktop_project_form_preserves_user_names_without_native_changes(ui, tmp_path):
+    from agent_workspace import desktop_projects
+    app, bindings, page = ui
+    product = tmp_path / 'product'
+    product.mkdir()
+    before = app.store('sea').head('main')
+    page.get_by_role('button', name='桌面项目', exact=True).first.click()
+    page.wait_for_selector('#f-project_name')
+    name = page.locator('#f-project_name').input_value()
+    agent = name.split(' · ')[-1]
+    page.locator('#f-project_name').fill('My Existing Project')
+    page.locator('#f-section_name').fill('My Existing Section')
+    page.locator('#f-product_paths').fill(str(product))
+    page.locator('#submit').click()
+    page.wait_for_selector('#dialog', state='hidden')
+    value = desktop_projects.plan(app, 'sea', agent)
+    assert value['project']['project_name'] == 'My Existing Project'
+    assert value['project']['section_name'] == 'My Existing Section'
+    assert value['native_project_verified'] is False
+    assert app.store('sea').head('main') == before and not list(product.iterdir())
+    page.get_by_role('button', name='桌面项目', exact=True).first.click()
+    assert page.locator('#f-project_name').input_value() == 'My Existing Project'
+    page.locator('#f-harness').select_option('workbuddy')
+    page.wait_for_function("document.getElementById('f-section_name').disabled")
+    assert page.locator('#f-section_name').input_value() == ''
+
+
+def test_ordinary_page_without_workspace_lost_response_does_not_open_twice(tmp_path, browser, monkeypatch):
+    import sys
+    from agent_workspace.app import App
+    from agent_workspace import sessions
+    app = App(tmp_path / 'empty-home')
+    project = tmp_path / 'project'
+    project.mkdir()
+    (project / 'AGENTS.md').write_text('unchanged project rules', encoding='utf-8')
+    launches = []
+    def terminal(argv):
+        launches.append(argv)
+        return [sys.executable, '-c', 'pass'], {}
+    monkeypatch.setattr(sessions, '_terminal', terminal)
+    server = make_server(app, 0, 'ordinary-browser-token')
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    context = browser.new_context(viewport={'width': 390, 'height': 844})
+    page = context.new_page()
+    try:
+        page.goto(f'http://127.0.0.1:{server.server_port}/sessions#token=ordinary-browser-token')
+        page.wait_for_selector('#app:not([hidden])')
+        page.locator('#kind').select_option('claude')
+        page.locator('#directory').fill(str(project))
+        page.locator('#executable').fill(sys.executable)
+        page.locator('#prompt').fill('Review only; no project file change.')
+        def lose_response(route):
+            if route.request.post_data_json['command'] == 'session.open':
+                assert route.fetch().json()['ok']
+                route.abort()
+            else:
+                route.continue_()
+        page.route('**/api/execute', lose_response)
+        page.locator('#form').evaluate('(f) => {f.requestSubmit();f.requestSubmit();}')
+        page.wait_for_function("!busy && !!document.getElementById('error').textContent")
+        assert len(launches) == 1
+        page.unroute('**/api/execute', lose_response)
+        page.reload()
+        page.wait_for_selector('#pending:not([hidden])')
+        page.wait_for_function("!busy")
+        page.locator('#continue').click()
+        page.wait_for_function("!busy")
+        assert len(launches) == 1 and not app.registry.exists()
+        assert len(list((app.home / 'ordinary-sessions').glob('*.json'))) == 1
+        assert (project / 'AGENTS.md').read_text() == 'unchanged project rules'
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    finally:
+        context.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(5)

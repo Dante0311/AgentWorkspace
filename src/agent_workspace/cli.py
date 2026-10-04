@@ -33,6 +33,17 @@ def parser():
         sub = domains.add_parser(domain).add_subparsers(dest="action", required=True)
         return {name: sub.add_parser(name) for name in names}
 
+    session = actions("session", ["prepare", "open", "show", "run"])
+    for key in ("open", "show", "run"):
+        session[key].add_argument("request_id")
+    session["prepare"].add_argument("--kind", required=True, choices=["codex", "claude", "codebuddy"])
+    session["prepare"].add_argument("--directory", required=True)
+    session["prepare"].add_argument("--prompt", default="")
+    session["prepare"].add_argument("--request-id")
+    session["prepare"].add_argument("--allow-http", action="store_true")
+    for field in ("model", "effort", "base-url", "env-key", "executable"):
+        session["prepare"].add_argument("--" + field, default=None if field == "executable" else "")
+
     ws = actions("workspace", ["init", "connect", "bootstrap-remote", "list", "show", "friend", "project", "doctor"])
     for key in ("init", "connect", "bootstrap-remote"):
         ws[key].add_argument("name")
@@ -46,11 +57,11 @@ def parser():
     ag = actions("agent", ["create", "import", "list", "show", "connect", "configure", "versions", "update",
         "promote", "archive", "unarchive", "start", "bind", "stop", "handoff", "renew", "fork", "input",
         "capture-desktop", "sync", "upgrade-tools", "configure-codex", "configure-sdk",
-        "transfer", "transfer-profile", "transfer-continue", "transfer-status"])
+        "transfer", "transfer-profile", "transfer-continue", "transfer-status", "desktop-project", "desktop-project-save"])
     for key, sub in ag.items():
         if key != "list":
             sub.add_argument("name" if key in ("create", "import") else "agent_id")
-            if key not in ("configure-codex", "configure-sdk", "transfer-profile"):
+            if key not in ("configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save"):
                 sub.add_argument("--directory")
     for key in ("create", "import"):
         ag[key].add_argument("--id", dest="agent_id")
@@ -78,6 +89,8 @@ def parser():
     ag["capture-desktop"].add_argument("--command", help="JSON argv array of the actual desktop MCP server.")
 
     for key in ("configure-codex", "configure-sdk", "transfer-profile"):
+        ag[key].add_argument("--allow-http", action="store_true",
+                             help="Allow this profile's non-loopback HTTP URL; credentials and content are unencrypted.")
         for field in ("model", "effort", "base-url", "env-key", "executable"):
             ag[key].add_argument("--" + field, default=None if field == "executable" else "")
         if key != "configure-codex":
@@ -86,6 +99,13 @@ def parser():
     ag["transfer"].add_argument("--config", dest="target_config", required=True, help="Runtime JSON or @file.json")
     for key in ("transfer", "transfer-profile", "input"):
         ag[key].add_argument("--request-id")
+
+    for key in ("desktop-project", "desktop-project-save"):
+        ag[key].add_argument("--harness", choices=["codex", "claude", "workbuddy"], default="codex")
+    ag["desktop-project-save"].add_argument("--project-name", required=True)
+    ag["desktop-project-save"].add_argument("--section-name", default="")
+    ag["desktop-project-save"].add_argument("--product-path", dest="product_paths", action="append")
+    ag["desktop-project-save"].add_argument("--revision")
 
     mt = actions("maintenance", ["status", "schedule", "grant", "repair", "run"])
     mt["schedule"].add_argument("--enabled", action=argparse.BooleanOptionalAction, required=True)
@@ -199,6 +219,11 @@ def main(argv=None):
             actor = (os.environ["AW_WORKSPACE"], os.environ["AW_AGENT"], os.environ["AW_BINDING"])
         if actor and (domain in ("serve", "setup") or (domain in ("maintenance", "runtime") and action == "run")):
             raise Error("Starting a server or worker is a user-management operation.")
+        if domain == "session" and action == "run":
+            if actor:
+                raise Error("Ordinary native sessions are a user-management operation.")
+            from .sessions import run
+            return run(app, options["request_id"])
         if domain == "maintenance" and action == "run":
             from .maintenance import run
             run(app)
@@ -242,7 +267,7 @@ def main(argv=None):
                 command, args["renew"] = "agent.handoff", True
             if domain == "bridge" and action in ("start", "stop"):
                 command, args["enabled"] = "bridge.switch", action == "start"
-        if not command.startswith("setup.") and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+        if not command.startswith(("setup.", "session.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)

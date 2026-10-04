@@ -32,6 +32,10 @@ aw -w demo agent configure-sdk helper --kind codebuddy --model MODEL_ID --base-u
 
 三行是三种替代配置示例，不是要求依次执行。地址、模型 ID 和强度必须换成实际服务支持的值；省略地址时沿用该 Harness 的认证/服务环境。`--executable` 可指定已安装原生程序的绝对路径。密钥由用户在启动工作台/运行器的环境中提供，这里只保存环境变量名，不将密钥放进命令、Git 或角色定义。
 
+可信网络上的非本机 HTTP 模型地址默认需要明确确认：在首次配置或实例配置中勾选“允许此地址使用 HTTP 明文传输”，CLI 使用 `--allow-http`；JSON 操作（含元数据查询）传 `"allow_http": true`。该选择仅随本次实例配置保存，不是全局放开；地址或 Harness 变更后界面清除确认。管家不能代替用户作出新的明文传输确认，但已由用户配置好的实例可以继续正常启动。
+
+HTTP 会明文传输凭据及请求内容。是否属于可信内网由用户确认，不按固定私有 IP 范围猜测，也不自动访问截图地址或额外探测端口。配置、查询和交接复用同一校验，仍拒绝 URL 中的凭据、查询参数和非 HTTP(S) 协议。Base URL 原样传给对应 Harness，不擅自添加 `/v1`、`/messages` 或更换 HTTPS。OpenAI 与 Anthropic 两种入口应分别填写网关提供的地址；地址可保存不等于认证、Responses/工具调用或实际模型能力已经验收。
+
 Codex 自有服务使用 Responses，Claude SDK 使用对应原生 Messages，CodeBuddy SDK 使用其原生服务或兼容接入配置；不是通用协议转换器。不同实例的配置只作用于本实例启动参数/子进程，不改全局设置。Codex 和 Claude 可以显式查询原生返回的模型/强度选项；CodeBuddy 尚无已验证的目录接口时保留手工填写。保存仍返回 `unchecked`，目录不是模型调用权限的证明；自有网关不冒用内置目录。
 
 元数据查询可在首次配置页明确点击，或调用 `setup.inspect-codex` / `setup.inspect-sdk`。Claude 查询只做 SDK 握手，使用与真实会话相同的凭据路由，不发送模型输入、不创建平台 Binding、不返回账号明细。CodeBuddy 返回 `catalog=unsupported` 时，不尝试猜测或建立会话。
@@ -159,3 +163,7 @@ aw -w demo maintenance repair helper --repair-action sync-idle --request-id repa
 4. 在 Codex 请求交接到 Claude/CodeBuddy；核对旧入口 released、新入口唯一、材料保留，且后续 Message 到达后继。不手工替模型完成 checkpoint/stop 来冒充自动交接。
 5. 启用明确授权的巡检，制造一个可恢复测试异常；确认发现、通知、允许的维修和复查。关闭计划后不复活旧入口，撤销授权后操作被拒绝。
 6. 单独验收企业微信和具备真实控制接口的 Desktop。接口未确认的入口不能列入“已通过”。
+
+## 普通会话与桌面项目
+
+无 Workspace 的交互 CLI 启动、内网 HTTP 明确确认，以及持久 Agent 项目/分区的本机引用和手动准备，见 [session-projects.md](session-projects.md)。这批功能不把 Desktop 项目管理标为已自动接入。

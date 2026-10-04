@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>普通会话 · Agent Workspace</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f7f3;color:#162b2b;font:15px/1.7 system-ui,sans-serif}main{max-width:860px;margin:30px auto;padding:0 20px}section,form{background:white;border:1px solid #dce5df;border-radius:12px;padding:22px;margin:18px 0}h1{font-size:25px}label{display:block;margin:12px 0 4px}input,select,textarea,button{font:inherit}input,select,textarea{width:100%;padding:9px;border:1px solid #c8d7cd;border-radius:6px}input[type=checkbox]{width:auto}textarea{min-height:100px}button{padding:8px 14px;margin:8px 8px 0 0;cursor:pointer;border:1px solid #c8d7cd;border-radius:6px;background:#eef5ef}button:disabled{opacity:.5;cursor:not-allowed}.muted{color:#627370;font-size:13px}a{color:#196d55}pre{white-space:pre-wrap;overflow-wrap:anywhere}#error{white-space:pre-wrap;color:#923c2c}#consent{background:#fff7e8;padding:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:600px){.grid{grid-template-columns:1fr}main{padding:0 12px}section,form{padding:16px}}
+</style></head><body><main>
+<p><a href="/">工作台</a> · <a href="/setup">Workspace 配置</a> · <a href="/capabilities" target="_blank" rel="noopener noreferrer">支持范围</a></p>
+<h1>新建普通会话</h1>
+<p>在已有目录打开原生 CLI。不需要 Workspace 或 Git，不创建持久 Agent、管家或专属项目。</p>
+<p class="muted">聊天和历史留在原生终端，不是工作台聊天界面；不提供平台 Message/ACK 或跨 Harness 交接。项目与用户规则仍可能被原生客户端加载，不保证角色隔离。</p>
+<section id="auth"><label for="token">本机控制 Token</label><input id="token" type="password" autocomplete="off"><button id="login">连接</button></section>
+<div id="error" role="alert"></div>
+<div id="app" hidden>
+<form id="form">
+<label for="kind">运行环境</label><select id="kind"><option value="codex">Codex CLI</option><option value="claude">Claude Code CLI</option><option value="codebuddy">CodeBuddy CLI（不是 WorkBuddy Desktop）</option></select>
+<label for="directory">已有项目 / 工作目录</label><input id="directory" required placeholder="例如 D:\projects\shop 或 /home/me/projects/shop"><p class="muted">不复制目录、不创建 worktree、不写入 AGENTS.md。持久 Agent 的实例目录请从 Agent 入口进入。</p>
+<div class="grid"><div><label for="model">模型 ID（可选）</label><input id="model" list="model-options"><datalist id="model-options"></datalist></div><div><label for="effort">推理强度（可选）</label><input id="effort" list="effort-options"><datalist id="effort-options"></datalist></div></div>
+<label for="base_url">模型服务地址（留空使用原生配置）</label><input id="base_url" placeholder="按服务提供的 Base URL 原样填写">
+<p class="muted">Codex 使用 Responses；Claude 使用 Messages；CodeBuddy 按其原生协议。不会转换协议或自动追加 URL 后缀。</p>
+<label id="consent"><input type="checkbox" id="allow_http"> 允许此地址使用 HTTP 明文传输（凭据和内容不加密）</label>
+<label for="env_key">凭据环境变量名，不填写密钥</label><input id="env_key" placeholder="MY_MODEL_API_KEY"><p class="muted">请在实际原生终端环境设置该变量。macOS Terminal 或已有终端服务不一定继承工作台的临时环境变量；缺少凭据会在调用前停止，不自动登录。</p>
+<label for="executable">原生程序路径（可选）</label><input id="executable"><p class="muted">默认从 PATH 发现。此交互启动器不执行 .cmd/.bat 包装，需提供真实可执行程序；不会自动安装 Harness。</p>
+<button type="button" id="inspect">查询模型选项（不调用模型）</button><p id="catalog" class="muted"></p>
+<label for="prompt">本次任务 / 要求（可选，仅交给本会话）</label><textarea id="prompt" maxlength="16000" placeholder="例如：只审查登录模块，不修改文件。"></textarea>
+<p class="muted">点击启动后，填写的任务可能立即调用模型。权限仍由原生 CLI 交互确认，不自动启用完全访问。</p>
+<button type="submit" id="create">保存并打开原生 CLI</button>
+</form>
+<section id="pending" hidden><h2>原启动请求</h2><p id="identity"></p><p id="phase"></p><pre id="result"></pre><button id="refresh">只读刷新</button><button id="continue">继续原请求</button><button id="new">新建另一会话</button><p class="muted">刷新不会自动启动；重复操作沿用原请求。原生进程已启动或结果不明时不会再次打开。关闭标签页后浏览器草稿可能消失，本机请求仍保留；请记下请求 ID。此 ID 不是原生会话 ID。</p></section>
+</div></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+let token=new URLSearchParams(location.hash.slice(1)).get('token')||'', key='', pending=null, busy=false, models=[];
+if(location.hash)history.replaceState(null,'',location.pathname);
+try{token=token||sessionStorage.getItem('aw-token')||''}catch(e){$('error').textContent='浏览器存储不可用；不能安全保存启动请求。'}
+async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok||v.ok===false)throw new Error(v.error||'请求失败');return v.result}
+const command=(name,args)=>api('/api/execute',{command:name,arguments:args});
+function display(v){$('pending').hidden=false;$('identity').textContent='启动请求：'+v.id;$('phase').textContent='最后观测：'+v.state+'；原生会话：'+v.native_session;$('result').textContent=(v.hint||'')+'\n\n在终端继续原请求：\n'+v.run_command;$('create').disabled=!!pending;}
+async function action(fn){if(busy)return;busy=true;for(const b of document.querySelectorAll('button'))b.disabled=true;try{$('error').textContent='';await fn()}catch(e){$('error').textContent=e.message}finally{busy=false;for(const b of document.querySelectorAll('button'))b.disabled=false;$('create').disabled=!!pending}}
+async function connect(){sessionStorage.setItem('aw-token',token);const state=await api('/api/state');key='aw-ordinary:'+state.installation_id;pending=JSON.parse(sessionStorage.getItem(key)||'null');$('auth').hidden=true;$('app').hidden=false;if(pending){$('form').hidden=true;$('pending').hidden=false;$('identity').textContent='启动请求：'+pending.request_id;display(await command('session.show',{request_id:pending.request_id}))}}
+function profile(){const values={kind:$('kind').value,allow_http:$('allow_http').checked};for(const k of ['model','effort','base_url','env_key','executable'])if($(k).value)values[k]=$(k).value;return values}
+function resetCatalog(){models=[];$('model-options').replaceChildren();$('effort-options').replaceChildren();$('catalog').textContent='';$('allow_http').checked=false;}
+$('kind').onchange=resetCatalog;for(const k of ['base_url','env_key','executable'])$(k).oninput=resetCatalog;
+$('model').oninput=()=>{const m=models.find(m=>(m.model||m.id)===$('model').value);$('effort-options').replaceChildren(...(m?.supportedReasoningEfforts||[]).map(e=>new Option(e.reasoningEffort,e.reasoningEffort)))};
+$('inspect').onclick=()=>action(async()=>{const selection=JSON.stringify(profile());const args=profile(),kind=args.kind;delete args.model;delete args.effort;if(kind==='codex')delete args.kind;const result=await command(kind==='codex'?'setup.inspect-codex':'setup.inspect-sdk',args);if(JSON.stringify(profile())!==selection)return;models=result.models||[];$('model-options').replaceChildren(...models.map(m=>new Option(m.displayName||m.model||m.id,m.model||m.id)));$('effort-options').replaceChildren();$('catalog').textContent=(result.catalog||result.state)+'。'+(result.hint||'目录不是实际调用或权限证明。')});
+async function continueRequest(){if(!pending)throw new Error('没有待继续的启动请求。');const value=await command('session.prepare',pending);display(value);display(await command('session.open',{request_id:pending.request_id}))}
+$('form').onsubmit=e=>{e.preventDefault();action(async()=>{if(pending)throw new Error('请先处理原请求，或明确新建另一会话。');const spec={...profile(),directory:$('directory').value,prompt:$('prompt').value,request_id:'session-'+crypto.randomUUID()};sessionStorage.setItem(key,JSON.stringify(spec));pending=spec;$('form').hidden=true;$('pending').hidden=false;$('identity').textContent='启动请求：'+spec.request_id;await continueRequest()})};
+$('continue').onclick=()=>action(continueRequest);
+$('refresh').onclick=()=>action(async()=>{if(pending)display(await command('session.show',{request_id:pending.request_id}))});
+$('new').onclick=()=>action(async()=>{if(!confirm('新建的是另一普通会话，不会停止或恢复原会话。继续？'))return;sessionStorage.removeItem(key);pending=null;$('pending').hidden=true;$('form').hidden=false;resetCatalog()});
+$('login').onclick=()=>{token=$('token').value;action(connect)};
+if(token)action(connect);
+</script></body></html>

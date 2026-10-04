@@ -1,6 +1,6 @@
 """Use native Harness configuration; never edit the user's global configuration.
 
-This first implementation configures Codex CLI. Other entries are not emulated.
+Codex uses native argv; Claude/CodeBuddy use SDK options. Desktop is not emulated.
 """
 from __future__ import annotations
 
@@ -57,6 +57,8 @@ def codex_config(model="", effort="", base_url="", env_key="", executable=None):
     config = {"kind": "codex", "command": args, "sandbox": "workspace-write"}
     if model:
         config["model"] = model
+    if env_key:
+        config["credential_env"] = env_key
     if base_url:
         config["modelProvider"] = "aw_custom"
     return config
@@ -114,3 +116,41 @@ def configure_codex(app, workspace, agent_id, model="", effort="", base_url="", 
     return {**result, "model_access": "unchecked", "effort_support": "unchecked",
             "credential_state": "missing" if env_key and not os.environ.get(env_key) else "not_validated",
             "sessions_started": False, "global_configuration_changed": False}
+
+
+def sdk_config(kind, model="", effort="", base_url="", env_key="", executable=None, allowed_tools=None):
+    """Native SDK profiles are per instance. They never rewrite global settings."""
+    if kind not in ("claude", "codebuddy"):
+        raise Error("Choose claude or codebuddy for a native SDK profile.")
+    for field, value in (("model", model), ("effort", effort)):
+        if not isinstance(value, str) or (value and not re.fullmatch(r"[A-Za-z0-9_./:@+-]+", value)):
+            raise Error(f"Invalid native {field} identifier.")
+    if env_key and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", env_key):
+        raise Error("Provide a credential environment variable name, not a key.")
+    path = executable or shutil.which(kind)
+    if not path or not Path(path).is_file():
+        raise Error(f"{kind} CLI 未发现；请先自行安装。")
+    if base_url:
+        url = urllib.parse.urlsplit(base_url)
+        if (url.scheme not in ("https", "http") or not url.hostname or url.username is not None
+                or url.query or url.fragment or any(c.isspace() or c == '\0' for c in base_url)
+                or (url.scheme == "http" and url.hostname not in ("localhost", "127.0.0.1", "::1"))):
+            raise Error("Use HTTPS (or loopback HTTP) without URL credentials or query parameters.")
+    if allowed_tools is not None and (not isinstance(allowed_tools, list) or
+                                     not all(isinstance(t, str) and t for t in allowed_tools)):
+        raise Error("allowed_tools must be an explicit array of native tool names.")
+    return {"kind": kind, "executable": str(Path(path).resolve()), "model": model or None,
+            "effort": effort or None, "provider": {"base_url": base_url, "env_key": env_key},
+            "allowed_tools": allowed_tools or []}
+
+
+def configure_sdk(app, workspace, agent_id, kind, model="", effort="", base_url="", env_key="", executable=None,
+                  allowed_tools=None):
+    config = sdk_config(kind, model, effort, base_url, env_key, executable, allowed_tools)
+    root = app.root(workspace, agent_id)
+    with locked(root / ".aw-local/runner.lock", wait=0):
+        if app.agent(workspace, agent_id)["current"]:
+            raise Conflict("Handoff before replacing an instance's runtime profile.")
+        result = app.configure(workspace, agent_id, config)
+    return {**result, "sessions_started": False, "model_access": "unchecked", "effort_support": "unchecked",
+            "global_configuration_changed": False}

@@ -206,3 +206,20 @@ def test_forms_and_recovery_fit_viewport(ui, viewport):
     page.get_by_role('button', name='限定维修', exact=True).click()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert page.locator('#dialog').evaluate('(d) => d.scrollWidth <= d.clientWidth')
+
+
+def test_damaged_observation_keeps_workbench_and_diagnostics_usable(ui):
+    app, bindings, page = ui
+    damaged = app.root('sea', 'alice') / '.aw-local/status.json'
+    damaged.write_bytes(b'{broken')
+    page.locator('#refresh').click()
+    broken = page.locator('article').filter(has=page.get_by_role('heading', name='alice', exact=True))
+    broken.get_by_text('状态读取失败', exact=True).wait_for()
+    assert broken.get_by_role('button').all_text_contents() == ['健康检查']
+    assert page.locator('#auth').is_hidden()
+    healthy = page.locator('article').filter(has=page.get_by_role('heading', name='bob', exact=True))
+    assert healthy.get_by_role('button', name='详情', exact=True).is_visible()
+    broken.get_by_role('button', name='健康检查', exact=True).click()
+    page.wait_for_function("document.getElementById('output').textContent.includes('local_observation_failed')")
+    assert damaged.read_bytes() == b'{broken'
+    assert app.agent('sea', 'alice')['current'] == bindings['alice']

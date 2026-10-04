@@ -73,8 +73,16 @@ def make_server(app, port=8765, token=None):
                     for workspace in result["workspaces"]:
                         try:
                             for agent in app.agents(workspace["alias"]):
-                                result["agents"].append({"workspace": workspace["alias"], **app.show(workspace["alias"], agent["id"])})
-                        except Error as exc:
+                                try:
+                                    detail = app.show(workspace["alias"], agent["id"])
+                                except (Error, ValueError, OSError, KeyError) as exc:
+                                    # Keep the known identity, not invented liveness or ownership.
+                                    error = f"Instance observation failed ({type(exc).__name__}); use workspace doctor."
+                                    detail = {**agent, "observation_error": error}
+                                    result["errors"].append({"workspace": workspace["alias"], "agent": agent["id"],
+                                                             "error": f"{agent['id']}: {error}"})
+                                result["agents"].append({"workspace": workspace["alias"], **detail})
+                        except (Error, ValueError, OSError, KeyError) as exc:
                             result["errors"].append({"workspace": workspace["alias"], "error": str(exc)})
                 else:
                     self.reply(404, {"error": "Not found"})

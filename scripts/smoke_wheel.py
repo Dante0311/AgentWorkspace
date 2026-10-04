@@ -1,12 +1,70 @@
 """Install a built wheel in a clean temporary environment, without source imports."""
 from pathlib import Path
+from contextlib import contextmanager
 import hashlib
 import importlib.util
 import json
 import os
+import queue
 import subprocess
 import sys
 import tempfile
+import threading
+import time
+import urllib.parse
+import urllib.request
+
+
+@contextmanager
+def running_workbench(aw, home, cwd, env):
+    """Use the installed CLI and real HTTP; keep control tokens out of test output."""
+    process = subprocess.Popen([str(aw), "--home", str(home), "serve", "--port", "0"],
+                               cwd=cwd, env=env, text=True, encoding="utf-8",
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output = queue.Queue()
+
+    def read_output():
+        for line in process.stdout:
+            output.put(line)
+        output.put(None)
+
+    reader = threading.Thread(target=read_output, daemon=True)
+    reader.start()
+    try:
+        deadline = time.monotonic() + 30
+        while True:
+            line = output.get(timeout=max(.01, deadline - time.monotonic()))
+            if line is None:
+                raise RuntimeError("Installed workbench exited before announcing its endpoint.")
+            if line.startswith("http://127.0.0.1:"):
+                url = urllib.parse.urlsplit(line.strip())
+                token = urllib.parse.parse_qs(url.fragment)["token"][0]
+                break
+        base = f"{url.scheme}://{url.netloc}"
+
+        def request(command=None, arguments=None):
+            payload = None if command is None else json.dumps({
+                "command": command, "arguments": arguments or {}}).encode()
+            headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+            req = urllib.request.Request(base + ("/api/state" if payload is None else "/api/execute"),
+                                         data=payload, headers=headers)
+            with urllib.request.urlopen(req, timeout=20) as response:
+                value = json.load(response)
+            assert value["ok"], value
+            return value["result"]
+
+        yield request
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10)
+        reader.join(timeout=5)
+        process.stdout.close()
+        assert not reader.is_alive()
 
 
 def main() -> None:
@@ -111,7 +169,42 @@ for name in ('index.html', 'setup.html'):
         observed = json.loads(run(str(second_aw), "--home", str(root / "home"), "-w", "smoke", "agent", "list"))
         assert {a["id"] for a in observed["result"]} == ids
         assert (root / "home/registry.json").read_bytes() == registry
-    print("PASS: recoverable installer, separate installations, CLI, local Git and bundled resources")
+
+        # Carry the same data and enabled schedule across a real service restart
+        # and a separate software installation. No browser/Harness/model is needed.
+        with running_workbench(aw, root / "home", root, env) as request:
+            state = request()
+            installation = state["installation_id"]
+            assert {a["id"] for a in state["agents"]} == ids
+            plan = request("maintenance.schedule", {"workspace": "smoke", "enabled": True,
+                                                    "interval": 30, "notify": False})
+            deadline = time.monotonic() + 30
+            while True:
+                status = request("maintenance.status", {"workspace": "smoke"})
+                if (status["worker_running"] and status["local_run"]
+                        and status["local_run"]["generation"] == plan["generation"]
+                        and status["local_run"].get("state") == "checked"):
+                    break
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Installed maintenance worker did not run the authorized schedule.")
+                time.sleep(.1)
+            assert status["local_run"]["state"] == "checked"
+            previous_run = status["local_run"]
+        stopped = json.loads(run(*args, "-w", "smoke", "maintenance", "status"))["result"]
+        assert stopped["worker_running"] is False
+        assert stopped["schedule"]["generation"] == plan["generation"]
+        with running_workbench(second_aw, root / "home", root, env) as request:
+            state = request()
+            assert state["installation_id"] == installation
+            assert {a["id"] for a in state["agents"]} == ids
+            assert all(a["current"] is None for a in state["agents"])
+            restored = request("maintenance.status", {"workspace": "smoke"})
+            assert restored["schedule"]["generation"] == plan["generation"]
+            assert restored["local_run"]["generation"] == previous_run["generation"]
+            assert restored["local_run"]["last_run"] >= previous_run["last_run"]
+            request("maintenance.schedule", {"workspace": "smoke", "enabled": False})
+        assert (root / "home/registry.json").read_bytes() == registry
+    print("PASS: installer recovery, real HTTP restart, durable maintenance, CLI, Git and resources")
 
 
 if __name__ == "__main__":

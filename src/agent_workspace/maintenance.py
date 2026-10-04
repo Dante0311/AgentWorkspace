@@ -118,7 +118,7 @@ def doctor(app, workspace):
                 if config.get("enabled"):
                     state = read_json(p.parent / "status" / p.name, {})
                     if state.get("fatal") or state.get("state") in ("failed", "error", "disconnected"):
-                        issue("bridge_fault", aid, bridge=p.stem, generation=config["generation"])
+                        issue("bridge_fault", aid, binding=binding, bridge=p.stem, generation=config["generation"])
             transfer = read_json(root / ".aw-local/transfer.json")
             if transfer:
                 if entry and binding == transfer["target_binding"]:
@@ -314,7 +314,7 @@ def status(app, workspace):
             worker_running = False
     except Conflict:
         worker_running = True
-    return {"worker_running": worker_running,
+    return {"worker_running": worker_running, "grantable_commands": sorted(GRANTABLE),
             "schedule": app.store(workspace).snapshot().json("maintenance/schedule.json"),
             "local_run": read_json(root / "run.json"),
             "worker_error": read_json(root / "worker-error.json"), "grants": read_json(root / "grants.json", {})}

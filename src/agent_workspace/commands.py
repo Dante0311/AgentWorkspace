@@ -10,7 +10,7 @@ from .util import Conflict, Error, digest, inside, locked, read_json, relpath, w
 
 
 READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
-             "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show",
+             "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "asset.list", "asset.read", "runtime.status", "bridge.status",
              "agent.transfer-status", "maintenance.status", "workspace.doctor"}
 
@@ -174,7 +174,7 @@ def command_map(app):
         "work.update": app.work_update, "work.deliver": app.work_deliver,
         "message.send": messages.send, "message.list": messages.list, "message.show": messages.show,
         "message.receive": messages.receive, "message.poll": partial(message_poll, app),
-        "message.reconcile": messages.reconcile, "message.watch": partial(runtime.watch, app),
+        "message.operation": messages.operation, "message.reconcile": messages.reconcile, "message.watch": partial(runtime.watch, app),
         "asset.list": partial(assets, app, "list"),
         "asset.read": partial(assets, app, "read"),
         "asset.write": partial(assets, app, "write"),

@@ -59,6 +59,21 @@ class Messages:
                     "payload": body, "destinations": list(dict.fromkeys([own.address, target.address])), "completed": [], "sender": agent_id, "binding": binding})
         return self.reconcile(mid)
 
+    def operation(self, workspace, operation_id):
+        """Inspect the existing local receipt without publishing or replaying it."""
+        if workspace not in self.app.local()["workspaces"]:
+            raise Error("Unknown workspace.")
+        identifier = slug(operation_id)
+        receipt = read_json(self.app.home / "operations" / f"{identifier}.json")
+        if receipt is None:
+            return {"id": identifier, "state": "not_recorded"}
+        if receipt["workspace"] != workspace:
+            raise Conflict("Operation belongs to a different workspace.")
+        return {"id": identifier, "state": receipt.get("state", "pending"),
+                "type": receipt["type"], "payload": receipt["payload"],
+                "binding": receipt["binding"],
+                "agent": receipt.get("sender") or receipt.get("receiver")}
+
     def reconcile(self, operation_id):
         path = self.app.home / "operations" / (slug(operation_id) + ".json")
         with locked(path.with_suffix(".lock")):

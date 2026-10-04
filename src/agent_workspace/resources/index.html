@@ -5,7 +5,7 @@
 <title>Agent Workspace</title>
 <style>
 :root{color-scheme:light;--ink:#162b2b;--muted:#627370;--paper:#f5f7f3;--line:#dce5df;--green:#196d55;--light:#e9f3ec;--warn:#8d521a}
-*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.65 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}header{padding:22px 5vw;background:#fff;border-bottom:1px solid var(--line);display:flex;gap:18px;align-items:center;justify-content:space-between}h1{font-size:23px;letter-spacing:-.7px;margin:0}h2{font-size:21px;margin:0 0 6px}h3{font-size:18px;margin:0}p{margin:6px 0 14px}.sub,.muted{color:var(--muted);font-size:13px}.brand{display:flex;align-items:center;gap:12px}.logo{background:var(--green);color:white;width:37px;height:37px;display:grid;place-items:center;border-radius:10px;font-weight:700}.tag{display:inline-block;background:var(--light);color:var(--green);padding:3px 10px;border-radius:30px;font-size:12px}main{max-width:1280px;margin:30px auto;padding:0 28px 70px}.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin:23px 0}.tabs button{border:0;background:none;padding:12px 18px;color:var(--muted);border-bottom:3px solid transparent}.tabs button.active{color:var(--green);border-color:var(--green);font-weight:650}.btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 12px;color:var(--ink)}.btn:hover{border-color:var(--green);background:var(--light)}.btn.primary{background:var(--green);color:white;border-color:var(--green)}.buttons{display:flex;gap:7px;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:17px}.card{background:white;border:1px solid var(--line);border-radius:13px;padding:22px;min-width:0}.card .name{margin-top:12px}.card .kv{display:grid;grid-template-columns:90px 1fr;font-size:13px;margin:16px 0;gap:6px 10px}.kv span:nth-child(odd){color:var(--muted)}.kv span{overflow-wrap:anywhere}.card .buttons{border-top:1px solid var(--line);padding-top:16px;margin-top:18px}.empty{border:1px dashed #b8cec0;border-radius:14px;padding:48px 24px;text-align:center;background:#fafcf9}.empty p{max-width:540px;margin:10px auto 22px}.notice{padding:12px 16px;background:#fff7e8;border-left:3px solid #d29c51;margin:15px 0;font-size:13px}#result{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:24px}#result pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:440px;overflow:auto;font:13px/1.65 ui-monospace,monospace}#error{color:#923c2c;white-space:pre-wrap}select,input,textarea{border:1px solid #c8d7cd;background:#fff;color:var(--ink);border-radius:6px;padding:9px 11px;width:100%}select.filter{width:auto;min-width:160px}textarea{min-height:100px;resize:vertical}dialog{width:min(590px,94vw);border:1px solid var(--line);border-radius:16px;max-height:90vh;padding:27px;box-shadow:0 22px 90px #112f3529}dialog::backdrop{background:#142d3655}label{display:block;font-size:13px;font-weight:600;margin:15px 0 5px}.help{font-size:12px;color:var(--muted);margin-top:4px}.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:23px}.list-row{display:flex;gap:15px;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.status-error{color:#9c402c}.foot{font-size:12px;color:var(--muted);margin-top:28px}a{color:var(--green)}.hidden{display:none!important}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.65 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}header{padding:22px 5vw;background:#fff;border-bottom:1px solid var(--line);display:flex;gap:18px;align-items:center;justify-content:space-between}h1{font-size:23px;letter-spacing:-.7px;margin:0}h2{font-size:21px;margin:0 0 6px}h3{font-size:18px;margin:0}p{margin:6px 0 14px}.sub,.muted{color:var(--muted);font-size:13px}.brand{display:flex;align-items:center;gap:12px}.logo{background:var(--green);color:white;width:37px;height:37px;display:grid;place-items:center;border-radius:10px;font-weight:700}.tag{display:inline-block;background:var(--light);color:var(--green);padding:3px 10px;border-radius:30px;font-size:12px}main{max-width:1280px;margin:30px auto;padding:0 28px 70px}.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin:23px 0}.tabs button{border:0;background:none;padding:12px 18px;color:var(--muted);border-bottom:3px solid transparent}.tabs button.active{color:var(--green);border-color:var(--green);font-weight:650}.btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 12px;color:var(--ink)}.btn:hover{border-color:var(--green);background:var(--light)}.btn.primary{background:var(--green);color:white;border-color:var(--green)}.buttons{display:flex;gap:7px;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:17px}.card{background:white;border:1px solid var(--line);border-radius:13px;padding:22px;min-width:0}.card .name{margin-top:12px}.card .kv{display:grid;grid-template-columns:90px 1fr;font-size:13px;margin:16px 0;gap:6px 10px}.kv span:nth-child(odd){color:var(--muted)}.kv span{overflow-wrap:anywhere}.card .buttons{border-top:1px solid var(--line);padding-top:16px;margin-top:18px}.empty{border:1px dashed #b8cec0;border-radius:14px;padding:48px 24px;text-align:center;background:#fafcf9}.empty p{max-width:540px;margin:10px auto 22px}.notice{padding:12px 16px;background:#fff7e8;border-left:3px solid #d29c51;margin:15px 0;font-size:13px}#result{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:24px}#result pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:440px;overflow:auto;font:13px/1.65 ui-monospace,monospace}#error{color:#923c2c;white-space:pre-wrap}#pending-message{overflow-wrap:anywhere}select,input,textarea{border:1px solid #c8d7cd;background:#fff;color:var(--ink);border-radius:6px;padding:9px 11px;width:100%}select.filter{width:auto;min-width:160px}textarea{min-height:100px;resize:vertical}dialog{width:min(590px,94vw);border:1px solid var(--line);border-radius:16px;max-height:90vh;padding:27px;box-shadow:0 22px 90px #112f3529}dialog::backdrop{background:#142d3655}label{display:block;font-size:13px;font-weight:600;margin:15px 0 5px}.help{font-size:12px;color:var(--muted);margin-top:4px}.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:23px}.list-row{display:flex;gap:15px;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.status-error{color:#9c402c}.foot{font-size:12px;color:var(--muted);margin-top:28px}a{color:var(--green)}.hidden{display:none!important}fieldset{border:1px solid var(--line);border-radius:7px;margin:16px 0;padding:12px}fieldset label{display:flex;align-items:center;gap:8px;margin:7px 0;font-weight:400}fieldset input{width:auto}.notice .buttons{margin-top:10px}
 @media(max-width:600px){header{padding:17px 20px}main{padding:0 17px 50px;margin-top:22px}.sub.header-sub{display:none}.grid{grid-template-columns:1fr}.card{padding:19px}.tabs button{padding:10px 12px}.bar h2{font-size:20px}}
 </style>
 </head>
@@ -17,7 +17,7 @@
 <div id="app" class="hidden">
 <div class="bar"><div><h2 id="section-title">我的 Agent</h2><p class="muted">会话仍在你选择的 Desktop、CLI 或其他界面中进行。</p></div><div class="buttons"><select class="filter" id="filter" aria-label="Workspace 筛选"></select><button class="btn" id="refresh">刷新状态</button><button class="btn primary" id="create">创建 Agent</button></div></div>
 <nav class="tabs" aria-label="主要视图"><button data-tab="agents" class="active">Agent</button><button data-tab="workspaces">Workspace</button><button data-tab="collaboration">消息与工单</button></nav>
-<div id="error" role="alert"></div><section id="content"></section>
+<div id="error" role="alert"></div><section id="pending-message" class="notice hidden" aria-live="polite"></section><section id="content"></section>
 <section id="result" class="hidden"><div class="bar"><h3>操作结果</h3><button class="btn" id="copy">复制</button></div><p class="muted">按返回状态判断实际进度。已写入不等于已确认通知，预留入口不等于新会话已就绪。</p><div id="links"></div><pre id="output"></pre></section>
 <div class="foot">V1 · 身份归属一个 Workspace · Work 与共享 Definition 可选 · 本页面不是聊天客户端</div>
 </div>
@@ -28,15 +28,43 @@
 const $=id=>document.getElementById(id);let token=new URLSearchParams(location.hash.slice(1)).get('token')||sessionStorage.getItem('aw-token')||'';
 if(location.hash)history.replaceState(null,'',location.pathname);let state={workspaces:[],agents:[]},tab='agents',submitAction=null,lastResult;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
-function button(text,fn,primary=false){const b=el('button',text,'btn'+(primary?' primary':''));b.onclick=fn;return b}
+function button(text,fn,primary=false){
+ const b=el('button',text,'btn'+(primary?' primary':''));b.type='button';
+ b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){$('error').textContent=e.message}finally{b.disabled=false}};return b;
+}
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok||v.ok===false)throw new Error(v.error||'请求失败');return v.result}
 async function command(name,args){return api('/api/execute',{command:name,arguments:args})}
 function show(value){lastResult=value;$('result').classList.remove('hidden');$('output').textContent=JSON.stringify(value,null,2);$('links').replaceChildren();if(value&&value.open_url&&value.open_url.startsWith('codex://')){const a=el('a','打开新 Desktop 会话');a.href=value.open_url;$('links').append(a)}$('result').scrollIntoView({behavior:'smooth',block:'nearest'})}
 async function act(name,args){try{$('error').textContent='';show(await command(name,args));await load()}catch(e){$('error').textContent=e.message}}
-async function load(){try{$('refresh').disabled=true;state=await api('/api/state');$('auth').classList.add('hidden');$('app').classList.remove('hidden');const selected=$('filter').value;$('filter').replaceChildren(new Option('全部 Workspace',''));for(const w of state.workspaces)$('filter').add(new Option(w.alias,w.alias));$('filter').value=selected;render();$('error').textContent=state.errors.map(x=>x.workspace+'：'+x.error).join('\n')}catch(e){$('auth').classList.remove('hidden');$('error').textContent=e.message}finally{$('refresh').disabled=false}}
+async function load(){try{$('refresh').disabled=true;state=await api('/api/state');$('auth').classList.add('hidden');$('app').classList.remove('hidden');const selected=$('filter').value;$('filter').replaceChildren(new Option('全部 Workspace',''));for(const w of state.workspaces)$('filter').add(new Option(w.alias,w.alias));$('filter').value=selected;render();renderPendingMessage();$('error').textContent=state.errors.map(x=>x.workspace+'：'+x.error).join('\n')}catch(e){$('auth').classList.remove('hidden');$('error').textContent=e.message}finally{$('refresh').disabled=false}}
 function workspace(){const v=$('filter').value||state.workspaces[0]?.alias;if(!v)throw new Error('请先创建或接入一个 Workspace。');return v}
-function form(title,description,fields,callback){$('form-title').textContent=title;$('form-description').textContent=description;$('fields').replaceChildren();for(const f of fields){const label=el('label',f.label);label.htmlFor='f-'+f.key;let input;if(f.options){input=el('select');for(const [v,t] of f.options)input.add(new Option(t,v))}else input=el(f.multiline?'textarea':'input');input.id='f-'+f.key;input.name=f.key;input.value=f.value??(f.options?f.options[0][0]:'');input.required=!!f.required;input.dataset.kind=f.kind||'text';if(f.placeholder)input.placeholder=f.placeholder;$('fields').append(label,input);if(f.help)$('fields').append(el('div',f.help,'help'))}submitAction=callback;$('dialog').showModal()}
-$('form').onsubmit=async e=>{e.preventDefault();$('submit').disabled=true;try{const a={};for(const input of $('fields').querySelectorAll('input,textarea,select')){if(input.value==='')continue;a[input.name]=input.dataset.kind==='json'?JSON.parse(input.value):input.value}const result=await submitAction(a);$('dialog').close();show(result);await load()}catch(e){$('form-description').textContent=e.message}finally{$('submit').disabled=false}};
+function form(title,description,fields,callback){
+ $('form-title').textContent=title;$('form-description').textContent=description;$('fields').replaceChildren();
+ for(const f of fields){
+  if(f.checks){
+   const group=el('fieldset');group.dataset.key=f.key;group.append(el('legend',f.label));
+   for(const [value,title] of f.checks){const label=el('label'),input=el('input');input.type='checkbox';input.value=value;input.checked=(f.value||[]).includes(value);label.append(input,document.createTextNode(title));group.append(label)}
+   $('fields').append(group);if(f.help)$('fields').append(el('div',f.help,'help'));continue;
+  }
+  const label=el('label',f.label);label.htmlFor='f-'+f.key;let input;
+  if(f.options){input=el('select');for(const [v,t] of f.options)input.add(new Option(t,v))}else input=el(f.multiline?'textarea':'input');
+  input.id='f-'+f.key;input.name=f.key;input.value=f.value??(f.options?f.options[0][0]:'');input.required=!!f.required;input.dataset.kind=f.kind||'text';
+  if(f.placeholder)input.placeholder=f.placeholder;if(f.readOnly)input.readOnly=true;
+  $('fields').append(label,input);if(f.help)$('fields').append(el('div',f.help,'help'));
+ }
+ submitAction=callback;$('dialog').showModal();
+}
+$('form').onsubmit=async e=>{
+ e.preventDefault();if($('submit').disabled)return;$('submit').disabled=true;$('cancel').disabled=true;
+ try{
+  const a={};for(const input of $('fields').querySelectorAll('input:not([type="checkbox"]),textarea,select')){
+   if(input.value==='')continue;a[input.name]=input.dataset.kind==='json'?JSON.parse(input.value):input.value;
+  }
+  for(const group of $('fields').querySelectorAll('fieldset[data-key]'))a[group.dataset.key]=Array.from(group.querySelectorAll('input:checked'),input=>input.value);
+  const result=await submitAction(a);$('dialog').close();show(result);await load();
+ }catch(e){$('form-description').textContent=e.message;$('error').textContent=e.message}finally{$('submit').disabled=false;$('cancel').disabled=false}
+};
+$('dialog').addEventListener('cancel',e=>{if($('submit').disabled)e.preventDefault()});
 $('cancel').onclick=()=>$('dialog').close();$('refresh').onclick=load;$('filter').onchange=render;$('login').onclick=()=>{token=$('token').value;sessionStorage.setItem('aw-token',token);load()};$('copy').onclick=()=>navigator.clipboard.writeText(JSON.stringify(lastResult,null,2));
 for(const t of document.querySelectorAll('[data-tab]'))t.onclick=()=>{tab=t.dataset.tab;render()};
 function base(a){return {workspace:a.workspace,agent_id:a.id}}
@@ -51,13 +79,89 @@ function configureAgent(a){form('配置原生运行环境','仅保存，不启�
 function configureDesktop(a){form('Desktop / 手动入口配置','本版仅提供 Codex Desktop 的手动控制连接配置，接口待实机确认；不支持完整自动创建或自动跨端交接。Claude/WorkBuddy Desktop 未接入，不用 CLI 替代。',[{key:'value',label:'运行配置 JSON',kind:'json',multiline:true,required:true,value:JSON.stringify({kind:'desktop'},null,2)}],v=>command('agent.configure',{...base(a),...v}))}
 function transferAgent(a){const request_id=crypto.randomUUID();form('切换 Harness 并接手','先预检目标，再请求旧会话保存并交出。新会话成功绑定且完成 relay 后才算完成；失败请查看原交接，不要重复创建。',runtimeFields(a),v=>command('agent.transfer-profile',{...base(a),...v,request_id}))}
 function scheduleMaintenance(w){form('配置巡检计划','程序负责定时。只有工作台服务或 aw maintenance run 运行时才执行；通知会进入已启动 Sentinel，会产生模型调用。',[{key:'enabled',label:'计划',options:[['false','停止'],['true','启用']]},{key:'interval',label:'间隔（秒，至少 30）',value:'300'},{key:'notify',label:'发现异常时通知巡检员',options:[['false','只保存报告，不调用模型'],['true','通知当前 Sentinel 会话']]}],v=>command('maintenance.schedule',{workspace:w.alias,enabled:v.enabled==='true',interval:Number(v.interval),notify:v.notify==='true'}))}
-function caretakerGrant(w){form('管家操作授权','只授权登记的管家；留空操作数组即撤销。授权仅限本安装和此 Workspace，不是操作系统隔离。',[{key:'agent_id',label:'管家实例 ID',required:true},{key:'commands',label:'明确允许的操作数组',kind:'json',required:true,value:'[]',help:'例如 ["maintenance.schedule","maintenance.repair"]。不能委托授权管理、任意进程配置或原始 transfer 配置。'},{key:'targets',label:'目标实例 ID 数组',kind:'json',required:true,value:'[]',help:'[] 只允许自身；["alice"] 指定目标；["*"] 明确授权本 Workspace 全部实例。'}],v=>command('maintenance.grant',{workspace:w.alias,...v}))}
-function repairWorkspace(w){const request_id=crypto.randomUUID();form('执行限定维修','先查看健康报告，填写报告中的目标和预期状态。重复同一请求只查询原结果；不删除锁、不接管、不重放模型任务。',[{key:'agent_id',label:'目标实例 ID',required:true},{key:'action',label:'动作',options:[['sync-idle','同步已交出实例的资料'],['publication-reconcile','补齐原发布操作'],['bridge-retry','允许当前已启用桥接重试']]},{key:'operation_id',label:'原发布 operation ID（补齐时必填）'},{key:'bridge',label:'桥接名称（桥接重试时必填）'},{key:'expected_binding',label:'报告中的当前 Binding（桥接重试时必填）'},{key:'expected_generation',label:'报告中的桥接 generation（桥接重试时必填）'}],v=>command('maintenance.repair',{workspace:w.alias,...v,request_id}))}
+async function caretakerGrant(w){
+ const meta=await command('workspace.show',{workspace:w.alias}),current=await command('maintenance.status',{workspace:w.alias});
+ const members=Object.entries(meta.caretakers||{}).map(([role,id])=>[id,role+' / '+id]);
+ if(!members.length)throw new Error('此空间没有登记的管家，不能仅凭实例名称授予管理权限。');
+ const labels={'agent.start':'创建会话','agent.transfer-profile':'切换 Harness','maintenance.schedule':'调整巡检计划','maintenance.repair':'执行限定维修','asset.write':'修改实例用户资料','agent.handoff':'请求交出','message.watch':'控制自动投递'};
+ form('管家操作授权','显示当前授权；保存会替换所选管家的授权。全部取消可撤销，目标不选则只允许自身。',[{key:'agent_id',label:'管家',options:members,required:true},
+  {key:'commands',label:'允许的操作',checks:current.grantable_commands.map(c=>[c,(labels[c]||c)+' ('+c+')'])},
+  {key:'targets',label:'允许操作的目标',checks:[...state.agents.filter(a=>a.workspace===w.alias).map(a=>[a.id,a.name+' / '+a.id]),['*','整个 Workspace（含以后新增实例，仅明确选择时授权）']]}],v=>command('maintenance.grant',{workspace:w.alias,...v}));
+ const fill=()=>{const grant=current.grants[$('f-agent_id').value]||{};for(const key of ['commands','targets'])for(const input of $('fields').querySelectorAll('fieldset[data-key="'+key+'"] input'))input.checked=(grant[key]||[]).includes(input.value)};
+ $('f-agent_id').onchange=fill;fill();
+}
+
+async function healthReport(w){
+ const report=await command('workspace.doctor',{workspace:w.alias});show(report);
+ for(const issue of report.issues||[]){
+  let values;
+  if(issue.code==='publication_pending'&&issue.agent)values={agent_id:issue.agent,action:'publication-reconcile',operation_id:issue.operation};
+  if(issue.code==='bridge_fault'&&issue.binding)values={agent_id:issue.agent,action:'bridge-retry',bridge:issue.bridge,expected_binding:issue.binding,expected_generation:issue.generation};
+  if(values)$('links').append(button('处理 '+issue.agent+' / '+issue.code,()=>repairWorkspace(w,values)));
+ }
+}
+function repairWorkspace(w,initial={}){
+ const request_id=crypto.randomUUID(),targets=state.agents.filter(a=>a.workspace===w.alias).map(a=>[a.id,a.name+' / '+a.id]);
+ form('执行限定维修','目标与预期版本来自观测；提交时后端仍校验。重复请求只补齐原结果，不删除锁、不接管、不重放模型。',[
+  {key:'agent_id',label:'目标实例',options:[['','请选择'],...targets],required:true,value:initial.agent_id||''},
+  {key:'action',label:'动作',options:[['sync-idle','同步无有效入口实例的资料'],['publication-reconcile','补齐原发布操作'],['bridge-retry','允许当前已启用桥接重试']],value:initial.action||'sync-idle'},
+  {key:'operation_id',label:'原发布 operation ID',value:initial.operation_id||''},
+  {key:'bridge',label:'桥接名称',value:initial.bridge||''},
+  {key:'expected_binding',label:'报告中的 Binding',value:initial.expected_binding||''},
+  {key:'expected_generation',label:'报告中的 generation',value:initial.expected_generation||''}],v=>command('maintenance.repair',{workspace:w.alias,...v,request_id}));
+}
+
+// Keep one unconfirmed send per tab and installation. No background retries.
+let messageBusy=false;
+function messageKey(){if(!state.installation_id)throw new Error('请先连接本机工作台。');return 'aw-pending-message:'+state.installation_id}
+function pendingMessage(){const raw=sessionStorage.getItem(messageKey());if(!raw)return null;const p=JSON.parse(raw);if(!p.args?.request_id||!p.locator)throw new Error('本标签页恢复记录损坏；请核对原消息，不要重新发送。');return p}
+function renderPendingMessage(){
+ const box=$('pending-message');box.replaceChildren();box.classList.add('hidden');if(!state.installation_id)return;
+ try{
+  const p=pendingMessage();if(!p)return;box.classList.remove('hidden');
+  box.append(el('strong','存在尚未确认的消息请求'),el('p',p.args.workspace+' / '+p.args.agent_id+' → '+p.args.to+' · '+p.args.request_id),el('p','本标签页保留原请求用于恢复。刷新不会自动发送；先查看记录，再按原 ID 补齐。','muted'));
+  const actions=el('div',undefined,'buttons');
+  actions.append(button('查看原请求',()=>recoverMessage(false)),button('继续原请求',()=>recoverMessage(true)),button('移除本页提示',()=>{
+   if(confirm('仅移除浏览器中的恢复记录，不撤回或删除已发送的消息。结果可能仍未确定，请先核对原请求。')){sessionStorage.removeItem(messageKey());renderPendingMessage()}
+  }));for(const b of actions.children)b.disabled=messageBusy;box.append(actions);
+ }catch(e){box.classList.remove('hidden');box.textContent=e.message}
+}
+async function recoverMessage(continueRequest){
+ if(messageBusy)throw new Error('原消息请求正在处理，请勿重复提交。');
+ const p=pendingMessage();if(!p)throw new Error('没有待确认消息。');
+ if(!state.workspaces.some(w=>w.alias===p.args.workspace&&w.locator===p.locator))throw new Error('Workspace 地址已变化，不能把旧请求发往新的空间。');
+ messageBusy=true;renderPendingMessage();
+ try{
+  let result=await command('message.operation',{workspace:p.args.workspace,operation_id:p.args.request_id});
+  if(result.state!=='not_recorded'&&(result.type!=='message'||result.agent!==p.args.agent_id||result.binding!==p.args.binding||result.payload?.content!==p.args.content||result.payload?.delivery!==p.args.delivery))throw new Error('原操作与浏览器记录不一致，请核对记录，不会自动补齐。');
+  if(continueRequest&&result.state!=='published')result=result.state==='not_recorded'?await command('message.send',p.args):await command('message.reconcile',{operation_id:p.args.request_id});
+  if(result.state==='published')sessionStorage.removeItem(messageKey());
+  show(result);return result;
+ }finally{messageBusy=false;renderPendingMessage()}
+}
+function sendMessage(){
+ if(pendingMessage()){renderPendingMessage();$('pending-message').scrollIntoView();return;}
+ const w=workspace(),meta=state.workspaces.find(x=>x.alias===w),senders=state.agents.filter(a=>a.workspace===w&&!a.archived&&a.binding?.phase==='active');
+ if(!senders.length)throw new Error('此空间没有有效的发送实例；请先创建或接入会话。');
+ form('发送 Message','发送方使用页面已观察的 Binding，后台仍校验。原请求及正文暂存本标签页用于失败恢复；未确认前不能改写后重发。',[
+  {key:'agent_id',label:'发送实例',options:[['','请选择'],...senders.map(a=>[a.id,a.name+' / '+a.id])],required:true},
+  {key:'to',label:'接收者（实例 ID 或 好友/实例）',required:true},
+  {key:'delivery',label:'投递方式',help:'Claude/CodeBuddy SDK 本版不支持 insert；不会自动降级。',options:[['normal','normal：等待空闲'],['insert','insert：仅支持的入口，不插队']]},
+  {key:'content',label:'正文',required:true,multiline:true}],async a=>{
+   if(pendingMessage())throw new Error('请先处理未确认的原消息请求。');
+   const sender=senders.find(x=>x.id===a.agent_id);
+   if(!sender||!a.content?.trim()||!a.to?.trim())throw new Error('请选择有效发送方并填写接收者与正文。');
+   const args={workspace:w,...a,binding:sender.current,request_id:'m'+crypto.randomUUID()};
+   sessionStorage.setItem(messageKey(),JSON.stringify({locator:meta.locator,args}));renderPendingMessage();
+   // Close before network I/O so failure cannot leave an editable attempted payload.
+   $('dialog').close();return recoverMessage(true);
+ });
+}
 
 function checkpoints(a){form('保存 / 查看检查点','保存范围限实际文件，外部产品与不可取得的原生状态不会被伪装成完整备份。',[{key:'summary',label:'累计摘要',multiline:true,help:'留空则查看已保存检查点。'},{key:'content',label:'阶段事实与不确定性',multiline:true}],v=>command(v.summary?'checkpoint.create':'checkpoint.list',v.summary?{...base(a),...v,binding:a.current}:base(a)))}
 function addWorkspace(){location.href='/setup';}
-function renderWorkspaces(){const row=el('div',undefined,'buttons');row.append(button('创建 / 接入 Workspace',addWorkspace,true));$('content').append(row);for(const w of state.workspaces){const card=el('article',undefined,'card');card.style.marginTop='16px';card.append(el('h3',w.alias),el('p',w.address,'muted'));const actions=el('div',undefined,'buttons');actions.append(button('查看',()=>act('workspace.show',{workspace:w.alias})),button('健康检查',()=>act('workspace.doctor',{workspace:w.alias})),button('巡检状态',()=>act('maintenance.status',{workspace:w.alias})),button('巡检计划',()=>scheduleMaintenance(w)),button('管家授权',()=>caretakerGrant(w)),button('限定维修',()=>repairWorkspace(w)));for(const [kind,label] of [['friends','好友'],['projects','产品']])actions.append(button('管理'+label,()=>form('管理'+label,'只管理关联，不删除资源，不自动为对方登记。',[{key:'operation',label:'动作',options:[['list','查看'],['add','增加'],['remove','移除']]},{key:'alias',label:'简称'},{key:'address',label:'访问地址（增加时填写）'},{key:'content',label:'用途'}],a=>command('workspace.relation',{workspace:w.alias,kind,...a}))));card.append(actions);$('content').append(card)}}
-function renderCollaboration(){const card=el('section',undefined,'card');card.append(el('h3','明确发送，按需使用 Work'),el('p','ACK 只表示已确认通知，不代表已读或已完成。工单不是 Agent 运行的前提。','muted'));const buttons=el('div',undefined,'buttons');buttons.append(button('消息列表',()=>act('message.list',{workspace:workspace()})),button('发送消息',()=>form('发送 Message','使用当前有效入口发送；跨 Workspace 由 Backend 完成双写。',[{key:'agent_id',label:'发送实例 ID',required:true},{key:'binding',label:'当前 binding',required:true},{key:'to',label:'接收者（实例 ID 或 好友/实例）',required:true},{key:'delivery',label:'投递方式',help:'先核对目标入口；本版 Claude/CodeBuddy SDK 不支持 insert，队头不会自动降级。',options:[['normal','normal：等空闲'],['insert','insert：仅支持此能力的入口，不插队']]},{key:'content',label:'正文',required:true,multiline:true}],a=>command('message.send',{workspace:workspace(),...a}))),button('工单列表',()=>act('work.list',{workspace:workspace()})),button('创建工单',()=>form('创建 Work','创建只保存工单，不自动通知、启动模型或发布产品。',[{key:'owner',label:'负责人实例 ID',required:true},{key:'parent_id',label:'父工单 ID（可选）'},{key:'content',label:'工作说明',required:true,multiline:true}],a=>command('work.create',{workspace:workspace(),...a}))));card.append(buttons);$('content').append(card);const advanced=el('details',undefined,'card');advanced.style.marginTop='18px';advanced.append(el('summary','明确的高级操作（同一套 API）'),el('p','用于导入选定资产、更新、交付、桥接配置等。不会执行任意 shell。','muted'),button('执行平台操作',()=>form('平台操作','命令与参数参见 docs/usage.md 或 aw --help。',[{key:'command',label:'命令',required:true,placeholder:'work.show'},{key:'arguments',label:'参数 JSON',kind:'json',multiline:true,required:true,value:JSON.stringify({workspace:workspace()},null,2)}],a=>command(a.command,a.arguments))));$('content').append(advanced)}
+function renderWorkspaces(){const row=el('div',undefined,'buttons');row.append(button('创建 / 接入 Workspace',addWorkspace,true));$('content').append(row);for(const w of state.workspaces){const card=el('article',undefined,'card');card.style.marginTop='16px';card.append(el('h3',w.alias),el('p',w.address,'muted'));const actions=el('div',undefined,'buttons');actions.append(button('查看',()=>act('workspace.show',{workspace:w.alias})),button('健康检查',()=>healthReport(w)),button('巡检状态',()=>act('maintenance.status',{workspace:w.alias})),button('巡检计划',()=>scheduleMaintenance(w)),button('管家授权',()=>caretakerGrant(w)),button('限定维修',()=>repairWorkspace(w)));for(const [kind,label] of [['friends','好友'],['projects','产品']])actions.append(button('管理'+label,()=>form('管理'+label,'只管理关联，不删除资源，不自动为对方登记。',[{key:'operation',label:'动作',options:[['list','查看'],['add','增加'],['remove','移除']]},{key:'alias',label:'简称'},{key:'address',label:'访问地址（增加时填写）'},{key:'content',label:'用途'}],a=>command('workspace.relation',{workspace:w.alias,kind,...a}))));card.append(actions);$('content').append(card)}}
+function renderCollaboration(){const card=el('section',undefined,'card');card.append(el('h3','明确发送，按需使用 Work'),el('p','ACK 只表示已确认通知，不代表已读或已完成。工单不是 Agent 运行的前提。','muted'));const buttons=el('div',undefined,'buttons');buttons.append(button('消息列表',()=>act('message.list',{workspace:workspace()})),button('发送消息',sendMessage),button('工单列表',()=>act('work.list',{workspace:workspace()})),button('创建工单',()=>form('创建 Work','创建只保存工单，不自动通知、启动模型或发布产品。',[{key:'owner',label:'负责人实例 ID',required:true},{key:'parent_id',label:'父工单 ID（可选）'},{key:'content',label:'工作说明',required:true,multiline:true}],a=>command('work.create',{workspace:workspace(),...a}))));card.append(buttons);$('content').append(card);const advanced=el('details',undefined,'card');advanced.style.marginTop='18px';advanced.append(el('summary','明确的高级操作（同一套 API）'),el('p','用于导入选定资产、更新、交付、桥接配置等。不会执行任意 shell。','muted'),button('执行平台操作',()=>form('平台操作','命令与参数参见 docs/usage.md 或 aw --help。',[{key:'command',label:'命令',required:true,placeholder:'work.show'},{key:'arguments',label:'参数 JSON',kind:'json',multiline:true,required:true,value:JSON.stringify({workspace:workspace()},null,2)}],a=>command(a.command,a.arguments))));$('content').append(advanced)}
 $('create').onclick=()=>{try{
  const w=workspace(),request_id='create-'+crypto.randomUUID(),generated_id='a'+crypto.randomUUID().replaceAll('-','');
  const fields=[{key:'name',label:'名称',required:true,placeholder:'构建助手'},

@@ -67,7 +67,9 @@ def make_server(app, port=8765, token=None):
                 if self.path == "/api/commands":
                     result = list(command_map(app))
                 elif self.path == "/api/state":
-                    result = {"workspaces": app.workspace_list(), "agents": [], "errors": []}
+                    from .maintenance import installation_id
+                    result = {"installation_id": installation_id(app),
+                              "workspaces": app.workspace_list(), "agents": [], "errors": []}
                     for workspace in result["workspaces"]:
                         try:
                             for agent in app.agents(workspace["alias"]):

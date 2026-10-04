@@ -23,14 +23,9 @@ SDK_TYPES = {
 }
 
 
-def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
-    """Secrets are read at launch and passed only to the child process."""
-    module, client_name, options_name, executable_key = SDK_TYPES[config["kind"]]
-    try:
-        sdk = importlib.import_module(module)
-    except ImportError as exc:
-        raise Unavailable(f"Install AgentWorkspace's {config['kind']} extra before launching this entry.") from exc
-    env = {"AW_HOME": str(app.home), "AW_WORKSPACE": workspace, "AW_AGENT": agent_id, "AW_BINDING": binding}
+def sdk_environment(config):
+    """Use the same credential routing for metadata probes and actual sessions."""
+    env = {}
     provider = config.get("provider", {})
     if provider.get("base_url"):
         # Do not send an inherited official-account token to a different destination.
@@ -46,6 +41,18 @@ def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
         env[variable] = secret
         if config["kind"] == "claude":
             env["ANTHROPIC_API_KEY"] = ""
+    return env
+
+
+def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
+    """Secrets are read at launch and passed only to the child process."""
+    module, client_name, options_name, executable_key = SDK_TYPES[config["kind"]]
+    try:
+        sdk = importlib.import_module(module)
+    except ImportError as exc:
+        raise Unavailable(f"Install AgentWorkspace's {config['kind']} extra before launching this entry.") from exc
+    env = {"AW_HOME": str(app.home), "AW_WORKSPACE": workspace, "AW_AGENT": agent_id,
+           "AW_BINDING": binding, **sdk_environment(config)}
     # No automatic user/project MCP configuration or broad native permissions.
     options = {"cwd": str(root), executable_key: config["executable"], "env": env,
                "setting_sources": [], "model": config.get("model"), "effort": config.get("effort"),

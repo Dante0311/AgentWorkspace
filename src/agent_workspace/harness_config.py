@@ -4,6 +4,8 @@ Codex uses native argv; Claude/CodeBuddy use SDK options. Desktop is not emulate
 """
 from __future__ import annotations
 
+import asyncio
+import importlib
 import json
 import os
 from pathlib import Path
@@ -154,3 +156,47 @@ def configure_sdk(app, workspace, agent_id, kind, model="", effort="", base_url=
         result = app.configure(workspace, agent_id, config)
     return {**result, "sessions_started": False, "model_access": "unchecked", "effort_support": "unchecked",
             "global_configuration_changed": False}
+
+
+def inspect_sdk(kind, base_url="", env_key="", executable=None):
+    """Read native handshake metadata without sending a prompt or starting an Agent."""
+    config = sdk_config(kind, base_url=base_url, env_key=env_key, executable=executable)
+    result = {"state": "capability_unconfirmed", "models": [], "model_invoked": False}
+    if env_key and not os.environ.get(env_key):
+        return {**result, "state": "credential_missing", "env_key": env_key}
+    if kind != "claude":
+        return {**result, "catalog": "unsupported", "hint": "此 SDK 尚无已验证的模型目录查询接口，请按服务说明填写。"}
+    try:
+        from .native_sdk import sdk_environment
+        sdk = importlib.import_module("claude_agent_sdk")
+        with tempfile.TemporaryDirectory(prefix="aw-claude-probe-") as directory:
+            options = sdk.ClaudeAgentOptions(cli_path=config["executable"], cwd=directory,
+                setting_sources=[], tools=[], mcp_servers={}, env=sdk_environment(config))
+
+            async def probe():
+                async with asyncio.timeout(10):
+                    async with sdk.ClaudeSDKClient(options=options) as client:
+                        return await client.get_server_info()
+
+            info = asyncio.run(probe())
+        result.update(state="connected", authentication="configured_unverified" if info.get("account") else "unconfirmed")
+        # Native built-in choices do not describe an arbitrary custom model service.
+        if base_url or any(os.environ.get(key) for key in (
+                "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")):
+            return {**result, "catalog": "custom_provider_unconfirmed",
+                    "hint": "自有或第三方服务的模型和强度请按实际能力填写，未使用内置目录。"}
+        for model in info.get("models", [])[:500]:
+            identifier = model["value"]
+            result["models"].append({"id": identifier, "model": identifier,
+                "displayName": model.get("displayName", identifier),
+                "supportedReasoningEfforts": [{"reasoningEffort": effort}
+                    for effort in model.get("supportedEffortLevels", [])]})
+        result["catalog"] = "reported_by_claude" if "models" in info else "unconfirmed"
+        return result
+    except ImportError:
+        return {"state": "sdk_missing", "models": [], "model_invoked": False,
+                "hint": "请自行安装 AgentWorkspace 的 claude 可选依赖后重试。"}
+    except Exception:
+        # SDK diagnostics may contain account data or secrets. This is the external boundary.
+        return {"state": "capability_unconfirmed", "models": [], "model_invoked": False,
+                "hint": "无法确认当前 SDK/CLI 的元数据接口；没有发送模型输入或创建平台会话。"}

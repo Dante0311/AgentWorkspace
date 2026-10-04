@@ -28,7 +28,13 @@ aw -w demo agent configure-sdk helper --kind codebuddy --model MODEL_ID --base-u
 
 三行是三种替代配置示例，不是要求依次执行。地址、模型 ID 和强度必须换成实际服务支持的值；省略地址时沿用该 Harness 的认证/服务环境。`--executable` 可指定已安装原生程序的绝对路径。密钥由用户在启动工作台/运行器的环境中提供，这里只保存环境变量名，不将密钥放进命令、Git 或角色定义。
 
-Codex 自有服务使用 Responses，Claude SDK 使用对应原生 Messages，CodeBuddy SDK 使用其原生服务或兼容接入配置；不是通用协议转换器。不同实例的配置只作用于本实例启动参数/子进程，不改全局设置。当前 SDK 模型与强度手动填写，保存时明确返回 `unchecked`；Codex 官方目录可显式查询，自有网关不冒用内置目录。
+Codex 自有服务使用 Responses，Claude SDK 使用对应原生 Messages，CodeBuddy SDK 使用其原生服务或兼容接入配置；不是通用协议转换器。不同实例的配置只作用于本实例启动参数/子进程，不改全局设置。Codex 和 Claude 可以显式查询原生返回的模型/强度选项；CodeBuddy 尚无已验证的目录接口时保留手工填写。保存仍返回 `unchecked`，目录不是模型调用权限的证明；自有网关不冒用内置目录。
+
+元数据查询可在首次配置页明确点击，或调用 `setup.inspect-codex` / `setup.inspect-sdk`。Claude 查询只做 SDK 握手，使用与真实会话相同的凭据路由，不发送模型输入、不创建平台 Binding、不返回账号明细。CodeBuddy 返回 `catalog=unsupported` 时，不尝试猜测或建立会话。
+
+```sh
+aw call setup.inspect-sdk --arguments '{"kind":"claude"}'
+```
 
 当前入口有效时拒绝直接换配置，使用下节自动交接。保存配置本身不启动模型：
 
@@ -106,7 +112,7 @@ aw -w demo maintenance repair helper --repair-action sync-idle --request-id repa
 | 对象 | 已实现和开发者验证 | 仍需验证或尚缺能力 |
 | --- | --- | --- |
 | Codex 受管 CLI/App Server | 独立模型配置、真实会话、工具调用、持续通信；原生客户端对回环 API 测试 | 用户账号/自有真实 API、实际模型能力和机器权限 |
-| Claude Code 受管 CLI/SDK | 持续会话、平台 MCP 检查点/ACK、作为真实 Codex 交接后继 | 真实模型/账号；未实现已验证的 insert/steer |
+| Claude Code 受管 CLI/SDK | 持续会话、平台 MCP 检查点/ACK、原生模型元数据、作为真实 Codex 交接后继 | 真实模型/账号；未实现已验证的 insert/steer |
 | CodeBuddy 受管 CLI/SDK | 持续会话、平台 MCP 检查点/ACK；SDK 交接回归 | 真实模型/账号；不是 WorkBuddy Desktop；未实现已验证的 insert/steer |
 | Codex Desktop | 指定桌面 MCP 控制连接、真实会话绑定、状态与通知代码；深链准备新会话 | 实机接口版本、完整自动创建/跨入口接手；深链打开不能当作会话已建立 |
 | Claude Code / WorkBuddy Desktop | 安装位置发现与未接入状态提示 | 尚缺明确的原生会话创建、持续通信、停工观测接入；不是仅待用户验收 |

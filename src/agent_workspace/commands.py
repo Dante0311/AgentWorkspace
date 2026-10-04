@@ -16,7 +16,7 @@ READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "ag
 
 USER_MANAGEMENT = {"agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
-                   "setup.inspect-codex", "setup.prepare-instance", "agent.configure-codex",
+                   "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
                    "maintenance.grant", "maintenance.schedule", "maintenance.repair"}
 CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send"}
@@ -144,6 +144,7 @@ def command_map(app):
         "setup.scan": onboarding.scan, "setup.check-git": onboarding.check_git,
         "setup.create": partial(onboarding.create_workspace, app),
         "setup.inspect-codex": harness_config.inspect_codex,
+        "setup.inspect-sdk": harness_config.inspect_sdk,
         "setup.prepare-instance": partial(onboarding.prepare_instance, app),
         "agent.configure-codex": partial(harness_config.configure_codex, app),
         "agent.configure-sdk": partial(harness_config.configure_sdk, app),

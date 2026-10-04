@@ -116,3 +116,43 @@ def test_installed_claude_tools_and_two_turns_custom_endpoint(app, tmp_path, mon
         server.shutdown()
         server.server_close()
         worker.join(5)
+
+
+def test_installed_claude_metadata_does_not_call_model_api(tmp_path, monkeypatch):
+    from agent_workspace.harness_config import inspect_sdk
+    executable = os.environ.get('AW_TEST_CLAUDE')
+    if not executable or not Path(executable).is_file():
+        pytest.skip('An explicitly supplied Claude CLI is required.')
+    pytest.importorskip('claude_agent_sdk')
+    config_home = tmp_path / 'metadata-home'
+    config_home.mkdir()
+    monkeypatch.setenv('CLAUDE_CONFIG_DIR', str(config_home))
+    monkeypatch.setenv('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1')
+    monkeypatch.setenv('AW_TEST_METADATA_KEY', 'isolated-metadata-key')
+    for key in ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDECODE'):
+        monkeypatch.delenv(key, raising=False)
+    requests = []
+
+    class NoModelCalls(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+        def do_POST(self):
+            requests.append(self.path)
+            self.send_response(500)
+            self.end_headers()
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), NoModelCalls)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        result = inspect_sdk('claude', base_url=f'http://127.0.0.1:{server.server_port}',
+                             env_key='AW_TEST_METADATA_KEY', executable=executable)
+        assert result['state'] == 'connected', result
+        assert result['models'] == [] and result['catalog'] == 'custom_provider_unconfirmed'
+        assert not result['model_invoked'] and not requests
+        assert 'isolated-metadata-key' not in json.dumps(result)
+        assert not (config_home / 'settings.json').exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(5)

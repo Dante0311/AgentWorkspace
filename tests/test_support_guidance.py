@@ -21,7 +21,7 @@ def test_new_instance_contains_versioned_guidance(app):
     app.create('sea', 'alice')
     root = app.root('sea', 'alice')
     content = (root / '.aw/prompts/capabilities.md').read_bytes()
-    assert content.decode() == guide()
+    assert content == (files('agent_workspace') / 'resources/prompts/capabilities.md').read_bytes()
     manifest = read_json(root / '.aw/software.json')
     assert manifest['files']['.aw/prompts/capabilities.md'] == digest(content)
     for skill in ('message', 'relay'):
@@ -83,7 +83,7 @@ def test_public_guidance_does_not_read_accounts_or_workspace_state():
         with urllib.request.urlopen(base + '/capabilities') as response:
             assert response.headers.get_content_type() == 'text/plain'
             assert response.headers['X-Content-Type-Options'] == 'nosniff'
-            assert response.read().decode() == guide()
+            assert response.read() == (files('agent_workspace') / 'resources/prompts/capabilities.md').read_bytes()
         app.workspace_list.assert_not_called()
         app.local.assert_not_called()
         with pytest.raises(urllib.error.HTTPError) as error:

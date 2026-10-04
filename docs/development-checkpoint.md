@@ -19,11 +19,17 @@
 
 ## 验证
 
-- 本机完整套件启用 Codex、Claude、CodeBuddy 固定原生客户端：**281 passed、9 skipped、0 failed，271.79s**。9 项均为明确分开的浏览器测试，JUnit 与 pytest 输出一致，不累计重叠组。原生客户端使用回环模型夹具，不是付费模型、真实账号或 Desktop 验收。
+- `dfd1d9d` 本机完整套件启用 Codex、Claude、CodeBuddy 固定原生客户端：**281 passed、9 skipped、0 failed，271.79s**。9 项均为明确分开的浏览器测试，JUnit 与 pytest 输出一致，不累计重叠组。原生客户端使用回环模型夹具，不是付费模型、真实账号或 Desktop 验收。
 - 安装/支持说明组 19 passed；将能力资源临时换为 CRLF 后支持说明 8 passed，结束后恢复原字节。消息/维护回归 36 passed；新回执及真实 CLI/HTTP 组 18 passed；这些已包含于完整结果，不相加。
 - 从当前代码构建 wheel，通过扩展 smoke_wheel：真实 venv 建成后注入第一次包安装失败，用分发安装脚本恢复，重复安装不重建，第二个隔离安装读取原 Workspace 且 registry 字节不变。CLI、三管家、七 Skill、页面资源与巡检操作检查通过。
 - 本机 Chromium 导航被管理员策略拒绝（ERR_BLOCKED_BY_ADMINISTRATOR），没有绕过。9 项真实浏览器测试将在 GitHub CI 的 Workbench / real HTTP and Chromium 执行，涵盖发送前/后的响应丢失、刷新、双击、只读查询、存储失败、授权撤销、维修版本变化和两个视口。当前尚不能宣称通过。
 - Python 与页面 JavaScript 语法检查通过。上传前核对 Git blob 与本机已测试树；本提交 CI 独立检查，不沿用父提交结果。
+
+## 浏览器 CI 跟进
+
+`dfd1d9d3f201ec965362d2834b9dd32994fcd5c3` 的 CI `37215505611` 中，真实 HTTP/Chromium 组 8 passed、1 failed。失败发生在测试注入步骤：evaluate 返回被赋值的函数后被 Playwright 调用，提前抛出预设错误；尚未运行到被测提交动作。本提交将赋值放进显式函数体，不修改产品代码、不跳过失败场景。修复后仍须通过完整浏览器组，不能仅凭其余 8 项通过宣称全部成功。
+
+上述提交的 Linux 3.11、3.13 与打包/真实安装恢复已成功；最后读取时 Windows 两组仍在运行。后续提交的矩阵结果单独查看。
 
 ## 接续
 

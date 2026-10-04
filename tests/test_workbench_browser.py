@@ -121,7 +121,7 @@ def test_second_deliberate_send_has_new_id(ui):
 def test_storage_failure_prevents_network_send(ui):
     app, _, page = ui
     compose(page)
-    page.evaluate("Storage.prototype.setItem = function() { throw new Error('storage unavailable'); }")
+    page.evaluate("() => { Storage.prototype.setItem = function() { throw new Error('storage unavailable'); }; }")
     page.locator('#submit').click()
     page.wait_for_function("document.getElementById('error').textContent.includes('storage unavailable')")
     assert not Messages(app).list('sea')

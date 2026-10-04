@@ -5,6 +5,8 @@ description: 首次进入或接手同一实例，加载必要材料，不抢占�
 
 # relay
 
+先读取 `.aw/prompts/capabilities.md` 或本次入口提示中的当前版本说明。只使用已支持的接入方式；能力未确认时先说明，不把打开窗口当成接手成功，不自动换成 CLI。
+
 首次进入无须历史交接点；已运行实例必须已经明确 handoff。两者均不要求 Work 或共享 Definition。
 
 ```sh

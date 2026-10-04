@@ -63,7 +63,7 @@ from importlib.resources import files
 root = files('agent_workspace').joinpath('resources')
 for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork'):
     assert root.joinpath('skills', name, 'SKILL.md').read_text(encoding='utf-8')
-for name in ('checkpoints', 'entry', 'handoff', 'initialization'):
+for name in ('checkpoints', 'entry', 'handoff', 'initialization', 'capabilities'):
     assert root.joinpath('prompts', name + '.md').read_text(encoding='utf-8')
 for name in ('steward', 'sentinel', 'maintainer'):
     assert root.joinpath('definitions', name + '.md').read_text(encoding='utf-8')

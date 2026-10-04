@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib.resources import files
 import json
 import os
 from pathlib import Path
@@ -27,9 +28,11 @@ def entry_prompt(app, workspace, agent_id, binding, root):
     snap = app.store(workspace).snapshot()
     entry = snap.json(f"bindings/{binding}.json")
     item = app.agent(workspace, agent_id, snap)
-    lines = [(root / ".aw/prompts/entry.md").read_text(encoding="utf-8"),
+    # Read installed guidance, not a potentially stale copy from an older checkpoint.
+    capabilities = (files("agent_workspace") / "resources" / "prompts" / "capabilities.md").read_text(encoding="utf-8")
+    lines = [(root / ".aw/prompts/entry.md").read_text(encoding="utf-8"), capabilities,
              json.dumps({"workspace": workspace, "agent": agent_id, "binding": binding,
-                         "instance_root": str(root)}, ensure_ascii=False),
+                         "runtime_kind": entry["kind"], "instance_root": str(root)}, ensure_ascii=False),
              "平台命令使用 aw_execute 动态工具，或运行 aw。调用参数中的 workspace、agent_id、binding 必须使用上述值。"]
     if entry["handoff"]:
         handoff = snap.json(f"handoffs/{entry['handoff']}.json")

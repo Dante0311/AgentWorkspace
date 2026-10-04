@@ -10,7 +10,7 @@
 </head>
 <body><main>
 <h1>Agent Workspace · 首次配置</h1>
-<p class="muted">先准备环境，再建立身份，最后选择是否启动。检测不会安装软件或执行模型任务。</p>
+<p class="muted">先准备环境，再建立身份，最后选择是否启动。检测不会安装软件或执行模型任务。 <a href="/capabilities" target="_blank" rel="noopener noreferrer">当前版本支持范围与限制</a></p>
 <section id="auth" hidden><h2>连接本机工作台</h2><label for="token">启动地址中的控制 Token</label><input id="token" type="password" autocomplete="off"><button id="login">连接</button></section>
 <div id="error" role="alert"></div>
 <div id="app" hidden>
@@ -25,7 +25,7 @@
 <button type="button" id="check">检查访问（只读）</button><button id="create" class="primary" disabled>创建 / 接入，不启动模型</button>
 </form></section>
 <section><h2>3 · 配置实例的模型运行环境</h2>
-<p class="notice">可配置 Codex CLI、Claude Code CLI 与 CodeBuddy Code CLI。后两者需要对应 SDK 可选依赖；原生 Desktop 单独配置和验收，CLI 不能冒充 Desktop。创建管家身份不等于巡检正在运行。</p>
+<p class="notice">可配置 Codex CLI、Claude Code CLI 与 CodeBuddy Code CLI。后两者需要对应 SDK 可选依赖。本版不支持原生 Desktop 完整自动创建/交接；Codex Desktop 仅提供待实机确认的手动控制连接，Claude/WorkBuddy Desktop 未接入。创建管家身份不等于巡检正在运行。</p>
 <div class="fields"><div><label for="workspace">Workspace</label><select id="workspace"></select></div><div><label for="agent">实例</label><select id="agent"></select></div></div>
 <button id="reload">刷新实例</button><button id="prepare">在本机准备选中实例目录</button>
 <form id="profile-form">
@@ -52,7 +52,7 @@ if(token)sessionStorage.setItem('aw-token',token);
 if(location.hash)history.replaceState(null,'',location.pathname);
 let agents=[],catalog=[],gitReady=false,busy=false;
 const profileCommand=()=> $('kind').value==='codex'?'agent.configure-codex':'agent.configure-sdk';
-const labels={available:'可用',missing:'未安装',unavailable:'不可用',found:'已发现，待确认',not_found_in_path:'PATH 未发现',location_unconfirmed:'安装位置未确认',preview:'预览接入',not_implemented:'自动接入待实现',manual_capture:'需手动捕获控制入口'};
+const labels={available:'可用',missing:'未安装',unavailable:'不可用',found:'已发现，待确认',not_found_in_path:'PATH 未发现',location_unconfirmed:'安装位置未确认',preview:'预览接入',not_implemented:'本版不支持自动接入',manual_capture:'需手动捕获控制入口'};
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok||v.ok===false)throw new Error(v.error||'请求失败');return v.result}
 const command=(name,args={})=>api('/api/execute',{command:name,arguments:args});
 function show(value){$('result').hidden=false;$('output').textContent=JSON.stringify(value,null,2)}

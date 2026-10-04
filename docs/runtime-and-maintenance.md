@@ -111,24 +111,17 @@ aw -w demo maintenance repair helper --repair-action sync-idle --request-id repa
 
 ## 5. 当前能力与验收边界
 
-| 对象 | 已实现和开发者验证 | 仍需验证或尚缺能力 |
-| --- | --- | --- |
-| Codex 受管 CLI/App Server | 独立模型配置、真实会话、工具调用、持续通信；原生客户端对回环 API 测试；六向交接矩阵 | 用户账号/自有真实 API、实际模型能力和机器权限 |
-| Claude Code 受管 CLI/SDK | 持续会话、平台 MCP 检查点/ACK、原生模型元数据、作为三种 CLI 交接的前端或后继 | 真实模型/账号；未实现已验证的 insert/steer |
-| CodeBuddy 受管 CLI/SDK | 持续会话、平台 MCP 检查点/ACK；三种 CLI 六向交接矩阵 | 真实模型/账号；不是 WorkBuddy Desktop；未实现已验证的 insert/steer |
-| Codex Desktop | 指定桌面 MCP 控制连接、真实会话绑定、状态与通知代码；深链准备新会话 | 实机接口版本、完整自动创建/跨入口接手；深链打开不能当作会话已建立 |
-| Claude Code / WorkBuddy Desktop | 安装位置发现与未接入状态提示 | 尚缺明确的原生会话创建、持续通信、停工观测接入；不是仅待用户验收 |
-| 管家维护 | 实例授权、持久计划、去重通知、健康观察和三类有限维修 | 真实模型是否正确诊断/选择动作、持续运行机器和用户明确授权 |
-| 企业微信 | 可选文本 Bridge、发送记录、受管进程看护 | 真实 Bot、网络、映射及收发验收；不宣称多模态全部支持 |
-| 安装/存储 | 隔离 wheel 安装、资源检查、本地与普通 Git 远端逻辑 | 用户新机器安装/凭据/远端分支策略；正式发布另行授权 |
+用户与 Agent 共用一份随包维护的[当前版本支持范围](../src/agent_workspace/resources/prompts/capabilities.md)，不在这里另存一张可能漂移的矩阵。工作台与首次配置页可打开 `/capabilities` 查看本机安装版本，不需要 Git、账号或额外服务。
 
-SDK 不支持 insert 时，队头保持等待并返回 `delivery_unsupported`，不改成 normal、不新开会话，也不让后面的消息越过它。检查目标能力后由用户决定处理方式。
+明确不支持的操作是本版公开限制，不靠反复重试或自行更换入口“修好”；未确认能力不冒充上游不支持。SDK 的 insert 队头仍保留并返回 `delivery_unsupported`，结果同时给出处理说明，不改消息和 ACK。模型目录不支持时明确说明可手工填写，填写成功仍不等于服务已经验收。
+
+新建实例带有 `.aw/prompts/capabilities.md`，message/relay Skill 引导读取。自动或手动 `agent start` 生成的首次进入与接手提示总是附带当前安装包的说明和实际 Binding 类型，不信任旧 checkpoint 中的能力副本。已有实例可显式使用 `agent upgrade-tools` 更新受管说明，保留本地修改冲突检查，不覆盖 AGENTS.md 或用户资料。已经运行的模型不会因软件更新自动读到新规则，需用户明确让它读取更新材料，或在下次接手时加载。
 
 开发测试中的“真实客户端”指已安装的原生可执行程序、SDK、平台工具和 Git；模型响应是回环 API 夹具。它验证通信和副作用，不证明真实模型质量、费用、账号权限、长期运行或任何 Desktop 已验收。参见 [开发检查点](development-checkpoint.md) 与当前提交的 CI。
 
 截至 2026-10-04 核对的外部入口说明：[Codex App Server](https://developers.openai.com/codex/app-server)、[Claude Desktop](https://code.claude.com/docs/en/desktop)、[CodeBuddy SDK](https://www.codebuddy.ai/docs/cli/sdk)。这些不是我们已经实现对应全部能力的证明，使用特定版本前须重新核对。
 
-### 5.1 Desktop 接入仍缺什么
+### 5.1 当前不支持项与上游待确认事项
 
 2026-10-04 的接口核对区分“原生产品能做”与“第三方能可靠控制”：
 
@@ -136,7 +129,7 @@ SDK 不支持 insert 时，队头保持等待并返回 `delivery_unsupported`，
 - Claude Desktop：[官方对照](https://code.claude.com/docs/en/desktop#feature-comparison)仍将脚本自动化与 Agent SDK 列为 CLI 能力。文档有 `/desktop`、桌面会话间消息等功能，但这不等于已提供可由 AgentWorkspace 调用的完整会话控制接口；当前不能据此承诺自动配置和接管原生窗口。
 - WorkBuddy：[开放平台](https://open.workbuddy.cn/docs/third-party-app)及[本地助理 API](https://open.workbuddy.cn/docs/openapi)确实提供消息、在线状态和历史查询。该路线要求应用注册、相应 Scope 与用户授权；还需核实其是否能指定实例工作根、创建独立会话、观察停工并选择模型。不会为暂未确认的适配引入一整套 OAuth 服务，也不能宣称 WorkBuddy 没有任何通信 API。
 
-下一步接入需要的是合法的实际控制接口与能力证据，不是用户提供账号密码或整份私有会话。此处记录开发阻塞，不缩减 V1 的 Desktop 目标；在它们得到解决前，不能把剩余工作统称为实机验收。
+完整 Desktop 自动化保留为设计方向，但本版按支持范围明确标为不支持，不承诺输入账号即可启用。后续增加支持须取得合法控制接口与能力证据，不要求用户提交账号密码或整份私有会话。上游接口未知与本版未接入是两件事，不能互相代替；已支持路径的实机验收和这些公开限制分别列明。
 
 ## 6. 实机验收顺序
 

@@ -44,6 +44,8 @@ aw setup --open
 
 ## 运行边界
 
+[当前版本支持范围与限制](src/agent_workspace/resources/prompts/capabilities.md)同时提供给用户和 Agent：工作台可查看本机说明，首次进入/relay 提示自动附带，实例 Skill 也指向同一份材料。当前不支持是明确的版本边界，不与尚未验证或临时故障混为一谈；设计目标不是支持承诺。
+
 **Desktop 与 CLI 分开。** CodeBuddy 受管 CLI 不等于 WorkBuddy Desktop。Codex Desktop 仍需实际桌面控制连接和会话绑定，深链打开不代表会话已创建；Claude/WorkBuddy Desktop 自动控制尚未接通。具体缺口见 [能力矩阵](docs/runtime-and-maintenance.md#5-当前能力与验收边界)。
 
 **发现、配置和实际运行分开。** 模型或强度字段保存成功不证明服务支持。SDK 原生工具默认收紧，用户按需明确允许；SDK insert/steer 未验证时明确拒绝，不偷偷改为 normal。

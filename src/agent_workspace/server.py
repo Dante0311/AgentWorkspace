@@ -51,6 +51,11 @@ def make_server(app, port=8765, token=None):
             return True
 
         def do_GET(self):
+            if self.path == "/capabilities":
+                # Public, static package documentation only; no instance or account data.
+                guide = (files("agent_workspace") / "resources" / "prompts" / "capabilities.md").read_bytes()
+                self.reply(200, guide, "text/plain; charset=utf-8")
+                return
             if self.path in ("/", "/setup"):
                 name = "setup.html" if self.path == "/setup" or not app.workspace_list() else "index.html"
                 page = (files("agent_workspace") / "resources" / name).read_bytes()

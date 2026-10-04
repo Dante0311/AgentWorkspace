@@ -5,6 +5,8 @@ description: 发送、查询、确认通知和控制自动投递，不强制业�
 
 # message
 
+投递前读取 `.aw/prompts/capabilities.md`，核对目标的当前入口。`delivery_unsupported` 不是临时故障；告知用户并保留原消息，不自动改成 normal、重发副本或伪造 ACK。
+
 from 使用当前实例，binding 使用本原生会话被明确授予的入口，不读取新入口冒充接手。
 
 ```sh

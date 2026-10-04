@@ -195,7 +195,8 @@ class Messages:
         if adapter is None:
             return {"state": "awaiting_manual_receive", "notification": notification}
         if message["delivery"] == "insert" and getattr(adapter, "supports_insert", True) is False:
-            return {"state": "delivery_unsupported", "message_id": message["id"], "delivery": "insert"}
+            return {"state": "delivery_unsupported", "message_id": message["id"], "delivery": "insert",
+                    "instruction": "当前接入不支持 insert；队头与原消息保留。告知用户，按其选择主动接收原消息或交接到支持的入口；不要重发副本、改写 delivery 或伪造 ACK。"}
         state = adapter.status()
         if state == "unknown":
             return {"state": "entry_state_unknown"}

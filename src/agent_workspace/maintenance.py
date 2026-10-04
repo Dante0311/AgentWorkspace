@@ -91,45 +91,53 @@ def doctor(app, workspace):
         if not root.is_dir():
             issue("instance_directory_missing", aid)
             continue
-        control = read_json(root / ".aw-local/control.json", {})
-        intentional_stop = control.get("stop") == binding or control.get("handoff") == binding
-        runtime = read_json(root / ".aw-local/status.json", {})
-        if binding and entry and entry["kind"] != "manual" and not intentional_stop:
-            try:
-                with locked(root / ".aw-local/runner.lock", wait=0):
-                    running = False
-            except Conflict:
-                running = True
-            if not running:
-                issue("runner_not_observed", aid, binding=binding,
-                      controller_present=bool(entry.get("controller")))
-            if runtime.get("binding") == binding and runtime.get("state") in ("failed", "connection_failed", "native_stop_unconfirmed"):
-                issue("runtime_fault", aid, state=runtime["state"])
-        for p in (root / ".aw-local/inputs").glob("*.json"):
-            record = read_json(p)
-            if record["state"] in ("dispatching", "outcome_unknown"):
-                issue("input_outcome_unknown", aid, operation=record["id"])
-            if (record.get("binding") == binding and record.get("purpose") == "initial"
-                    and record["state"] == "completed" and not record.get("checkpoint_revision")):
-                issue("initial_checkpoint_pending", aid, operation=record["id"])
-        for p in (root / ".aw-local/bridges").glob("*.json"):
-            config = read_json(p)
-            if config.get("enabled"):
-                state = read_json(p.parent / "status" / p.name, {})
-                if state.get("fatal") or state.get("state") in ("failed", "error", "disconnected"):
-                    issue("bridge_fault", aid, bridge=p.stem, generation=config["generation"])
-        transfer = read_json(root / ".aw-local/transfer.json")
-        if transfer:
-            if entry and binding == transfer["target_binding"]:
-                from .transfer import observed_target
-                transfer = observed_target(transfer, entry, root)
-            if transfer["state"] != "completed":
-                issue("transfer_pending", aid, operation=transfer["id"], state=transfer["state"])
+        try:
+            control = read_json(root / ".aw-local/control.json", {})
+            intentional_stop = control.get("stop") == binding or control.get("handoff") == binding
+            runtime = read_json(root / ".aw-local/status.json", {})
+            if binding and entry and entry["kind"] != "manual" and not intentional_stop:
+                try:
+                    with locked(root / ".aw-local/runner.lock", wait=0):
+                        running = False
+                except Conflict:
+                    running = True
+                if not running:
+                    issue("runner_not_observed", aid, binding=binding,
+                          controller_present=bool(entry.get("controller")))
+                if runtime.get("binding") == binding and runtime.get("state") in ("failed", "connection_failed", "native_stop_unconfirmed"):
+                    issue("runtime_fault", aid, state=runtime["state"])
+            for p in (root / ".aw-local/inputs").glob("*.json"):
+                record = read_json(p)
+                if record["state"] in ("dispatching", "outcome_unknown"):
+                    issue("input_outcome_unknown", aid, operation=record["id"])
+                if (record.get("binding") == binding and record.get("purpose") == "initial"
+                        and record["state"] == "completed" and not record.get("checkpoint_revision")):
+                    issue("initial_checkpoint_pending", aid, operation=record["id"])
+            for p in (root / ".aw-local/bridges").glob("*.json"):
+                config = read_json(p)
+                if config.get("enabled"):
+                    state = read_json(p.parent / "status" / p.name, {})
+                    if state.get("fatal") or state.get("state") in ("failed", "error", "disconnected"):
+                        issue("bridge_fault", aid, bridge=p.stem, generation=config["generation"])
+            transfer = read_json(root / ".aw-local/transfer.json")
+            if transfer:
+                if entry and binding == transfer["target_binding"]:
+                    from .transfer import observed_target
+                    transfer = observed_target(transfer, entry, root)
+                if transfer["state"] != "completed":
+                    issue("transfer_pending", aid, operation=transfer["id"], state=transfer["state"])
+        except (OSError, ValueError, KeyError) as exc:
+            # One damaged local record must not hide the health of other instances.
+            issue("local_observation_failed", aid, error_type=type(exc).__name__)
     for p in (app.home / "operations").glob("*.json"):
-        receipt = read_json(p)
-        if receipt.get("workspace") == workspace and receipt.get("state") != "published":
-            issue("publication_pending", receipt.get("sender") or receipt.get("receiver"), operation=receipt["id"],
-                  state=receipt.get("state", "pending"))
+        try:
+            receipt = read_json(p)
+            if receipt.get("workspace") == workspace and receipt.get("state") != "published":
+                issue("publication_pending", receipt.get("sender") or receipt.get("receiver"), operation=receipt["id"],
+                      state=receipt.get("state", "pending"))
+        except (OSError, ValueError, KeyError) as exc:
+            issue("publication_record_unreadable", operation=p.stem,
+                  scope="installation; workspace ownership unconfirmed", error_type=type(exc).__name__)
     waiting = {}
     for path in snap.entries:
         if path.startswith("message-index/"):
@@ -161,7 +169,7 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
         if receipt:
             if receipt["request"] != payload:
                 raise Conflict("Repair request ID belongs to a different action.")
-            return receipt
+            return _verify_repair(app, workspace, path, receipt)
         receipt = {"id": request_id, "request": payload, "state": "attempting", "created_at": now()}
         if action == "publication-reconcile":
             source = read_json(app.home / "operations" / (slug(operation_id) + ".json"))
@@ -191,14 +199,28 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
                     if app.agent(workspace, agent_id)["current"]:
                         raise Conflict("An entry was acquired before sync repair; no files were changed.")
                     result = app.sync_agent(workspace, agent_id)
-            receipt.update(state="applied", result=result, verification=doctor(app, workspace))
-            # "Applied" is not "healthy". The report states the observed remaining issues.
         except (Error, OSError, ValueError, KeyError) as exc:
             receipt.update(state="outcome_unknown", error_type=type(exc).__name__)
             write_json(path, receipt)
             raise
+        # Persist the effect before a separate observation can fail or the process exits.
+        receipt.update(state="applied", result=result)
         write_json(path, receipt)
+        return _verify_repair(app, workspace, path, receipt)
+
+
+def _verify_repair(app, workspace, path, receipt):
+    if (receipt["state"] != "applied"
+            or receipt.get("verification", {}).get("state") not in (None, "unavailable")):
         return receipt
+    try:
+        receipt["verification"] = doctor(app, workspace)
+    except (Error, OSError, ValueError, KeyError) as exc:
+        receipt["verification"] = {"state": "unavailable", "observed_at": now(),
+                                   "error_type": type(exc).__name__}
+    # "Applied" is not "healthy"; retry only this observation, never the saved effect.
+    write_json(path, receipt)
+    return receipt
 
 
 def installation_id(app):

@@ -34,8 +34,11 @@ jobs:
           python -m pip freeze --exclude git-native-agent-workspace > native-test-requirements.txt
           python -m pip download --only-binary=:all: -r native-test-requirements.txt pytest -d native-test-dependencies
           npm install --prefix native-test-dependencies/codex @openai/codex@0.160.0
-      - name: Exercise installed Codex against an isolated local API
-        run: python -m pytest tests/test_codex_native.py -q
+      - name: Exercise installed Codex and cross-Harness transfer against a local API
+        run: |
+          export AW_TEST_CLAUDE="$(python -c 'from pathlib import Path; import claude_agent_sdk; print(Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude")')"
+          test -x "$AW_TEST_CLAUDE"
+          python -m pytest tests/test_codex_native.py tests/test_native_transfer.py -q
         env:
           AW_TEST_CODEX: ${{ github.workspace }}/native-test-dependencies/codex/node_modules/.bin/codex
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

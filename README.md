@@ -2,97 +2,84 @@
 
 **会话可以更换，Agent 的身份与工作资产持续存在。**
 
-AgentWorkspace 是一个 Git-native 的持久 Agent 协作工作空间：每个实例拥有自己的职责、Skill、资料和历史，通过共享 Workspace 通信，并按需使用 Work / Delivery 组织正式工作。它连接用户选择的 Desktop、CLI 或其他运行入口，不要求用一个新聊天客户端替换原来的工作习惯。
+AgentWorkspace 为持久 Agent 管理独立工作根、职责、Skill、资料和历史，通过 Git Workspace 通信，并按需使用 Work / Delivery。它操作已有 Harness 的真实会话，不重写模型推理或工具循环，也不要求用户改用新的聊天客户端。
 
-> **当前版本：`0.1.0a1`，开发预览版。** 已有可安装代码、CLI、本机工作台和七个 Skill。真实 Codex Desktop、真实模型、企业微信及生产 GitHub Backend 尚未完成实机验收，请先用隔离数据试用。这不是正式 V1 Release，也未发布到 PyPI。
+> **`0.1.0a1` 开发预览。** 当前功能分支已有首次配置、三名管家、受管 Codex/Claude/CodeBuddy、自动交接与维护工具。真实账号、自有模型服务、生产 Git、企业微信和 Desktop 未完成实机验收；部分 Desktop 控制能力尚缺接口接入，不能当成只待验收。尚未发布正式 Release 或 PyPI 包。
 
-## 核心能力
+## 使用流程
 
-| 能力 | 当前范围 |
+**安装软件 → 检测 Git 和 Harness → 用户自行补齐 → 创建/接入 Workspace → 配置实例 → 明确启动真实会话。**
+
+普通用户不必下载源码。在所选提交的 GitHub Actions `CI` 中获取 `agent-workspace-build` 制品，解压后使用其中的 wheel、`install.py` 和 `SHA256SUMS`：
+
+```sh
+python install.py git_native_agent_workspace-0.1.0a1-py3-none-any.whl --destination ./aw-app
+```
+
+需要 Python 3.11+。脚本校验构建包，在空目录隔离安装，不改 PATH，不安装/登录 Git 或 Harness，不改 Workspace 数据。Claude、CodeBuddy 和企业微信分别按需添加 `--extra claude`、`--extra codebuddy`、`--extra wecom`，这会下载对应 SDK 依赖。制品有有效期，不能仅凭相同的预览版本号区分提交；以提交、CI 和校验值为准。
+
+按安装器输出的命令打开本机工作台，例如 POSIX 的 `./aw-app/bin/aw setup --open`，Windows 的 `aw-app\Scripts\aw.exe setup --open`。已有 `aw` 命令时直接运行：
+
+```sh
+aw setup --open
+```
+
+工作台地址含本机控制 Token，不要分享。Git 和所选 Harness 需要用户自行安装、登录，检测不代装、不改全局配置。支持仅本机 Git 或用户自己提供的远端仓库地址，远端认证复用本机 Git/SSH；读访问成功不等于已验证写权限。
+
+首次使用见 [新机器配置](docs/first-use.md)，受管会话、指定模型服务、自动交接、维护授权和验收步骤见 [运行与维护说明](docs/runtime-and-maintenance.md)。参与开发才需要 clone 源码，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 当前能力
+
+| 能力 | 实现范围 |
 | --- | --- |
-| 持久实例 | 独立工作根与 `AGENTS.md`，Definition 和 Work 均可选；支持从自然语言描述逐步完善。 |
-| 轻量协作 | 不可变 Message、最小 ACK、按序 `normal / insert`、自动收件开关与 Git 发布补齐。 |
-| 接续与分叉 | 检查点、`handoff → relay` 换新会话、从确定检查点 Fork；V1 同一实例最多一个有效入口。 |
-| 工作资产 | 明确范围的文件导入、来源版本差异、受管材料更新、用户确认后的共享提升。 |
-| 可选任务管理 | 轻量 Work 树、唯一负责人、正式 Delivery 与交付后封存，不强制工作方法。 |
-| 接入 | CLI、HTTP、MCP、本机中文工作台；Desktop/托管 Codex 适配代码及可选企微文本桥接。 |
+| 持久实例 | 独立工作根、AGENTS.md、七个 Skill 和检查点；用户实例不强制 Definition 或 Work。 |
+| 首次配置 | Git/Harness 发现、只读 Git 检查、可补齐的初始化；新空间建立 Steward、Sentinel、Maintainer 三个真实实例，不隐式启动。 |
+| 模型与会话 | Codex App Server、Claude/CodeBuddy 原生 SDK；实例独立的服务地址、凭据引用、模型/强度配置，持续会话与原生事件。 |
+| 通信与交接 | 不可变 Message/ACK、当前 Binding 路由、固定后继的跨 Harness 自动交接；原生客户端对回环 API 的工具与接手测试。 |
+| 管家维护 | 明确作用域的委托、健康检查、持久巡检、去重通知、有限维修及独立复查；不强制接管或重放未知业务。 |
+| 资产与工作 | 明确文件导入、来源差异与更新、选定共享提升、Fork、可选 Work/Delivery。 |
+| 接口与安装 | 一份实现的 CLI、HTTP、MCP、本机工作台和隔离 wheel 安装入口。 |
 
-没有实际任务时，初始化只完善用户要求的基础材料、简短问候并保存初始检查点，不替用户分配试做任务。
+正常交接不改变 Agent 身份：原会话保存检查点并停工，新会话在同一实例空间接手。手动 handoff/relay 是保底，不是 V1 自动化的替代。统一聊天界面和同一身份的多事务会话仍留到 V3。
 
-## 安装与开始
+## 运行边界
 
-需要 **Python 3.11+**。本地或普通 Git 远端需要安装 Git；`github:OWNER/REPO` 访问使用仓库 API。
+**Desktop 与 CLI 分开。** CodeBuddy 受管 CLI 不等于 WorkBuddy Desktop。Codex Desktop 仍需实际桌面控制连接和会话绑定，深链打开不代表会话已创建；Claude/WorkBuddy Desktop 自动控制尚未接通。具体缺口见 [能力矩阵](docs/runtime-and-maintenance.md#5-当前能力与验收边界)。
 
-当前从仓库安装，建议先创建虚拟环境。以下命令在仓库根目录执行：
+**发现、配置和实际运行分开。** 模型或强度字段保存成功不证明服务支持。SDK 原生工具默认收紧，用户按需明确允许；SDK insert/steer 未验证时明确拒绝，不偷偷改为 normal。
 
-```sh
-git clone https://github.com/Dante0311/AgentWorkspace.git
-cd AgentWorkspace
-python -m pip install .
-aw --help
-aw serve --open
-```
+**管家身份和巡检启用分开。** 名字不授予管理员权限。程序负责计时，模型按事务处理；巡检需要 `aw serve`、`aw setup` 或 `aw maintenance run` 进程持续运行，关闭网页不等于停止服务。关机/休眠不继续巡检，不自动注册开机任务。
 
-工作台只监听本机回环地址。启动地址含控制 Token，不要分享。默认数据目录为 `~/.agent-workspace/`；可用 `--home` 或 `AW_HOME` 指定。
+**测试与生产验收分开。** 原生客户端测试使用回环模型协议夹具，验证真实 SDK、MCP 和 Git 副作用，不代表真实模型质量、账号权限、长期运行或 Desktop 验收。失败和未知结果保留，不以成功文本代替证据。
 
-也可在专门的试用目录运行最小 CLI 路径：
-
-```sh
-aw --home ./.aw-demo workspace init demo ./.aw-demo/demo.git
-aw --home ./.aw-demo -w demo agent create helper --id helper --description "构建助手；没有任务时等待安排。"
-aw --home ./.aw-demo -w demo agent show helper
-aw --home ./.aw-demo serve --open
-```
-
-这些命令只创建和查看实例，不会调用模型。运行接入另按 [使用说明](docs/usage.md) 配置。**不要把本工具开发仓当作用户的 Shared Workspace，也不要在产品仓里初始化协作数据。**
-
-安装 wheel 后不需要保留开发仓。构建方式见 [开发说明](CONTRIBUTING.md)，真实安装与测试结果见 [验证记录](docs/validation.md)。命令 `python -m agent_workspace` 可替代 `aw`。
-
-## 三种空间
+## 软件、Workspace 与产品资料
 
 ```text
-AgentWorkspace                  软件开发仓：源码、Skill、测试和文档。
-    ↓ 安装
-Shared Workspace Repo           应用数据仓，每个 Workspace 一份。
-    ├─ main                     共享登记、公共资产、Message、可选 Work。
-    ├─ instance/A               A 自己的职责、Skill、资料和历史。
-    └─ instance/B               B 自己的职责、Skill、资料和历史。
-    ↓ 组织协作
-Product Repo                    实际代码、设计及交付成果。
+AgentWorkspace 软件安装
+    └─ 管理一个或多个 Shared Workspace
+         ├─ main：登记、定义、Message、Work 等共享事实
+         ├─ instance/steward、sentinel、maintainer：管家各自的持久资产
+         └─ instance/<agent>：用户实例的独立资产
+产品仓：实际代码、设计和交付成果，单独关联
 ```
 
-V1 的实例身份归属一个 Shared Workspace，但实例有独立的持久工作空间；App 可以管理多个 Workspace。目录或分支独立不等于权限/保密隔离。工具升级不覆盖用户资料，消息 ACK 不表示业务完成。
+默认本机数据目录为 `~/.agent-workspace/`，可用 `--home` 或 `AW_HOME` 指定。不要把软件开发仓或产品仓当作协作数据仓。目录或分支独立不等于保密隔离；仅本机 Git 不代表模型请求离线。升级不覆盖用户职责和资料，重新接入不重建管家或接管旧入口。
 
-## 接入状态与限制
-
-**Desktop：** 只连接桌面持有的原生会话，不另起 CLI 抢同一个 writer。现有版本可能仍需手动提供控制接口、捕获当前管道并绑定真实会话 ID，尚不承诺无配置的自动发现与重连。
-
-**托管 Codex：** 已有 app-server 协议实现和隔离协议测试，真实模型、登录、Windows 行为及长期运行仍需实测。
-
-**企业微信：** 可选文本桥接，不是核心依赖。需要使用者安装 SDK、配置 Bot 和凭据；不声称已支持全部多模态或企业微信功能。
-
-**恢复与安全：** 有有限连接重试和发布补齐，但不自动接管失联实例、不重放结果不明的业务。没有完整权限系统或任意 Runtime 的物理隔离。生产环境前应完成相关验收。
-
-详见 [使用与故障说明](docs/usage.md)、[实现状态](docs/implementation.md) 和 [迁仓验证](docs/validation-migration.md)。
-
-## 文档与开发入口
+## 文档入口
 
 | 文件 | 内容 |
 | --- | --- |
-| [docs/design.md](docs/design.md) | 唯一产品设计，包括 V1 合同和 V2/V3 后续方向。 |
-| [docs/usage.md](docs/usage.md) | 实际命令、Runtime 配置、消息、资产与故障处置。 |
-| [docs/implementation.md](docs/implementation.md) | 实现位置、当前限制与下一步验收。 |
-| [docs/validation.md](docs/validation.md) | `0.1.0a1` 原始验证记录。 |
-| [docs/migration.md](docs/migration.md) | Playbook 来源版本、迁仓范围与维护归属。 |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 开发安装、检查、打包与变更边界。 |
-| [AGENTS.md](AGENTS.md) | 开发本软件的 Agent 规则，不是产品实例的运行提示词。 |
+| [产品设计](docs/design.md) | 唯一产品合同，V1 目标及 V2/V3 边界。 |
+| [首次配置](docs/first-use.md) | 新机器准备、本机/远端 Git、三实例初始化。 |
+| [运行与维护](docs/runtime-and-maintenance.md) | 当前操作入口、支持矩阵、限制和实机验收。 |
+| [基础使用](docs/usage.md) | 基础 CLI、消息、资产、Work 与旧入口说明。 |
+| [实现状态](docs/implementation.md) | 当前模块、验证层次和剩余缺口。 |
+| [开发检查点](docs/development-checkpoint.md) | 实际提交、恢复位置、验证证据和接续事项。 |
+| [开发说明](CONTRIBUTING.md) | 源码安装、测试、打包。 |
+| [开发规则](AGENTS.md) | 开发本软件的约定，不是用户实例的职责文件。 |
 
-七个 Skill 随软件在 `src/agent_workspace/resources/skills/` 中维护：`workspace`、`work`、`message`、`agent`、`handoff`、`relay`、`fork`。不在 Playbook 另维护一份。
+历史验证保留在 [validation.md](docs/validation.md) 和 [validation-migration.md](docs/validation-migration.md)，不拿旧测试结论代替当前提交验证。源码和设计仅在本仓维护，Playbook 保留来源关系，见 [迁仓记录](docs/migration.md)。
 
-后续先把 V1 的真实 Desktop、收发与换会话路径跑稳；V2 研究独立身份参与多个 Workspace，V3 研究统一工作台和同一身份的多事务会话。后两者没有在当前代码中实现，完整边界见 [设计后续方向](docs/design.md#14-后续方向与来源)。
+## 许可证与发布
 
-## 项目归属与许可证
-
-本仓是 AgentWorkspace 的设计、代码、Skill 和验证记录的唯一维护位置。项目从 Playbook 的独立目录迁入，Playbook 此后仅保留仓库入口，不再并行维护实现。
-
-**许可证尚未确定，当前没有新增开源许可授权。** 仓库公开不等于已经采用 MIT、Apache 或其他许可证。尚未发布正式 Release 或 PyPI 包。
+许可证尚未确定，没有新增开源许可授权；公开仓库不等于已采用 MIT/Apache 等许可证。当前仅提供开发构建和 PR，正式合并、Release/PyPI 发布和许可证变更须分别授权。

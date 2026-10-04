@@ -1,6 +1,6 @@
-# 新机器配置：第一批实现
+# 新机器配置
 
-本页说明首次配置实现，不将管家身份、配置保存或协议测试等同于真实自动化已验收。
+本页说明首次配置。后续会话、交接和维护操作见 [运行与维护说明](runtime-and-maintenance.md)；不将管家身份、配置保存或协议测试等同于真实自动化已验收。
 
 ## 打开
 
@@ -12,11 +12,11 @@ aw setup --open
 
 `aw serve --open` 在尚未登记 Workspace 时也显示首次配置页；已有空间可通过 `/setup` 打开。两者复用本机服务、控制 Token 和操作分发，不启动另一套 Web 服务。地址中的控制 Token 不要分享。
 
-本仓仍是开发预览，没有在本次发布安装器、Release 或 PyPI 包。安装包生成方式见 `CONTRIBUTING.md`。操作数据应放在开发仓和产品仓之外。
+本仓仍是开发预览，已有 CI wheel 制品与隔离安装脚本，尚未发布正式 Release 或 PyPI 包。[安装步骤](runtime-and-maintenance.md#1-安装和依赖)不要求 clone 源码；构建方式见 [开发说明](../CONTRIBUTING.md)。操作数据应放在开发仓和产品仓之外。
 
 ## 依赖和认证
 
-检测只检查 Git、PATH 中的 Codex/Claude/CodeBuddy CLI，以及 macOS 的部分标准 Desktop 安装位置。非标准位置和其他系统的 Desktop 可能显示未确认，不是未安装的证明。本批只有 Codex CLI 配置接通原有受管运行器；Claude Code、WorkBuddy 的发现不等于自动控制已实现。没有 Harness 时可先建立身份，之后自行安装、登录并重新检测。
+检测只检查 Git、PATH 中的 Codex/Claude/CodeBuddy CLI，以及 macOS 的部分标准 Desktop 安装位置。非标准位置和其他系统的 Desktop 可能显示未确认，不是未安装的证明。Codex CLI 和 Claude/CodeBuddy SDK 已接通受管运行器；Claude/WorkBuddy Desktop 的发现不等于桌面自动控制已实现。没有 Harness 时可先建立身份，之后自行安装、登录并重新检测。
 
 Git 是新配置流程的前置条件，需用户自行安装。选择本机目录或自己准备的专用私有空远端仓。首次配置接受本机路径、普通 HTTPS/SSH 地址，不接受携带凭据的 URL、远端 helper 或 `github:` 简写。已有 GitHub REST 后端仍留在原低层接口，未扩展成另一套首次向导。
 
@@ -58,10 +58,10 @@ aw call setup.create --arguments '{"name":"demo","address":"https://host/owner/w
 
 保存配置不会启动会话，当前实例已有入口时拒绝改写，需先交接。进入原工作台后可以明确调用现有“进入新会话”。程序实际返回的 starting、awaiting_new_session_bind、active 等状态仍须区别，不能仅因子进程启动便认定初始化完成。
 
-## 本批边界与验收
+## 当前边界与验收
 
-本批落实环境检测、只读 Git 探测、可补齐的三实例创建、首次配置 UI 和 Codex CLI 原生模型配置。没有增加 ACP、模型网关、安装器、账号管理器、插件市场或通用任务调度器。
+当前已有环境检测、只读 Git 探测、可补齐的三实例创建、首次配置 UI；首次向导的配置区以 Codex 为入口，其他 SDK 配置可进入主工作台或使用 CLI。运行、自动交接、管家授权、程序定时巡检与受限维修的实际操作和缺口统一见 [运行与维护说明](runtime-and-maintenance.md)。
 
-Sentinel 的真实定时巡检、Maintainer 的受限维修工具、Steward 的管理授权、三家完整 Desktop/CLI 自动接入和跨 Harness 自动交接仍需后续实现与实机验收。本批未授予系统实例特殊权限，现有模型工具的用户管理限制不因角色名称而改变。
+没有增加 ACP、模型网关、账号管理器、插件市场或通用任务调度器。安装、登录、模型调用和巡检启用仍是明确分开的步骤。已有资料和当前入口不因重新打开向导而重建或接管。
 
-新增测试分别覆盖真实临时 Git 与目录恢复、配置和元数据协议、CLI/HTTP 分发；真实模型、Desktop、生产远端和企微不由这些测试替代。采用原生参数的依据为 Codex 官方配置和 app-server 文档；升级支持版本时需重新验证。
+真实临时 Git、配置协议、CLI/HTTP、原生客户端与回环 API 测试不能代替真实模型、Desktop、生产远端和企微验收。采用原生参数的依据为对应 Harness 官方配置和 SDK 文档；升级支持版本时需重新验证。

@@ -1,5 +1,7 @@
 # 0.1.0a1 使用说明
 
+首次安装见 [新机器配置](first-use.md)；当前受管 Codex/Claude/CodeBuddy、跨 Harness 自动交接、管家授权、巡检与维修见 [运行与维护说明](runtime-and-maintenance.md)。本页保留基础命令与旧入口说明，支持边界以上述当前能力矩阵为准。
+
 本文件描述实际代码，不替代 [产品合同](design.md)。这是开发预览版本，先使用隔离 Workspace；真实外部 Runtime 和渠道的验收范围见 [验证记录](validation.md)。
 
 ## 1. 安装、路径与本机工作台
@@ -23,7 +25,7 @@ aw workspace list
 aw -w sea workspace show
 ```
 
-`init` 创建空目录中的 bare Git 协作仓，不在产品仓里初始化。工具另用自己的 bare 对象缓存和临时索引提交，不操作用户产品 checkout 的暂存区。实例目录是工具物化出来的普通目录，快照进入所属仓的 `instance/*`；无需实例自己包含 `.git`。
+`init` 通过首次配置流程创建空目录中的 bare Git 协作仓和三个管家实例，不启动会话或巡检，不在产品仓里初始化。工具另用自己的 bare 对象缓存和临时索引提交，不操作用户产品 checkout 的暂存区。实例目录是工具物化出来的普通目录，快照进入所属仓的 `instance/*`；无需实例自己包含 `.git`。
 
 远端两种路径：
 
@@ -38,7 +40,7 @@ aw workspace connect sea github:OWNER/SEA-WORKSPACE
 aw workspace bootstrap-remote sea github:OWNER/SEA-WORKSPACE
 ```
 
-程序不替用户创建 GitHub Repo，不绕过分支保护。纯本地 Workspace 的名字应在相互通信的范围内唯一，避免 `local:名称` 歧义；远端初始化直接采用远端地址作为 locator。
+程序不替用户创建 GitHub Repo，不绕过分支保护。新向导采用持久创建 ID 标识 Workspace；上述旧 `bootstrap-remote` 入口仅保留原预览初始化，不补建管家。旧 `local:名称` / 远端地址 locator 不会隐式迁移，接入与补建分开。
 
 ```sh
 aw -w sea workspace project add --alias product --address /path/to/Sea-Dev
@@ -68,7 +70,7 @@ aw -w sea agent import helper --from-directory /path/to/existing-agent --asset A
 
 只导入明确选定的普通文件；不改原目录、不覆盖原 `.git`、不接管旧会话。嵌套 Git、symlink、密钥、数据库整体迁移不自动猜测；原生历史应先通过来源环境明确导出。该操作不是 V2 membership。
 
-## 4. 三种运行入口
+## 4. 手动与 Codex 入口
 
 ### 4.1 手动 / 云端工具接入
 
@@ -132,7 +134,7 @@ aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-程序通过 app-server 创建原生线程、提交初始化输入、记录事件；`aw_execute` 动态工具直接调用公共操作，不要求模型切到开发目录。可选配置 `model`、`modelProvider`、`sandbox`，未指定时使用原生配置和 workspaceWrite。原生审批/额外授权请求不会被自动批准。
+程序通过 app-server 创建原生线程、提交初始化输入、记录事件；`aw_execute` 动态工具直接调用公共操作，不要求模型切到开发目录。可选配置 `model`、`modelProvider`、`sandbox`，未指定时使用原生配置和 `workspace-write`。原生审批/额外授权请求不会被自动批准。
 
 Windows npm `.cmd` 启动器有单独的 argv 处理；未在真实 Windows/Codex 环境完成验收。CLI 成功不等于 Desktop 成功。
 

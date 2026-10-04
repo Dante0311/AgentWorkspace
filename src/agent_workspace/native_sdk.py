@@ -150,6 +150,7 @@ class NativeSDK:
                 data = asdict(message)
                 actual = data.get("session_id") or data.get("data", {}).get("session_id")
                 completion = None
+                terminal_error = isinstance(message, getattr(self.sdk, "ErrorMessage", ()))
                 with self.guard:
                     submission = self.submission
                 if isinstance(message, self.sdk.ResultMessage) and submission:
@@ -162,8 +163,10 @@ class NativeSDK:
                     with self.record.open("a", encoding="utf-8") as stream:
                         stream.write(json.dumps(item, ensure_ascii=False) + "\n")
                         stream.flush()
-                        if completion:
+                        if completion or terminal_error:
                             os.fsync(stream.fileno())
+                if terminal_error:
+                    raise Unavailable("Native SDK reported a terminal error; inspect its saved event.")
                 if actual:
                     if self.session and self.session != actual:
                         raise Conflict("Native SDK resumed a different session.")

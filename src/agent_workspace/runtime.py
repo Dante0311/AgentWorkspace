@@ -430,6 +430,8 @@ class Runner:
                 if agent["current"] != self.binding:
                     break
                 current = snap.json(f"bindings/{self.binding}.json")
+                if entry["kind"] in SDK_TYPES and self.adapter.status() == "unknown":
+                    raise Unavailable("Native SDK is disconnected; inspect the original input before recovery.")
                 if current["phase"] == "stopping":
                     bridges.stop_all()
                     self.status(state="handoff_waiting_idle", session=self.adapter.session)

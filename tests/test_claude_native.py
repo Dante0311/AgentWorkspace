@@ -9,9 +9,10 @@ import pytest
 
 from agent_workspace.harness_config import sdk_config
 from agent_workspace.native_sdk import NativeSDK
+from agent_workspace.messages import Messages
 
 
-def test_installed_claude_two_turns_custom_endpoint(app, tmp_path, monkeypatch):
+def test_installed_claude_tools_and_two_turns_custom_endpoint(app, tmp_path, monkeypatch):
     executable = os.environ.get('AW_TEST_CLAUDE')
     if not executable or not Path(executable).is_file():
         pytest.skip('An explicitly supplied Claude CLI is required.')
@@ -22,7 +23,12 @@ def test_installed_claude_two_turns_custom_endpoint(app, tmp_path, monkeypatch):
     monkeypatch.setenv('AW_TEST_CLAUDE_KEY', 'isolated-native-test-key')
     for name in ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDECODE'):
         monkeypatch.delenv(name, raising=False)
-    calls = []
+    calls, tool_requests = [], []
+    phase = [0]
+    operations = [
+        {"command": "checkpoint.create", "arguments": {"summary": "Checkpoint from the real Claude MCP client"}},
+        {"command": "message.receive", "arguments": {"message_id": "native-message"}},
+    ]
     class ModelFixture(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -32,13 +38,25 @@ def test_installed_claude_two_turns_custom_endpoint(app, tmp_path, monkeypatch):
             message = {'id': 'msg-fixture', 'type': 'message', 'role': 'assistant', 'model': body.get('model'),
                        'content': [{'type': 'text', 'text': 'Isolated native fixture completed.'}],
                        'stop_reason': 'end_turn', 'stop_sequence': None, 'usage': {'input_tokens': 1, 'output_tokens': 1}}
+            if body.get('stream') and body.get('tools') and phase[0] not in tool_requests:
+                tool_requests.append(phase[0])
+                message['content'] = [{'type': 'tool_use', 'id': 'tool-checkpoint',
+                    'name': 'mcp__aw__aw_execute', 'input': operations[phase[0]]}]
+                message['stop_reason'] = 'tool_use'
+            block = message['content'][0]
+            if block['type'] == 'tool_use':
+                start = {**block, 'input': {}}
+                delta = {'type': 'input_json_delta', 'partial_json': json.dumps(block['input'])}
+            else:
+                start = {'type': 'text', 'text': ''}
+                delta = {'type': 'text_delta', 'text': block['text']}
             if body.get('stream'):
                 events = [
                     {'type': 'message_start', 'message': {**message, 'content': [], 'stop_reason': None}},
-                    {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}},
-                    {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': message['content'][0]['text']}},
+                    {'type': 'content_block_start', 'index': 0, 'content_block': start},
+                    {'type': 'content_block_delta', 'index': 0, 'delta': delta},
                     {'type': 'content_block_stop', 'index': 0},
-                    {'type': 'message_delta', 'delta': {'stop_reason': 'end_turn', 'stop_sequence': None}, 'usage': {'output_tokens': 1}},
+                    {'type': 'message_delta', 'delta': {'stop_reason': message['stop_reason'], 'stop_sequence': None}, 'usage': {'output_tokens': 1}},
                     {'type': 'message_stop'},
                 ]
                 payload = ''.join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
@@ -63,15 +81,32 @@ def test_installed_claude_two_turns_custom_endpoint(app, tmp_path, monkeypatch):
         binding = app.reserve('sea', 'claude-native')['binding']
         adapter = NativeSDK(app, 'sea', 'claude-native', binding, root, config)
         adapter.connect()
-        adapter.bootstrap('Explicit isolated protocol test. Do not use tools.')
+        adapter.bootstrap('Explicit isolated test: save one checkpoint through the platform MCP tool.')
         assert adapter.completed.get(timeout=45)['status'] == 'completed'
         session = adapter.session
-        response = adapter.notify('Explicit second protocol test. Do not use tools.', 'normal')
+        app.create('sea', 'sender')
+        sender = app.reserve('sea', 'sender')['binding']
+        app.bind('sea', 'sender', sender, 'sender-native-fixture')
+        receipt = Messages(app).send('sea', 'sender', sender, 'claude-native',
+                                     'Explicit native Message fixture.', request_id='native-message')
+        assert receipt['state'] == 'published'
+        phase[0] = 1
+        response = adapter.notify('Explicit second protocol test: receive native-message through the platform tool.', 'normal')
         result = adapter.completed.get(timeout=45)
         assert result['status'] == 'completed' and result['id'] == response['turn']['id']
         assert adapter.session == session and app.show('sea', 'claude-native')['binding']['session'] == session
         model_calls = [(p, auth, body) for p, auth, body in calls if p.startswith('/v1/messages')]
-        assert len(model_calls) >= 2
+        assert len(model_calls) >= 4
+        assert tool_requests == [0, 1]
+        assert Messages(app).show('sea', 'native-message')['ack'] == {'message_id': 'native-message'}
+        assert (root / 'messages/native-message.json').is_file()
+        points = app.checkpoints('sea', 'claude-native')
+        assert len(points) == 1, adapter.record.read_text()
+        saved = app.checkpoint_show('sea', 'claude-native', points[0]['id'])
+        assert saved['record']['summary'] == 'Checkpoint from the real Claude MCP client'
+        assert any(block.get('type') == 'tool_result' and not block.get('is_error')
+                   for _, _, body in model_calls for msg in body.get('messages', [])
+                   for block in msg.get('content', []) if isinstance(block, dict))
         assert all(auth == 'Bearer isolated-native-test-key' for _, auth, _ in model_calls)
         assert all(body['model'] == 'claude-sonnet-4-6' for _, _, body in model_calls)
         assert not (config_home / 'settings.json').exists()

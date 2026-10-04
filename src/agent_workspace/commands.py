@@ -202,9 +202,9 @@ def execute(app, command, arguments, *, actor=None):
         if command in USER_MANAGEMENT and not maintenance.allowed(app, actor, command, args):
             raise Error("This is a user-management operation; a scoped caretaker grant is required.")
         # Ordinary agents may act on their own assets; another instance is a management target.
-        if (command not in READ_ONLY and command in maintenance.GRANTABLE
-                and command not in USER_MANAGEMENT
-                and (args.get("workspace", workspace) != workspace or args.get("agent_id", aid) != aid)
+        if (command not in READ_ONLY and command not in CALLER_BOUND
+                and (args.get("workspace", workspace) != workspace
+                     or (command != "agent.create" and args.get("agent_id", aid) != aid))
                 and not maintenance.allowed(app, actor, command, args)):
             raise Error("Managing another instance requires an explicit caretaker grant.")
         if command in CALLER_BOUND:

@@ -28,3 +28,9 @@ Definition 可选，职责可在本目录逐步完善。没有来源是正常状
 提升只发布用户明确选择的文件，不整体合并实例分支，不删除原资料，不自动替别人更新。
 归档前先 handoff；解除归档不自动进入。已有外部目录可用 agent import --from-directory --asset 明确导入选定文件，原目录不改变。
 七个内置 Skill 不限制实例自己的 Skill 数量。
+
+## 普通会话与桌面组织
+
+持久实例的桌面项目准备先用 `agent.desktop-project`（当前身份可省略 workspace/agent_id）读取本机名称、主目录和随包手动步骤。桌面项目按 Agent 复用，Codex 分区按 Workspace 组织；本版只记录引用，不自动创建原生项目/分区，不把保存引用说成已创建。修改名称/产品目录由用户使用 `agent.desktop-project-save`，不改变身份或权限。不要把产品 AGENTS.md 复制为自己的职责。
+
+无 Workspace 的普通会话由用户从工作台“新建普通会话”进入；它没有持久身份、平台 Message/ACK 或 handoff/relay 保证，不能借普通会话绕过当前 Binding。用户的会话要求不写进共享项目规则。

@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import bridges, runtime, onboarding, harness_config, maintenance, transfer
+from . import bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects
 from .messages import Messages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
@@ -12,9 +12,9 @@ from .util import Conflict, Error, digest, inside, locked, read_json, relpath, w
 READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "asset.list", "asset.read", "runtime.status", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor"}
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project"}
 
-USER_MANAGEMENT = {"agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
+USER_MANAGEMENT = {"session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
@@ -137,6 +137,10 @@ def bridge_status(app, workspace, agent_id, directory=None):
 def command_map(app):
     messages = Messages(app)
     return {
+        "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
+        "session.show": partial(sessions.show, app),
+        "agent.desktop-project": partial(desktop_projects.plan, app),
+        "agent.desktop-project-save": partial(desktop_projects.save, app),
         "workspace.init": partial(onboarding.init_workspace, app), "workspace.connect": app.workspace_connect,
         "workspace.bootstrap-remote": app.workspace_bootstrap_remote,
         "workspace.list": app.workspace_list, "workspace.show": app.workspace_show,

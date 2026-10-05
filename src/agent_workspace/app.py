@@ -177,7 +177,7 @@ class App:
         result = {}
         for name in ("workspace", "work", "message", "agent", "handoff", "relay", "fork"):
             result[f".agents/skills/{name}/SKILL.md"] = (root / "skills" / name / "SKILL.md").read_bytes()
-        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md", "capabilities.md"):
+        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md", "capabilities.md", "desktop-projects.md"):
             result[f".aw/prompts/{name}"] = (root / "prompts" / name).read_bytes()
         result[".aw/software.json"] = encode({"version": __version__,
             "files": {p: digest(v) for p, v in result.items()}})

@@ -156,7 +156,7 @@ def test_cli_prepare_without_workspace(ordinary):
     env = {k: v for k, v in os.environ.items() if not k.startswith('AW_')}
     args = [sys.executable, '-m', 'agent_workspace', '--home', str(app.home), 'session', 'prepare',
             '--kind', 'claude', '--directory', str(root), '--executable', sys.executable, '--request-id', 'from-cli']
-    result = subprocess.run(args, env=env, capture_output=True, text=True, timeout=15)
+    result = subprocess.run(args, env=env, capture_output=True, text=True, encoding="utf-8", timeout=15)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)['result']['state'] == 'prepared'
     assert not app.registry.exists()

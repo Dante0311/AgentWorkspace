@@ -1,0 +1,24 @@
+FFF.                                                                     [100%]
+=================================== FAILURES ===================================
+_____ test_selected_js_runs_via_node_and_auth_result_stays_separate[False] _____
+tests/test_codebuddy_windows_entry.py:70: in test_selected_js_runs_via_node_and_auth_result_stays_separate
+    adapter.connect()
+src/agent_workspace/native_sdk.py:100: in connect
+    raise Unavailable(self.failure)
+E   agent_workspace.util.Unavailable: Native SDK failed (PermissionError); inspect the local native event record.
+_____ test_selected_js_runs_via_node_and_auth_result_stays_separate[True] ______
+tests/test_codebuddy_windows_entry.py:70: in test_selected_js_runs_via_node_and_auth_result_stays_separate
+    adapter.connect()
+src/agent_workspace/native_sdk.py:100: in connect
+    raise Unavailable(self.failure)
+E   agent_workspace.util.Unavailable: Native SDK failed (PermissionError); inspect the local native event record.
+_________ test_missing_node_fails_preflight_without_binding_or_handoff _________
+tests/test_codebuddy_windows_entry.py:102: in test_missing_node_fails_preflight_without_binding_or_handoff
+    with pytest.raises(Unavailable, match="Node"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE Unavailable
+=========================== short test summary info ============================
+FAILED tests/test_codebuddy_windows_entry.py::test_selected_js_runs_via_node_and_auth_result_stays_separate[False] - agent_workspace.util.Unavailable: Native SDK failed (PermissionError); inspect the local native event record.
+FAILED tests/test_codebuddy_windows_entry.py::test_selected_js_runs_via_node_and_auth_result_stays_separate[True] - agent_workspace.util.Unavailable: Native SDK failed (PermissionError); inspect the local native event record.
+FAILED tests/test_codebuddy_windows_entry.py::test_missing_node_fails_preflight_without_binding_or_handoff - Failed: DID NOT RAISE Unavailable
+3 failed, 1 passed in 1.07s

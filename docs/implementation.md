@@ -102,6 +102,18 @@ HY 失败后停止 Runner 但保留 Binding 执行资格，是当前合同下保
 - 验证标准：真实自动接手完成后，目标停工或后续合法入口变化不使旧事务终态回退；新交接不会被已完成的旧记录阻挡。结果未知的交接仍保持原防重做边界。
 - 证据：`reports/evidence/P09-transfer-status.json`、`reports/evidence/P15-final-transfer-status.json`、`reports/evidence/P18-final-facts-with-visibility.json`、`review/P-NORMAL-REVIEW.md`。独立复核认可 P 的限定业务副作用，并单列这一状态缺陷；既有 E2E-001 也仍未修复。
 
+## E2E 定向修复进展（2026-10-07）
+
+上面的 E2E-001 至 E2E-004 保留为 `1258b62` 的历史登记，不改写原失败、撤回与验收结果。本轮基于已提交登记的 `c1f747b` 隔离副本，仅修本节列出的代码；不读取或改写用户旧账本、旧 transfer、锁、alpha 的 HY 资格，不运行完整 A–J。
+
+- **E2E-004：代码已修，官方登录实机复测待执行。** 后继 Runner 在 boot 完成并具有已保存检查点后，主动通过原 `transfer.lock` 保存 `completed` 和真实 session。该锁避免快速后继被原启动步骤的 `starting` 回写覆盖；旧 Runner 不能写另一笔交接。查询仍只读；后继停工后终态保留，新的合法交接可归档旧请求，相同 ID 不重启。
+- **E2E-001：代码已修，官方登录实机复测待执行。** 正常停工先关闭原生客户端，再写入按 turn ID 匹配的完成事件，最后执行原有释放步骤。失败事件仍记失败，无事件的 submitted、queued、未知结果及其他 Binding 不改写。若 boot 本轮自行停工，只在有成功完成事件时引用原显式停工检查点，不在关闭客户端后再创建一份自动初始快照。
+- **开发验证：** 定向状态/运行器/防重做组 121 passed；另一个真实 Codex 客户端配合回环模型夹具的限定正常链路 1 passed，覆盖两次交接、后继读旧资产并自行停工、后续合法新交接、旧请求读回，以及对应输入/原生事件/释放一致。不是用户的官方 `gpt-6-luna/low` 验收，不外推到 Desktop 或 Windows。
+
+- **E2E-002：启动适配已补，Windows / 认证 / 真实接手仍分项待验收。** 已核对固定 `codebuddy-agent-sdk==0.3.267` 的真实 options、Client 和 SubprocessTransport：原路径直接作为进程入口，没有解释器前缀选项。仅对 Windows 明确选择的 `.js/.cjs/.mjs` 入口，用 SDK 的公开 custom transport 接口复用其 SubprocessTransport，仅覆盖 Node 路径及 argv 前缀；未复制协议/环境/进程清理逻辑。Node 必须已在 PATH，缺失或只有批处理包装时，在预留 Binding / 发起 handoff 前报错。原 `.exe` 路径不改变；不换服务、不复制桌面凭据、不自动 `/login`。真实 SDK + Node 协议夹具及相邻回归 29 passed；当前 Linux 环境只模拟 Windows 的入口选择条件，不冒充 Windows 内核或 WorkBuddy 的真实认证。夹具中的 `/login` 结果仍失败且不自动释放资格，真实 HY 阻塞尚未解除。
+
+复测范围与步骤见 [E2E 修复后定向验收](e2e-repair-acceptance.md)。未取得真实环境证据前，不关闭这两项验收登记。原始报告和日志仍留在用户本机，本轮依据已提交摘要及用户交接说明，不声称已经读取这些原始文件。
+
 ## 本轮新增的正常路径证据
 
 同一固定基线在上述隔离批次继续验证正常使用路径，没有修改产品源码或通过重放未知结果消除失败记录。以下是真实本机验证的限定范围，不代表完整 A–J、所有 Harness 或生产业务已通过：
@@ -123,3 +135,7 @@ HY 失败后停止 Runner 但保留 Binding 执行资格，是当前合同下保
 ## 普通会话与项目组织补充
 
 `sessions.py` 复用运行配置生成原生交互 CLI 参数，保存不可变的本机启动回执，不创建 Workspace/持久身份，不解析终端画面或新增对话循环。`desktop_projects.py` 只保存每实例每桌面端的项目/分区名称和产品目录引用，返回同一份随包手动说明。内网 HTTP 配置通过明确的 `allow_http` 共用检查。界面、CLI、权限边界和包装资源同步更新；未提供的原生项目/分区控制仍公开说明。具体操作见 [session-projects.md](session-projects.md)。
+
+### 本批整合交付（2026-10-07）
+
+用户随后授权将两项修复推送并合入 `main`。整合以 `5ea4605` 为基线，保留已归档的原始 E2E 报告/日志以及 E2E-003 更正；产品代码没有在整合中扩展。[本次修复与验证记录](evidence/2026-10-07-e2e-fixes/README.md)附上三组重新执行的结果、修复前失败、来源和归档校验。上述“待修复”是原验收时的历史状态；目前为代码已修、官方账号/Windows/认证真实复测待完成，不能把开发回归通过追写成原基线验收通过。

@@ -1,0 +1,97 @@
+{
+  "baseline": "5ea4605e38114010d40f4306a004c223f1cb3cd0",
+  "baseline_tree": "08c621e458bdbe5e966abd7870edceef9ed40707",
+  "original_patch_commits": [
+    "559726fe8f13e08fb90985351ae4060cef4c4edf",
+    "db7d8b26560ca352dbdfbe6e8a2a41a604b10a2e"
+  ],
+  "product_sha256": {
+    "src/agent_workspace/runtime.py": "4b220c869179a5463af7bb79699cc55336ff6a01c92fef06fa792a0b26a1a9ae",
+    "src/agent_workspace/transfer.py": "81e1cdb45f99945464a094f78170d7dc770055eda5911187bbd3a2f683eff2e8",
+    "src/agent_workspace/native_sdk.py": "647a3073c3f2e47fd0af84f68232966516b42f8f69ecae5f433709442de96e57"
+  },
+  "environment": {
+    "os": "Linux",
+    "python": "3.13.5",
+    "node": "22.16.0",
+    "codex": "0.160.0",
+    "claude_sdk": "0.2.163",
+    "codebuddy_sdk": "0.3.267"
+  },
+  "results": {
+    "001-004": {
+      "tests": "121",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "20.847"
+    },
+    "002": {
+      "tests": "29",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "13.009"
+    },
+    "native-chain": {
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "21.943"
+    }
+  },
+  "files": [
+    {
+      "file": "001-004-before.txt",
+      "source_sha256": "8e564b0247225c9b70c8bf4d505d27111156b56e778cf2d69f18258b4c494a75",
+      "archive_sha256": "8e564b0247225c9b70c8bf4d505d27111156b56e778cf2d69f18258b4c494a75",
+      "treatment": "redact tool paths and test host name; preserve results and ordering"
+    },
+    {
+      "file": "002-before.txt",
+      "source_sha256": "6248dcde02b055d396d20828e9be13868ef162b0b527d96ad58d6bdb12866302",
+      "archive_sha256": "6248dcde02b055d396d20828e9be13868ef162b0b527d96ad58d6bdb12866302",
+      "treatment": "redact tool paths and test host name; preserve results and ordering"
+    },
+    {
+      "file": "001-004.txt",
+      "source_sha256": "ef7b0a69212c9bc67a2718bfbb478caf62b9f3ee9655da87da7a57008c19f4e5",
+      "archive_sha256": "ef7b0a69212c9bc67a2718bfbb478caf62b9f3ee9655da87da7a57008c19f4e5",
+      "treatment": "redact tool paths and test host name; preserve results and ordering"
+    },
+    {
+      "file": "001-004.xml",
+      "source_sha256": "a43b5ab3a4b41aed801cfc34e3e8108b9ea23b9f0888ffd1f8f0f5322733906b",
+      "archive_sha256": "11e4338e15f0fd1ec90e9d584e57de15199319d38c914d6503b03247c6c7ccdc",
+      "treatment": "redact tool paths and test host name; preserve results and ordering"
+    },
+    {
+      "file": "002.txt",
+      "source_sha256": "6dcbe2e6a0f349ef43baf096f0cd377bd9e4117c0c1738e4babcd51b6f2a32e0",
+      "archive_sha256": "6dcbe2e6a0f349ef43baf096f0cd377bd9e4117c0c1738e4babcd51b6f2a32e0",
+      "treatment": "redact tool paths and test host name; preserve results and ordering"
+    },
+    {
+      "file": "002.xml",
+      "source_sha256": "bc814da491400c7820048a34210b8bfcdf580d23beb5330fe4e59359b94ea356",
+      "archive_sha256": "9ca9f121c1a7ea8d5f29b2c11c159156a863335e93d6f1e07ce3aa8ae65403e8",
+      "treatment": "redact tool paths and test host name; preserve results and ordering"
+    },
+    {
+      "file": "native-chain.txt",
+      "source_sha256": "b953879c718bfe8b5570a02bff9cbeef6911903058fd4fabd87ec355b0d5395d",
+      "archive_sha256": "b953879c718bfe8b5570a02bff9cbeef6911903058fd4fabd87ec355b0d5395d",
+      "treatment": "redact tool paths and test host name; preserve results and ordering"
+    },
+    {
+      "file": "native-chain.xml",
+      "source_sha256": "d874d8844c5a63fec962ee6f6808422647240534b7edc992c69b0a858a063235",
+      "archive_sha256": "fc19eb0fe7004441f8ede1cc7d7e63503483fe5d95cc2b56af1b614e76109897",
+      "treatment": "redact tool paths and test host name; preserve results and ordering"
+    }
+  ],
+  "official_model_run": false,
+  "wecom_sent": false,
+  "original_evidence_modified": false
+}

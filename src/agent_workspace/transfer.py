@@ -117,12 +117,34 @@ def advance(app, workspace, agent_id, directory=None):
 def observed_target(record, entry, root):
     record = dict(record, session=entry["session"])
     boot = read_json(root / ".aw-local/inputs" / f"boot-{record['target_binding']}.json", {})
-    if entry["phase"] == "active" and entry["session"]:
-        record["state"] = ("completed" if boot.get("checkpoint_revision") else
-                           "relay_failed" if boot.get("state") == "failed" else "session_bound")
+    if (entry["session"] and entry["phase"] in ("active", "stopping", "released")
+            and boot.get("binding") == record["target_binding"]
+            and boot.get("state") == "completed" and boot.get("checkpoint_revision")):
+        record["state"] = "completed"
+    elif entry["phase"] == "active" and entry["session"]:
+        record["state"] = "relay_failed" if boot.get("state") == "failed" else "session_bound"
     else:
         record["state"] = "outcome_unknown" if record.get("failure") else "starting"
     return record
+
+
+def persist_completion(root, entry):
+    """The successor runner records boot success, independently of UI queries.
+
+    Share the launch lock: a fast boot must not be overwritten by advance()'s
+    final starting write. An older runner must not modify a later transfer.
+    """
+    path = root / ".aw-local/transfer.json"
+    record = read_json(path)
+    if not record or record["state"] == "completed" or record["target_binding"] != entry["id"]:
+        return
+    with locked(root / ".aw-local/transfer.lock"):
+        record = read_json(path)
+        if not record or record["state"] == "completed" or record["target_binding"] != entry["id"]:
+            return
+        observed = observed_target(record, entry, root)
+        if observed["state"] == "completed":
+            write_json(path, observed)
 
 
 def status(app, workspace, agent_id, directory=None):

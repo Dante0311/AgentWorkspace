@@ -10,7 +10,9 @@ from dataclasses import asdict
 import importlib
 import json
 import os
+from pathlib import Path
 import queue
+import shutil
 import sys
 import threading
 
@@ -44,6 +46,32 @@ def sdk_environment(config):
     return env
 
 
+def _codebuddy_client(sdk, executable):
+    """0.3.267 has no interpreter option; reuse its transport through the public hook."""
+    client_type = sdk.CodeBuddySDKClient
+    script = Path(executable)
+    if os.name != "nt" or script.suffix.lower() not in (".js", ".cjs", ".mjs"):
+        return client_type
+    node = shutil.which("node")
+    if not node or Path(node).suffix.lower() in (".cmd", ".bat"):
+        raise Unavailable("This Windows CodeBuddy JS entry needs Node on PATH (not a batch wrapper); install it before launch.")
+    from codebuddy_agent_sdk.transport import SubprocessTransport
+
+    class NodeTransport(SubprocessTransport):
+        # These two SDK hooks are checked against the pinned SDK in contract tests.
+        # Keep its stdio, permissions, environment, protocol and process cleanup.
+        def _get_cli_path(self):
+            return str(Path(node).resolve())
+
+        def _build_args(self):
+            return [str(script.resolve()), *super()._build_args()]
+
+    def client(options):
+        return client_type(options=options, transport=NodeTransport(options))
+
+    return client
+
+
 def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
     """Secrets are read at launch and passed only to the child process."""
     module, client_name, options_name, executable_key = SDK_TYPES[config["kind"]]
@@ -62,7 +90,9 @@ def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
                    "env": {key: value for key, value in env.items() if key.startswith("AW_")}}}}
     if session:
         options["resume"] = session
-    return sdk, getattr(sdk, client_name), getattr(sdk, options_name), options
+    client_type = (_codebuddy_client(sdk, config["executable"]) if config["kind"] == "codebuddy"
+                   else getattr(sdk, client_name))
+    return sdk, client_type, getattr(sdk, options_name), options
 
 
 class NativeSDK:

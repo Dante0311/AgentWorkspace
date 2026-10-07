@@ -425,6 +425,7 @@ class Runner:
                     raise Unavailable("Open the new Desktop session and bind its actual ID first.")
                 self.adapter = Desktop(self.root, config, entry["session"])
             from .bridges import BridgeManager
+            from .transfer import persist_completion
             bridges = BridgeManager(app, workspace, aid, self.binding, self.root)
             self.status(state="running", kind=entry["kind"], session=self.adapter.session)
             while not self.stop_event.wait(0.5):
@@ -441,6 +442,9 @@ class Runner:
                     if self.adapter.status() == "idle":
                         # Release ownership only after the managed writer is confirmed closed.
                         self._close_adapter()
+                        # Closing drains native events; idle alone is not input success.
+                        self._complete_inputs(stopping_checkpoint=current["checkpoint"])
+                        persist_completion(self.root, current)
                         result = app.finish_stop(workspace, aid, self.binding, observed_idle=True)
                         self.status(state="released", handoff=result["id"])
                         break
@@ -456,6 +460,7 @@ class Runner:
                         bridges.tick()
                     records = self._read_inputs()
                     self._complete_inputs(records)
+                    persist_completion(self.root, current)
                     self._inputs(records)
                     setting = read_json(self.root / ".aw-local/watch.json", {"enabled": False})
                     if not handoff_requested and setting.get("enabled") and setting.get("binding") == self.binding and time.monotonic() >= next_poll:
@@ -542,7 +547,7 @@ class Runner:
                 records.append((path, item))
         return records
 
-    def _complete_inputs(self, records=None):
+    def _complete_inputs(self, records=None, *, stopping_checkpoint=None):
         if not isinstance(self.adapter, (Codex, NativeSDK)):
             return
         records = self._read_inputs() if records is None else records
@@ -559,10 +564,15 @@ class Runner:
         for path, item in records:
             if item["purpose"] != "initial" or item["state"] != "completed" or item.get("checkpoint_revision"):
                 continue
-            point = self.app.checkpoint(self.workspace, self.agent_id,
-                "首次进入已结束。实际职责与资料以此快照中的文件为准。",
-                content="原生事件按记录段保存；此记录不宣称执行了任何未安排的产品任务。",
-                binding=self.binding, directory=str(self.root), checkpoint_id="initial-" + self.binding)
+            if stopping_checkpoint:
+                # A boot turn can itself stop. Reuse its explicit handoff snapshot;
+                # never publish a later automatic checkpoint during writer cleanup.
+                point = self.app.checkpoint_show(self.workspace, self.agent_id, stopping_checkpoint)
+            else:
+                point = self.app.checkpoint(self.workspace, self.agent_id,
+                    "首次进入已结束。实际职责与资料以此快照中的文件为准。",
+                    content="原生事件按记录段保存；此记录不宣称执行了任何未安排的产品任务。",
+                    binding=self.binding, directory=str(self.root), checkpoint_id="initial-" + self.binding)
             item["checkpoint_revision"] = point["revision"]
             write_json(path, item)
 

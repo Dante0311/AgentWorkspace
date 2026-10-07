@@ -18,7 +18,7 @@ jobs:
       - run: python -m pip install claude-agent-sdk==0.2.163 codebuddy-agent-sdk==0.3.267
       - run: python scripts/check_native_sdks.py
       - run: python -m pip install -e ".[test]"
-      - run: python -m pytest tests/test_native_sdk.py tests/test_native_failure.py -q
+      - run: python -m pytest tests/test_native_sdk.py tests/test_native_failure.py tests/test_codebuddy_windows_entry.py tests/test_sdk_metadata.py -q
       - name: Exercise the SDK's installed Claude binary against an isolated local API
         run: |
           export AW_TEST_CLAUDE="$(python -c 'from pathlib import Path; import claude_agent_sdk; print(Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude")')"

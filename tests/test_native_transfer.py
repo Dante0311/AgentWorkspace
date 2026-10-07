@@ -9,6 +9,7 @@ import pytest
 
 
 @pytest.mark.parametrize(('source', 'target'), [
+    ('codex', 'codex'),  # E2E-004/001 focused normal lifecycle regression.
     ('codex', 'claude'), ('codex', 'codebuddy'),
     ('claude', 'codex'), ('claude', 'codebuddy'),
     ('codebuddy', 'codex'), ('codebuddy', 'claude'),
@@ -38,7 +39,8 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
                  'CODEBUDDY_API_KEY', 'CODEBUDDY_AUTH_TOKEN', 'CODEBUDDY_BASE_URL',
                  'CODEBUDDY_INTERNET_ENVIRONMENT'):
         monkeypatch.delenv(name, raising=False)
-    phase = {'handoff': False, 'step': 0, 'receive': False, 'acked': False}
+    phase = {'handoff': False, 'step': 0, 'receive': False, 'acked': False, 'stop': False, 'stop_step': 0}
+    stop_tools = []
     calls = {'codex': [], 'claude': [], 'codebuddy': []}
     handoff_tools = [
         {'command': 'checkpoint.create', 'arguments': {'checkpoint_id': 'transfer-cp',
@@ -64,7 +66,10 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
             operation = None
             # Only main tool-capable requests drive platform effects, not auxiliary SDK calls.
             if body.get('tools') and (kind != 'claude' or body.get('stream')):
-                if kind == source and phase['handoff'] and phase['step'] < len(handoff_tools):
+                if kind == target and phase['stop'] and phase['stop_step'] < len(stop_tools):
+                    operation = stop_tools[phase['stop_step']]
+                    phase['stop_step'] += 1
+                elif kind == source and phase['handoff'] and phase['step'] < len(handoff_tools):
                     operation = handoff_tools[phase['step']]
                     phase['step'] += 1
                 elif kind == target and phase['receive'] and not phase['acked']:
@@ -179,7 +184,7 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
         wait_until(lambda: read_json(root / f'.aw-local/inputs/boot-{old}.json', {}).get('checkpoint_revision'))
         phase['handoff'] = True
         operation = transfer.request(app, 'sea', 'native-transfer', profile(target), request_id='native-transfer')
-        wait_until(lambda: transfer.status(app, 'sea', 'native-transfer')['state'] == 'completed')
+        wait_until(lambda: read_json(root / '.aw-local/transfer.json')['state'] == 'completed')
         current = app.show('sea', 'native-transfer')['binding']
         assert len(runners) == 2 and phase['step'] == 2
         assert current['id'] == operation['target_binding'] and current['kind'] == target
@@ -202,6 +207,54 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
         assert (root / 'messages/after-transfer.json').is_file()
         assert app.show('sea', 'native-transfer')['binding']['session'] == current['session']
         assert len(runners) == 2
+        if source == target == 'codex':
+            # E2E-004: no status/continue call is used to make completion durable.
+            receipt_path = root / '.aw-local/transfer.json'
+            finished = read_json(receipt_path)
+            first_record = dict(finished)
+            for cycle in (1, 2):
+                binding = finished['target_binding']
+                phase.update(stop=True, stop_step=0)
+                stop_tools[:] = [
+                    {'command': 'asset.read', 'arguments': {'path': 'user-note.md'}},
+                    {'command': 'checkpoint.create', 'arguments': {
+                        'checkpoint_id': f'successor-stop-{cycle}', 'summary': 'Explicit successor stop'}},
+                    {'command': 'agent.stop', 'arguments': {'checkpoint': f'successor-stop-{cycle}'}},
+                ]
+                runtime.queue_input(app, 'sea', 'native-transfer', 'Read the old asset and stop normally.',
+                                    request_id=f'successor-stop-{cycle}')
+                wait_until(lambda: app.agent('sea', 'native-transfer')['current'] is None)
+                wait_until(lambda: not threads[-1].is_alive())
+                assert read_json(receipt_path) == finished
+                assert transfer.status(app, 'sea', 'native-transfer') == finished
+                assert transfer.advance(app, 'sea', 'native-transfer') == finished
+                stop = read_json(root / f'.aw-local/inputs/successor-stop-{cycle}.json')
+                assert stop['state'] == 'completed'
+                events = [json.loads(line) for line in (root / 'records' / binding / 'runtime.jsonl').read_text().splitlines()]
+                assert any(e.get('method') == 'turn/completed' and e['params']['turn']['id'] == stop['result']['turn']['id']
+                           and e['params']['turn']['status'] == 'completed' for e in events)
+                assert (root / 'user-note.md').read_text() == 'User-owned asset survives handoff.'
+                assert transfer.request(app, 'sea', 'native-transfer', profile(target),
+                                        request_id='native-transfer') == first_record
+                if cycle == 1:
+                    phase['stop'] = False
+                    runtime.start(app, 'sea', 'native-transfer')
+                    fresh = app.agent('sea', 'native-transfer')['current']
+                    wait_until(lambda: read_json(root / f'.aw-local/inputs/boot-{fresh}.json', {}).get('checkpoint_revision'))
+                    phase['step'] = 0
+                    handoff_tools[0]['arguments']['checkpoint_id'] = 'transfer-cp-next'
+                    handoff_tools[1]['arguments']['checkpoint'] = 'transfer-cp-next'
+                    second = transfer.request(app, 'sea', 'native-transfer', profile(target), request_id='native-transfer-next')
+                    assert second['old_binding'] == fresh
+                    assert second['target_binding'] != first_record['target_binding']
+                    wait_until(lambda: read_json(receipt_path)['state'] == 'completed')
+                    finished = read_json(receipt_path)
+            assert len(runners) == 4  # Two explicit starts, two fixed successors, no extras.
+            assert all(not thread.is_alive() for thread in threads)
+            for r in runners:
+                handoff = read_json(root / f'.aw-local/inputs/handoff-{r.binding}.json')
+                if handoff:
+                    assert handoff['state'] == 'completed'
     finally:
         for runner in runners:
             runner.stop_event.set()

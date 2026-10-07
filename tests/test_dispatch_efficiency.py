@@ -284,6 +284,7 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
     def fail(records):
         if transition == "stopping":
             entry["phase"] = "stopping"
+            entry["checkpoint"] = "explicit-stop"
         elif transition == "replaced":
             local_app.agent.return_value = {"current": "successor"}
         raise failure

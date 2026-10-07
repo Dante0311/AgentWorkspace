@@ -1,0 +1,12 @@
+{
+  "time": "2026-10-06T23:42:30.605492+08:00",
+  "source": "Lead relayed direct user confirmations and inspected screenshot",
+  "first_report_visible": true,
+  "screenshot_time": "23:30:09",
+  "bot_label": "E2E_TEST_BOT",
+  "authorization_sent_in_SBP_test_group": true,
+  "bot_actually_selected_from_member_list": true,
+  "authorization_content": "请先读取 scenario/sbp-ops/archive/sim-build-1 下的 job.log 和 job_summary.json 核对原因；确认后，同意修复模拟 tile-B 并复验。",
+  "platform_wecom_inbound_observed": false,
+  "reason": "unknown; do not attribute to user failing to mention bot"
+}

@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-10-06T02:46:03.6229208+08:00",
+  "owned_path_processes": [
+    {
+      "ProcessId": 191596,
+      "ParentProcessId": 207632,
+      "ExecutablePath": "${E2E_ROOT}\\app\\Scripts\\pythonw.exe",
+      "CommandLine": "\"${E2E_ROOT}\\app\\Scripts\\pythonw.exe\" ${E2E_ROOT}\\intake\\local_form.py open"
+    }
+  ],
+  "known_runner_pids_alive": [],
+  "[TEST_CHANNEL_OR_USER]": [],
+  "intake_alive": true,
+  "source_head": "1258b622c474beb73f13234c0f00672d8d5b5bbb",
+  "source_status": "?? docs/AgentWorkspace-local-E2E-prompt.md"
+}

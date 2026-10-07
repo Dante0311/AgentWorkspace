@@ -1,0 +1,140 @@
+[
+  {
+    "ProcessId": 271812,
+    "ParentProcessId": 272352,
+    "ExecutablePath": "${E2E_ROOT}\\app\\Scripts\\python.exe",
+    "CommandLine": "${E2E_ROOT}\\app\\Scripts\\python.exe -m agent_workspace --home ${E2E_ROOT}\\data\\workspace-home --workspace e2e-local runtime run e2e-beta --directory ${E2E_ROOT}\\data\\workspace-home\\instances\\e2e-local\\e2e-beta"
+  },
+  {
+    "ProcessId": 226864,
+    "ParentProcessId": 271812,
+    "ExecutablePath": "${HOST_PATH}/conhost.exe",
+    "CommandLine": "\\??\\${HOST_PATH}/conhost.exe 0x4"
+  },
+  {
+    "ProcessId": 199320,
+    "ParentProcessId": 271812,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "CommandLine": "\"${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe\" -m agent_workspace --home ${E2E_ROOT}\\data\\workspace-home --workspace e2e-local runtime run e2e-beta --directory ${E2E_ROOT}\\data\\workspace-home\\instances\\e2e-local\\e2e-beta"
+  },
+  {
+    "ProcessId": 284040,
+    "ParentProcessId": 199320,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex.exe",
+    "CommandLine": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex.exe -c model=\\\"gpt-6-luna\\\" -c model_reasoning_effort=\\\"low\\\" app-server"
+  },
+  {
+    "ProcessId": 282420,
+    "ParentProcessId": 284040,
+    "ExecutablePath": "${HOST_PATH}/blender-mcp-server.exe",
+    "CommandLine": "\"${HOST_PATH}/blender-mcp-server.exe\""
+  },
+  {
+    "ProcessId": 246456,
+    "ParentProcessId": 284040,
+    "ExecutablePath": "${HOST_PATH}/blender-mcp-server.exe",
+    "CommandLine": "\"${HOST_PATH}/blender-mcp-server.exe\""
+  },
+  {
+    "ProcessId": 188740,
+    "ParentProcessId": 282420,
+    "ExecutablePath": "${HOST_PATH}/conhost.exe",
+    "CommandLine": "\\??\\${HOST_PATH}/conhost.exe 0x4"
+  },
+  {
+    "ProcessId": 275936,
+    "ParentProcessId": 284040,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_repl.exe",
+    "CommandLine": "\"${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_repl.exe\""
+  },
+  {
+    "ProcessId": 269716,
+    "ParentProcessId": 246456,
+    "ExecutablePath": "${HOST_PATH}/conhost.exe",
+    "CommandLine": "\\??\\${HOST_PATH}/conhost.exe 0x4"
+  },
+  {
+    "ProcessId": 276204,
+    "ParentProcessId": 282420,
+    "ExecutablePath": "${HOST_PATH}/python.exe",
+    "CommandLine": "\"${HOST_PATH}/python.exe\" \"${HOST_PATH}/blender-mcp-server.exe\""
+  },
+  {
+    "ProcessId": 284264,
+    "ParentProcessId": 284040,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node.exe",
+    "CommandLine": "\"${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node.exe\" ${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_modules\\@oai\\cua-repl\\bin\\cua-repl.mjs"
+  },
+  {
+    "ProcessId": 62284,
+    "ParentProcessId": 275936,
+    "ExecutablePath": "${HOST_PATH}/conhost.exe",
+    "CommandLine": "\\??\\${HOST_PATH}/conhost.exe 0x4"
+  },
+  {
+    "ProcessId": 252084,
+    "ParentProcessId": 246456,
+    "ExecutablePath": "${HOST_PATH}/python.exe",
+    "CommandLine": "\"${HOST_PATH}/python.exe\" \"${HOST_PATH}/blender-mcp-server.exe\""
+  },
+  {
+    "ProcessId": 267404,
+    "ParentProcessId": 276204,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "CommandLine": "\"${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe\" \"${HOST_PATH}/blender-mcp-server.exe\""
+  },
+  {
+    "ProcessId": 271612,
+    "ParentProcessId": 252084,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "CommandLine": "\"${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe\" \"${HOST_PATH}/blender-mcp-server.exe\""
+  },
+  {
+    "ProcessId": 255220,
+    "ParentProcessId": 284264,
+    "ExecutablePath": "${HOST_PATH}/conhost.exe",
+    "CommandLine": "\\??\\${HOST_PATH}/conhost.exe 0x4"
+  },
+  {
+    "ProcessId": 199708,
+    "ParentProcessId": 284264,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_repl.exe",
+    "CommandLine": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_repl.exe"
+  },
+  {
+    "ProcessId": 256020,
+    "ParentProcessId": 284040,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex-code-mode-host.exe",
+    "CommandLine": "\"${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex-code-mode-host.exe\""
+  },
+  {
+    "ProcessId": 279508,
+    "ParentProcessId": 256020,
+    "ExecutablePath": "${HOST_PATH}/conhost.exe",
+    "CommandLine": "\\??\\${HOST_PATH}/conhost.exe 0x4"
+  },
+  {
+    "ProcessId": 260180,
+    "ParentProcessId": 199320,
+    "ExecutablePath": "${E2E_ROOT}\\app\\Scripts\\python.exe",
+    "CommandLine": "${E2E_ROOT}\\app\\Scripts\\python.exe ${E2E_ROOT}\\scenarios\\sbp-ops\\wecom_launcher.py bridge"
+  },
+  {
+    "ProcessId": 276424,
+    "ParentProcessId": 260180,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "CommandLine": "\"${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe\" ${E2E_ROOT}\\scenarios\\sbp-ops\\wecom_launcher.py bridge"
+  },
+  {
+    "ProcessId": 45508,
+    "ParentProcessId": 276424,
+    "ExecutablePath": "${E2E_ROOT}\\app\\Scripts\\python.exe",
+    "CommandLine": "${E2E_ROOT}\\app\\Scripts\\python.exe -m agent_workspace.wecom"
+  },
+  {
+    "ProcessId": 283272,
+    "ParentProcessId": 45508,
+    "ExecutablePath": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "CommandLine": "\"${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe\" -m agent_workspace.wecom"
+  }
+]

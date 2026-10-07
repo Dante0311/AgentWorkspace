@@ -1,0 +1,1 @@
+G批已授权的隔离维护笔记。sync-idle由maintainer真实受限工具完成；仅记录正常空闲同步，不代表故障恢复或Workspace全部健康。

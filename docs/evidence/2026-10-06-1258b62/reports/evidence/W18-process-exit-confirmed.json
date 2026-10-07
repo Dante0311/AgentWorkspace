@@ -1,0 +1,11 @@
+{
+  "observed_at": "2026-10-07T00:07:26.9660590+08:00",
+  "known_owned_pids": [
+    280972,
+    253152,
+    271784,
+    262696
+  ],
+  "owned_or_direct_children_alive": [],
+  "root_matching_python_codex": []
+}

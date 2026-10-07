@@ -1,0 +1,22 @@
+{
+  "started_at": "2026-10-06T23:28:23.274710+08:00",
+  "finished_at": "2026-10-06T23:28:23.632802+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "bridge",
+    "configure",
+    "e2e-beta",
+    "--name",
+    "wecom",
+    "--config",
+    "{\"command\": [\"${E2E_ROOT}\\\\app\\\\Scripts\\\\python.exe\", \"${E2E_ROOT}\\\\scenarios\\\\sbp-ops\\\\wecom_launcher.py\", \"bridge\"], \"enabled\": true, \"max_restarts\": 1, \"allowed_chat_ids\": [\"[TEST_CHANNEL_OR_USER]\"], \"bot_id_env\": \"WECOM_BOT_ID\", \"secret_env\": \"WECOM_BOT_SECRET\"}"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"name\": \"wecom\", \"configured\": true, \"enabled\": true}}",
+  "stderr": ""
+}

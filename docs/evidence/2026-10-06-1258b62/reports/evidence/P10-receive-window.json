@@ -1,0 +1,12 @@
+{
+  "ready_confirmed_at": "2026-10-07T00:25:53.804765+08:00",
+  "deadline": "2026-10-07T00:35:53.804765+08:00",
+  "binding": "b4c8d06c2c2b846dd8cede789542b13b3",
+  "session": "01a11207-e5fd-7790-9bc5-4a68dd05a153",
+  "wecom_ready_at": "2026-10-07T00:24:41.211892+08:00",
+  "old_process_tree_all_exited": true,
+  "native_started": 3,
+  "native_completed": 3,
+  "user_query": "请核对上次模拟导航导出的结果与产物",
+  "operator": "user via Lead coordination; controller does not send"
+}

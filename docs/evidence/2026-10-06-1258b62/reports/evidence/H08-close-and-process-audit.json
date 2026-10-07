@@ -1,0 +1,46 @@
+{
+  "observed_at": "2026-10-07T01:18:57.701463+08:00",
+  "sessions": [
+    {
+      "id": 81576,
+      "input": "Ctrl+C",
+      "tool_exit_code": 1
+    },
+    {
+      "id": 96350,
+      "input": "Ctrl+C",
+      "tool_exit_code": 1
+    }
+  ],
+  "shutdown_adapter_created": false,
+  "forced_termination_used": false,
+  "finally_verified": false,
+  "remaining_isolated_processes": [],
+  "ports": [
+    {
+      "port": 40447,
+      "accepting_connections": false
+    },
+    {
+      "port": 49595,
+      "accepting_connections": false
+    }
+  ],
+  "private_logs": [
+    {
+      "private_path": "${E2E_ROOT}\\private\\service-logs\\H-first-service-private.log",
+      "bytes": 140,
+      "public_original_removed": true,
+      "port": 40447,
+      "token_emitted": false
+    },
+    {
+      "private_path": "${E2E_ROOT}\\private\\service-logs\\H-second-service-private.log",
+      "bytes": 140,
+      "public_original_removed": true,
+      "port": 49595,
+      "token_emitted": false
+    }
+  ],
+  "audit_correction": "First inline observer included its own venv Python launcher. Separate PowerShell inventory after observer exited confirms zero. No product change or retry of service."
+}

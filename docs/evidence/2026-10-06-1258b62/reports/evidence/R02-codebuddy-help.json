@@ -1,0 +1,12 @@
+{
+  "start": "2026-10-06T02:16:59.074684+08:00",
+  "finish": "2026-10-06T02:16:59.163265+08:00",
+  "argv": [
+    "node",
+    "${USER_HOME}\\AppData\\Roaming\\npm\\node_modules\\@tencent-ai\\codebuddy-code\\bin\\codebuddy",
+    "--help"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit": 1,
+  "safe_output": "Error: Cannot find module '../dist/codebuddy'\nRequire stack:\n- ${USER_HOME}\\AppData\\Roaming\\npm\\node_modules\\@tencent-ai\\codebuddy-code\\bin\\codebuddy\n    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)\n    at Function._load (node:internal/modules/cjs/loader:1192:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)\n    at Module.require (node:internal/modules/cjs/loader:1463:12)\n    at require (node:internal/modules/helpers:147:16)\n    at ${USER_HOME}\\AppData\\Roaming\\npm\\node_modules\\@tencent-ai\\codebuddy-code\\bin\\codebuddy:267:17\n    at Object.<anonymous> (${USER_HOME}\\AppData\\Roaming\\npm\\node_modules\\@tencent-ai\\codebuddy-code\\bin\\codebuddy:275:3) {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: [\n    '${USER_HOME}\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@tencent-ai\\\\codebuddy-code\\\\bin\\\\codebuddy'\n  ]\n}\n"
+}

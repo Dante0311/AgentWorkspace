@@ -1,0 +1,18 @@
+{
+  "started_at": "2026-10-06T02:42:24.390509+08:00",
+  "finished_at": "2026-10-06T02:42:31.664396+08:00",
+  "argv": [
+    "${E2E_ROOT}\\codebuddy-app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "agent",
+    "start",
+    "e2e-alpha"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"agent\": \"e2e-alpha\", \"binding\": \"b75712931632c4f8da3a948ca9cb395f6\", \"phase\": \"starting\", \"kind\": \"codebuddy\", \"pid\": 115864, \"state\": \"starting_runner\"}}",
+  "stderr": ""
+}

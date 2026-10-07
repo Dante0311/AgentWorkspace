@@ -1,0 +1,18 @@
+{
+  "time": "2026-10-07T00:40:35.864265+08:00",
+  "Q1": "PASS_REAL_MANAGEMENT_FORK_WORK_DATA_CONTRACT",
+  "Q2": "PASS_REAL_SECOND_INSTALL_SAME_HOME_CLI_REUSE",
+  "models_added": 0,
+  "outbound_added": 0,
+  "services_started": 0,
+  "new_test_identities": 1,
+  "new_management_works": 1,
+  "new_verification_assets": 1,
+  "new_installations": 1,
+  "fork_id": "e2e-q-fork",
+  "work_id": "w6e0f8c4a4a67405ea2fd4e0a11b95b13",
+  "P_visibility": "confirmed by human; P17/P18",
+  "P_turn_count_unchanged": 17,
+  "wecom_cumulative_unchanged": 3,
+  "closed": true
+}

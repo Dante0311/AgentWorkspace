@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-06T02:33:30.637003+08:00",
+  "finished_at": "2026-10-06T02:33:30.922088+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "asset",
+    "read",
+    "e2e-alpha",
+    "--path",
+    "AGENTS.md"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"path\": \"AGENTS.md\", \"content\": \"# 验收读取实例\\n\\n这是明确授权的本轮验收任务。通过平台asset.read读取notes/source.md的随机标记，通过asset.write在notes/result.md写下该标记并保存真实checkpoint。简短回复后等待输入。仅使用平台工具，不运行shell、不联网、不发Message、不创建Work或后继，不委派子任务。\\n\\n工作根为本目录。平台操作参见 `.agents/skills/`；不要将没有收到的任务当作默认任务。\\n\", \"revision\": \"0bbfba976eda70be33de8b6f800cef90dae0453abd70cdab0637d3a0e364ff3b\"}}",
+  "stderr": ""
+}

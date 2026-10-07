@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-06T02:36:19.089117+08:00",
+  "finished_at": "2026-10-06T02:38:43.953241+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\python.exe",
+    "${E2E_ROOT}\\dist\\install.py",
+    "${E2E_ROOT}\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
+    "--destination",
+    "${E2E_ROOT}\\codebuddy-app",
+    "--extra",
+    "codebuddy",
+    "--sha256",
+    "0ec257b1ffc14ede077f023415fa52f013f2a83ed04042d31be1baa9eeafb048"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "Processing ${E2E_ROOT}\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl\r\nCollecting codebuddy-agent-sdk==0.3.267 (from git-native-agent-workspace==0.1.0a1)\r\n  Downloading codebuddy_agent_sdk-0.3.267-py3-none-win_amd64.whl (56.8 MB)\r\n     -------------------------------------- 56.8/56.8 MB 462.0 kB/s eta 0:00:00\r\nCollecting anyio>=4.0.0 (from codebuddy-agent-sdk==0.3.267->git-native-agent-workspace==0.1.0a1)\r\n  Downloading anyio-4.15.1-py3-none-any.whl (132 kB)\r\n     ------------------------------------ 132.1/132.1 kB 433.6 kB/s eta 0:00:00\r\nCollecting typing-extensions>=4.0.0 (from codebuddy-agent-sdk==0.3.267->git-native-agent-workspace==0.1.0a1)\r\n  Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)\r\n     -------------------------------------- 45.6/45.6 kB 560.8 kB/s eta 0:00:00\r\nCollecting idna>=2.8 (from anyio>=4.0.0->codebuddy-agent-sdk==0.3.267->git-native-agent-workspace==0.1.0a1)\r\n  Downloading idna-3.20-py3-none-any.whl (69 kB)\r\n     -------------------------------------- 69.6/69.6 kB 474.7 kB/s eta 0:00:00\r\nInstalling collected packages: typing-extensions, idna, git-native-agent-workspace, anyio, codebuddy-agent-sdk\r\nSuccessfully installed anyio-4.15.1 codebuddy-agent-sdk-0.3.267 git-native-agent-workspace-0.1.0a1 idna-3.20 typing-extensions-4.16.0\r\n0.1.0a1\r\n{\"installed\": \"${E2E_ROOT}\\\\codebuddy-app\", \"start\": [\"${E2E_ROOT}\\\\codebuddy-app\\\\Scripts\\\\aw.exe\", \"setup\", \"--open\"], \"[TEST_CHANNEL_OR_USER]\": false}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,212 @@
+{
+  "time": "2026-10-07T00:48:24.132263+08:00",
+  "bounded_seconds": 45,
+  "status_changes": [
+    {
+      "observed_at": "2026-10-07T00:47:39.065974+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:44:53.741480+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e"
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:47:44.574056+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:47:44.550717+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "notified_waiting_ack",
+          "message_id": "r-watch-normal-001"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:47:48.581130+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:47:48.355244+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-001"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:47:52.593054+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:47:52.145739+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-001"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:47:55.597379+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:47:55.147540+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-001"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:47:58.099784+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:47:58.005840+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-002"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:48:01.103064+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:48:00.961403+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-002"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:48:04.106761+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:48:03.704735+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-002"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:48:09.613614+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:48:09.380306+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "notified_waiting_ack",
+          "message_id": "r-watch-normal-002"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:48:12.617687+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:48:12.189523+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-002"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:48:15.120459+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:48:15.087367+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-002"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:48:18.123103+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:48:17.973323+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "waiting_idle",
+          "message_id": "r-watch-normal-002"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:48:21.126378+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:48:20.657775+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "empty"
+        }
+      }
+    },
+    {
+      "observed_at": "2026-10-07T00:48:23.631271+08:00",
+      "status": {
+        "pid": 255964,
+        "binding": "bfe56718746f34061bcf4334d686d159a",
+        "observed_at": "2026-10-06T16:48:23.421179+00:00",
+        "state": "running",
+        "kind": "codex",
+        "session": "01a1121a-7b6d-7f70-aa94-d40cd3afbe8e",
+        "poll": {
+          "state": "empty"
+        }
+      }
+    }
+  ],
+  "business_delay_injected": false,
+  "busy_second_observed": true
+}

@@ -1,0 +1,8 @@
+{
+  "id": "c04877e9d873f4943a96b75ecf1975a61",
+  "created_at": "2026-10-06T15:41:34.404905+00:00",
+  "summary": "W批 SBP Ops E2E 收尾：授权及恢复未确认",
+  "content": "本轮实际事实：当前 binding 为 bf06398581b804f2c9da2134133b8d006（Codex）。收到 sim-build-1 失败自动入站；读取 scenario/sbp-ops/build_operation.json 与 scenario.json 确认模拟 navigation_export 缺少 tile-B.txt。archive/sim-build-1/job.log 与 job_summary.json 指定路径读取返回文件不存在。调查记录 notes/ops-investigation.md，收尾记录 notes/ops-result.md。曾调用 bridge.send 修复授权请求 w-ops-failure-report-001，工具状态仅 queued，由运行器投递；Lead 人类反馈称用户看到报告并表示已授权，但平台没有真实企微授权入站，原因未知。未修复、未重跑、未收到恢复构建事实，故无成功闭环。未决：真实授权入站及模拟恢复事实均未获确认。",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

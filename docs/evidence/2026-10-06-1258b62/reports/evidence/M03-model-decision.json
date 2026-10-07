@@ -1,0 +1,38 @@
+{
+  "time": "2026-10-06T02:33:29.703573+08:00",
+  "model": "gpt-6-luna",
+  "effort": "low",
+  "official_existing_auth": true,
+  "additional_sol_turns": 0,
+  "cross_harness": "WorkBuddy bundled CLI help succeeds and advertises hy3-preview-ioa and hunyuan IDs. Existing login and cheapest HY selection unconfirmed; help has no verified noninteractive auth-status method. Claude2.1.11 help has no auth status command. No credential read, login, SDK install, repair or model probe. Use same Codex relay; cross Harness NOT_RUN.",
+  "budget_source": "Lead batch cap6 additional / cumulative8, not a number originally stated by user",
+  "catalog": {
+    "id": "gpt-6-luna",
+    "model": "gpt-6-luna",
+    "displayName": "GPT-6-Luna",
+    "defaultReasoningEffort": "medium",
+    "supportedReasoningEfforts": [
+      {
+        "reasoningEffort": "low",
+        "description": "Fast responses with lighter reasoning"
+      },
+      {
+        "reasoningEffort": "medium",
+        "description": "Balances speed and reasoning depth for everyday tasks"
+      },
+      {
+        "reasoningEffort": "high",
+        "description": "Greater reasoning depth for complex problems"
+      },
+      {
+        "reasoningEffort": "xhigh",
+        "description": "Extra high reasoning depth for complex problems"
+      },
+      {
+        "reasoningEffort": "max",
+        "description": "Maximum reasoning depth for the hardest problems"
+      }
+    ],
+    "isDefault": false
+  }
+}

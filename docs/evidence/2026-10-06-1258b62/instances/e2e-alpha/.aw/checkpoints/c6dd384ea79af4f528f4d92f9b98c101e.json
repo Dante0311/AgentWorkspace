@@ -1,0 +1,8 @@
+{
+  "id": "c6dd384ea79af4f528f4d92f9b98c101e",
+  "created_at": "2026-10-05T18:38:50.355458+00:00",
+  "summary": "M alpha communication complete handoff",
+  "content": "Record actual request and reply message IDs, marker, read and ACK facts; preserve older e2e-alpha-second-stop-001 submitted inconsistency without replay. Next owner is only authorized to read these notes and this checkpoint, save relay proof and stop; no further communication.",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

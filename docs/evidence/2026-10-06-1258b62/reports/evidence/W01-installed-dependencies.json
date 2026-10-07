@@ -1,0 +1,8 @@
+{
+  "git-native-agent-workspace": "0.1.0a1",
+  "wecom-aibot-python-sdk": "1.0.2",
+  "websockets": "17.2",
+  "aiohttp": "3.14.4",
+  "pyee": "13.0.1",
+  "cryptography": "50.0.2"
+}

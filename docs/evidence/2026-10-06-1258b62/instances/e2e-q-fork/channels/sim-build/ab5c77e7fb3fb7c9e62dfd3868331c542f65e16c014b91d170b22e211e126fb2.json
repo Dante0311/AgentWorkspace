@@ -1,0 +1,7 @@
+{
+  "event": "input",
+  "id": "sim-build-2-succeeded",
+  "sender": "sim-build-watcher",
+  "target": "simulation-outbox",
+  "text": "{\"simulation\": true, \"operation\": {\"schema_version\": 1, \"simulation\": true, \"operation_id\": \"sim-operation-2\", \"build_id\": \"sim-build-2\", \"status\": \"succeeded\", \"stage_order\": [\"navigation_export\"], \"updated_at\": \"2026-10-06T15:59:03.511494+00:00\", \"error\": null, \"last_cursor\": 6, \"progress\": {\"stage_name\": \"navigation_export\", \"job_id\": \"fictional-tile-export\", \"completed_inputs\": 2, \"total_inputs\": 2}, \"effects_certainty\": \"certain\"}, \"evidence_directory\": \"archive/sim-build-2\", \"scenario_directory\": \"${E2E_ROOT}\\\\data\\\\workspace-home\\\\instances\\\\e2e-local\\\\e2e-beta\\\\scenario\\\\sbp-ops\", \"notice\": \"Fictional build facts. Repair requires explicit authorization; scope is this scenario only.\"}"
+}

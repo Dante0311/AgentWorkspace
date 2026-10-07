@@ -1,0 +1,18 @@
+{
+  "started_at": "2026-10-07T00:55:01.617619+08:00",
+  "finished_at": "2026-10-07T00:55:02.511614+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "agent",
+    "show",
+    "maintainer"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"id\": \"maintainer\", \"name\": \"maintainer\", \"description\": \"\", \"branch\": \"instance/maintainer\", \"archived\": false, \"current\": null, \"has_run\": false, \"handoff\": null, \"created_at\": \"2026-10-05T18:19:12.667580+00:00\", \"creation\": {\"request_id\": \"setupc43bab4966e34765851333d07122cdfd-maintainer\", \"fingerprint\": \"ee016e1d15a32938303943ded4de89e2bef59a4ae7fcb8e0b5e91e99302ccd13\"}, \"revision\": \"b95d6cb2df222a2a8ec97037cbd7e97afd4c6518\", \"binding\": null, \"directories\": [\"${E2E_ROOT}\\\\data\\\\workspace-home\\\\instances\\\\e2e-local\\\\maintainer\"], \"runtime\": {\"state\": \"not_running\", \"runner_alive\": false}, \"watch\": {\"enabled\": false}, \"configured_kind\": \"manual\"}}",
+  "stderr": ""
+}

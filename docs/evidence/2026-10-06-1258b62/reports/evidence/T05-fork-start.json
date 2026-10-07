@@ -1,0 +1,18 @@
+{
+  "started_at": "2026-10-07T00:45:53.568811+08:00",
+  "finished_at": "2026-10-07T00:46:03.234601+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "agent",
+    "start",
+    "e2e-q-fork"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"agent\": \"e2e-q-fork\", \"binding\": \"bf000d594021742cea71d260e2399277f\", \"phase\": \"starting\", \"kind\": \"codex\", \"pid\": 281548, \"state\": \"starting_runner\"}}",
+  "stderr": ""
+}

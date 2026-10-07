@@ -1,0 +1,18 @@
+{
+  "started_at": "2026-10-06T02:44:15.478016+08:00",
+  "finished_at": "2026-10-06T02:44:16.405500+08:00",
+  "argv": [
+    "${E2E_ROOT}\\codebuddy-app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "runtime",
+    "stop",
+    "e2e-alpha"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"monitor_stop_requested\": true, \"binding\": \"b75712931632c4f8da3a948ca9cb395f6\", \"execution_right_released\": false}}",
+  "stderr": ""
+}

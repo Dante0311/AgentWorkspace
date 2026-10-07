@@ -1,0 +1,47 @@
+- main:
+  - paragraph:
+    - link "工作台":
+      - /url: /
+    - text: ·
+    - link "Workspace 配置":
+      - /url: /setup
+    - text: ·
+    - link "支持范围":
+      - /url: /capabilities
+  - heading "新建普通会话" [level=1]
+  - paragraph: 在已有目录打开原生 CLI。不需要 Workspace 或 Git，不创建持久 Agent、管家或专属项目。
+  - paragraph: 聊天和历史留在原生终端，不是工作台聊天界面；不提供平台 Message/ACK 或跨 Harness 交接。项目与用户规则仍可能被原生客户端加载，不保证角色隔离。
+  - alert
+  - generic: 运行环境
+  - combobox "运行环境":
+    - option "Codex CLI" [selected]
+    - option "Claude Code CLI"
+    - option "CodeBuddy CLI（不是 WorkBuddy Desktop）"
+  - generic: 已有项目 / 工作目录
+  - textbox "已有项目 / 工作目录":
+    - /placeholder: 例如 ${HOST_PATH}/shop 或 /home/me/projects/shop
+  - paragraph: 不复制目录、不创建 worktree、不写入 AGENTS.md。持久 Agent 的实例目录请从 Agent 入口进入。
+  - generic: 模型 ID（可选）
+  - combobox "模型 ID（可选）"
+  - generic: 推理强度（可选）
+  - combobox "推理强度（可选）"
+  - generic: 模型服务地址（留空使用原生配置）
+  - textbox "模型服务地址（留空使用原生配置）":
+    - /placeholder: 按服务提供的 Base URL 原样填写
+  - paragraph: Codex 使用 Responses；Claude 使用 Messages；CodeBuddy 按其原生协议。不会转换协议或自动追加 URL 后缀。
+  - checkbox "允许此地址使用 HTTP 明文传输（凭据和内容不加密）"
+  - text: 允许此地址使用 HTTP 明文传输（凭据和内容不加密）
+  - generic: 凭据环境变量名，不填写密钥
+  - textbox "凭据环境变量名，不填写密钥":
+    - /placeholder: MY_MODEL_API_KEY
+  - paragraph: 请在实际原生终端环境设置该变量。macOS Terminal 或已有终端服务不一定继承工作台的临时环境变量；缺少凭据会在调用前停止，不自动登录。
+  - generic: 原生程序路径（可选）
+  - textbox "原生程序路径（可选）"
+  - paragraph: 默认从 PATH 发现。此交互启动器不执行 .cmd/.bat 包装，需提供真实可执行程序；不会自动安装 Harness。
+  - button "查询模型选项（不调用模型）"
+  - paragraph
+  - generic: 本次任务 / 要求（可选，仅交给本会话）
+  - textbox "本次任务 / 要求（可选，仅交给本会话）":
+    - /placeholder: 例如：只审查登录模块，不修改文件。
+  - paragraph: 点击启动后，填写的任务可能立即调用模型。权限仍由原生 CLI 交互确认，不自动启用完全访问。
+  - button "保存并打开原生 CLI"

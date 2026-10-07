@@ -1,0 +1,8 @@
+{
+  "observed_at": "2026-10-07T01:20:31.000975+08:00",
+  "path": "H05-second-install-ui.png",
+  "actual_view": "Second-install Agent cards; screenshot was captured before asynchronous dialog paint. Does not visually prove project name or paths.",
+  "token_visible": false,
+  "project_persistence_proof": "H05-second-install-ui.txt DOM shows dialog values; H06 public CLI readback proves project/revision/root. No service restarted to retake screenshot.",
+  "correction_to": "H12-final-public-hygiene screenshot_visual_check wording; byte token-match count remains valid."
+}

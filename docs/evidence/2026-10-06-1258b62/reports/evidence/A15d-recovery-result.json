@@ -1,0 +1,8 @@
+{
+  "time": "2026-10-06T00:28:19.373023+08:00",
+  "status": "PASS_REAL",
+  "controlled_fault_injection": true,
+  "result": "same verified request resumed in original directory; sentinel preserved",
+  "target": "${E2E_ROOT}\\disposable\\recovery-app",
+  "sentinel_sha256": "6e5d22608a90c3f6ecf34180f472e972da25fa1c6567c72a1504249d8a77a063"
+}

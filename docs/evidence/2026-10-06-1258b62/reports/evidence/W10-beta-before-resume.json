@@ -1,0 +1,18 @@
+{
+  "started_at": "2026-10-06T23:55:17.106169+08:00",
+  "finished_at": "2026-10-06T23:55:18.171954+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "agent",
+    "show",
+    "e2e-beta"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"id\": \"e2e-beta\", \"name\": \"验收通信目标\", \"description\": \"仅用于本轮后续通信验收；尚未分派真实模型任务。\", \"branch\": \"instance/e2e-beta\", \"archived\": false, \"current\": null, \"has_run\": true, \"handoff\": \"hf06398581b804f2c9da2134133b8d006\", \"created_at\": \"2026-10-05T18:20:15.821669+00:00\", \"creation\": {\"request_id\": \"e2e-beta-create-001\", \"fingerprint\": \"388fb84e9144c26abc72556e7f6c82da4868081ea5b23c4c67a04c92ddb28160\"}, \"revision\": \"bdea81d2970ecee4370eddd330a2950a092e6ffd\", \"binding\": null, \"directories\": [\"${E2E_ROOT}\\\\data\\\\workspace-home\\\\instances\\\\e2e-local\\\\e2e-beta\"], \"runtime\": {\"pid\": 260580, \"binding\": \"bf06398581b804f2c9da2134133b8d006\", \"observed_at\": \"2026-10-06T15:41:55.923063+00:00\", \"state\": \"released\", \"handoff\": \"hf06398581b804f2c9da2134133b8d006\", \"runner_alive\": false}, \"watch\": {\"enabled\": false, \"reason\": \"handoff\"}, \"configured_kind\": \"codex\"}}",
+  "stderr": ""
+}

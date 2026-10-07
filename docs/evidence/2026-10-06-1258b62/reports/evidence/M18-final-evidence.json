@@ -1,0 +1,468 @@
+{
+  "time": "2026-10-06T02:45:28.900567+08:00",
+  "instances": {
+    "e2e-alpha": {
+      "state": {
+        "id": "e2e-alpha",
+        "name": "验收读取实例",
+        "description": "这是明确授权的本轮验收任务。通过平台asset.read读取notes/source.md的随机标记，通过asset.write在notes/result.md写下该标记并保存真实checkpoint。简短回复后等待输入。仅使用平台工具，不运行shell、不联网、不发Message、不创建Work或后继，不委派子任务。",
+        "branch": "instance/e2e-alpha",
+        "archived": false,
+        "current": "b75712931632c4f8da3a948ca9cb395f6",
+        "has_run": true,
+        "handoff": null,
+        "created_at": "2026-10-05T18:20:08.717573+00:00",
+        "creation": {
+          "request_id": "e2e-alpha-create-001",
+          "fingerprint": "706a57f05a54c9b9b74853f1c50a285e16803078edce17650b98131d551b0f92"
+        },
+        "revision": "eba55bd89d94a14c5f61fbeddd44098633d38c20",
+        "binding": {
+          "id": "b75712931632c4f8da3a948ca9cb395f6",
+          "agent": "e2e-alpha",
+          "kind": "codebuddy",
+          "phase": "active",
+          "session": "01a10d5f-f98b-7300-a6f0-b73b738b5ed2",
+          "created_at": "2026-10-05T18:42:28.752459+00:00",
+          "handoff": "h89818d3a91bf4545b646a68571aaf6b8"
+        },
+        "directories": [
+          "${E2E_ROOT}\\data\\workspace-home\\instances\\e2e-local\\e2e-alpha"
+        ],
+        "runtime": {
+          "pid": 233836,
+          "binding": "b75712931632c4f8da3a948ca9cb395f6",
+          "observed_at": "2026-10-05T18:44:17.476931+00:00",
+          "state": "monitor_stopped",
+          "entry_still_owned": true,
+          "runner_alive": false
+        },
+        "watch": {
+          "enabled": false,
+          "reason": "handoff"
+        },
+        "configured_kind": "codebuddy"
+      },
+      "notes": {
+        "communication.md": {
+          "sha256": "3fbf4b0a0394086f3a2a7f34b92cf2a090b121e23a39dd0c92e9b46a1b095465",
+          "bytes": 705,
+          "text": "# Communication record\n\n- Current binding: `b89818d3a91bf4545b646a68571aaf6b8`.\n- Sent request: `m-e2e-luna-request-001` to e2e-beta.\n- Received reply: `m-e2e-luna-reply-001` from e2e-beta; it references `m-e2e-luna-request-001`.\n- Verified marker in reply: `AW-E2E-d723faeb0af548dab83cadb7b8327110`.\n- Actual reply content: “M test reply: received marker AW-E2E-d723faeb0af548dab83cadb7b8327110 and acknowledged the original notification.”\n- ACK: receiving the reply published `ack-m-e2e-luna-reply-001` for `m-e2e-luna-reply-001`; state `published`, receiver e2e-alpha, binding above.\n- Historical inconsistency: preserve older `e2e-alpha-second-stop-001` as submitted/unknown; it was not replayed.\n"
+        },
+        "result.md": {
+          "sha256": "207c643a6d338891f16460ec3ef0f38b41f81dddd107386bd5928ba6e830d2a3",
+          "bytes": 55,
+          "text": "本轮标记：AW-E2E-d723faeb0af548dab83cadb7b8327110\n"
+        },
+        "source.md": {
+          "sha256": "5d929553ae6a3195308d2577f82e71b6ad60e27fd1e3bb8289fa133af5d6e8c7",
+          "bytes": 160,
+          "text": "# 纸飞机计数器（虚构验收资料）\n\n本目录不属于真实产品，仅供短读取测试。\n\n本轮标记：AW-E2E-d723faeb0af548dab83cadb7b8327110\n"
+        }
+      },
+      "inputs": [
+        {
+          "id": "boot-b75712931632c4f8da3a948ca9cb395f6",
+          "binding": "b75712931632c4f8da3a948ca9cb395f6",
+          "purpose": "initial",
+          "state": "failed",
+          "sequence": 0,
+          "result": {
+            "turn": {
+              "id": "s0b8479d871e943afb628c2277efa3a68"
+            },
+            "id_source": "local_submission",
+            "session": null
+          }
+        },
+        {
+          "id": "boot-b89818d3a91bf4545b646a68571aaf6b8",
+          "binding": "b89818d3a91bf4545b646a68571aaf6b8",
+          "purpose": "initial",
+          "state": "completed",
+          "sequence": 3,
+          "result": {
+            "turn": {
+              "id": "01a10d58-5b17-7183-8701-691d11eb2758",
+              "items": [],
+              "itemsView": "notLoaded",
+              "status": "inProgress",
+              "error": null,
+              "startedAt": null,
+              "completedAt": null,
+              "durationMs": null
+            }
+          }
+        },
+        {
+          "id": "boot-bdd3cb0600def4dc6874145a6f5db8385",
+          "binding": "bdd3cb0600def4dc6874145a6f5db8385",
+          "purpose": "initial",
+          "state": "completed",
+          "sequence": 1,
+          "result": {
+            "turn": {
+              "id": "01a10d4c-3982-7711-8f46-067827ec9089",
+              "items": [],
+              "itemsView": "notLoaded",
+              "status": "inProgress",
+              "error": null,
+              "startedAt": null,
+              "completedAt": null,
+              "durationMs": null
+            }
+          }
+        },
+        {
+          "id": "e2e-alpha-second-stop-001",
+          "binding": "bdd3cb0600def4dc6874145a6f5db8385",
+          "purpose": "user",
+          "state": "submitted",
+          "sequence": 2,
+          "result": {
+            "turn": {
+              "id": "01a10d4e-19b4-7032-8c1f-a54d97b10a40",
+              "items": [],
+              "itemsView": "notLoaded",
+              "status": "inProgress",
+              "error": null,
+              "startedAt": null,
+              "completedAt": null,
+              "durationMs": null
+            }
+          }
+        },
+        {
+          "id": "M10-alpha-reply-stop",
+          "binding": "b89818d3a91bf4545b646a68571aaf6b8",
+          "purpose": "user",
+          "state": "submitted",
+          "sequence": 4,
+          "result": {
+            "turn": {
+              "id": "01a10d5c-1134-7a40-939c-8a07eee2f26a",
+              "items": [],
+              "itemsView": "notLoaded",
+              "status": "inProgress",
+              "error": null,
+              "startedAt": null,
+              "completedAt": null,
+              "durationMs": null
+            }
+          }
+        }
+      ]
+    },
+    "e2e-beta": {
+      "state": {
+        "id": "e2e-beta",
+        "name": "验收通信目标",
+        "description": "仅用于本轮后续通信验收；尚未分派真实模型任务。",
+        "branch": "instance/e2e-beta",
+        "archived": false,
+        "current": null,
+        "has_run": true,
+        "handoff": "h99b412cfc3794314a231f5090250ac1f",
+        "created_at": "2026-10-05T18:20:15.821669+00:00",
+        "creation": {
+          "request_id": "e2e-beta-create-001",
+          "fingerprint": "388fb84e9144c26abc72556e7f6c82da4868081ea5b23c4c67a04c92ddb28160"
+        },
+        "revision": "0fb282666535c4233ad0570dc209bd2a62381142",
+        "binding": null,
+        "directories": [
+          "${E2E_ROOT}\\data\\workspace-home\\instances\\e2e-local\\e2e-beta"
+        ],
+        "runtime": {
+          "pid": 237612,
+          "binding": "b99b412cfc3794314a231f5090250ac1f",
+          "observed_at": "2026-10-05T18:38:53.021058+00:00",
+          "state": "released",
+          "handoff": "h99b412cfc3794314a231f5090250ac1f",
+          "runner_alive": false
+        },
+        "watch": {
+          "enabled": false,
+          "reason": "handoff"
+        },
+        "configured_kind": "codex"
+      },
+      "notes": {
+        "received.md": {
+          "sha256": "c43c7189add7a97f0b0a7c4d3cd4946cff6cc507ead582a713fd390449ce12e8",
+          "bytes": 125,
+          "text": "Received m-e2e-luna-request-001 marker AW-E2E-d723faeb0af548dab83cadb7b8327110; ACK and reply m-e2e-luna-reply-001 published."
+        }
+      },
+      "inputs": [
+        {
+          "id": "boot-b99b412cfc3794314a231f5090250ac1f",
+          "binding": "b99b412cfc3794314a231f5090250ac1f",
+          "purpose": "initial",
+          "state": "completed",
+          "sequence": 1,
+          "result": {
+            "turn": {
+              "id": "01a10d59-ad8a-7da2-99b6-91a795960465",
+              "items": [],
+              "itemsView": "notLoaded",
+              "status": "inProgress",
+              "error": null,
+              "startedAt": null,
+              "completedAt": null,
+              "durationMs": null
+            }
+          }
+        },
+        {
+          "id": "M09-beta-stop",
+          "binding": "b99b412cfc3794314a231f5090250ac1f",
+          "purpose": "user",
+          "state": "submitted",
+          "sequence": 2,
+          "result": {
+            "turn": {
+              "id": "01a10d5c-0824-72f1-87ac-87e9b98f2262",
+              "items": [],
+              "itemsView": "notLoaded",
+              "status": "inProgress",
+              "error": null,
+              "startedAt": null,
+              "completedAt": null,
+              "durationMs": null
+            }
+          }
+        }
+      ]
+    }
+  },
+  "messages": {
+    "request": {
+      "message": {
+        "id": "m-e2e-luna-request-001",
+        "from": {
+          "workspace": "workspace:setupc43bab4966e34765851333d07122cdfd",
+          "agent": "e2e-alpha"
+        },
+        "to": {
+          "workspace": "workspace:setupc43bab4966e34765851333d07122cdfd",
+          "agent": "e2e-beta"
+        },
+        "created_at": "2026-10-05T18:34:43.263831+00:00",
+        "message_refs": [],
+        "delivery": "normal",
+        "content": "M test: read marker AW-E2E-d723faeb0af548dab83cadb7b8327110; acknowledge by message.receive and send one reply."
+      },
+      "ack": {
+        "message_id": "m-e2e-luna-request-001"
+      }
+    },
+    "reply": {
+      "message": {
+        "id": "m-e2e-luna-reply-001",
+        "from": {
+          "workspace": "workspace:setupc43bab4966e34765851333d07122cdfd",
+          "agent": "e2e-beta"
+        },
+        "to": {
+          "workspace": "workspace:setupc43bab4966e34765851333d07122cdfd",
+          "agent": "e2e-alpha"
+        },
+        "created_at": "2026-10-05T18:36:09.275760+00:00",
+        "message_refs": [
+          "m-e2e-luna-request-001"
+        ],
+        "delivery": "normal",
+        "content": "M test reply: received marker AW-E2E-d723faeb0af548dab83cadb7b8327110 and acknowledged the original notification."
+      },
+      "ack": {
+        "message_id": "m-e2e-luna-reply-001"
+      }
+    }
+  },
+  "native_codex_turns": [
+    {
+      "agent": "e2e-alpha",
+      "binding": "b89818d3a91bf4545b646a68571aaf6b8",
+      "method": "turn/started",
+      "thread": "01a10d58-3ea5-7753-9956-10acbe8f175b",
+      "turn": "01a10d58-5b17-7183-8701-691d11eb2758",
+      "status": "inProgress"
+    },
+    {
+      "agent": "e2e-alpha",
+      "binding": "b89818d3a91bf4545b646a68571aaf6b8",
+      "method": "turn/completed",
+      "thread": "01a10d58-3ea5-7753-9956-10acbe8f175b",
+      "turn": "01a10d58-5b17-7183-8701-691d11eb2758",
+      "status": "completed"
+    },
+    {
+      "agent": "e2e-alpha",
+      "binding": "b89818d3a91bf4545b646a68571aaf6b8",
+      "method": "turn/started",
+      "thread": "01a10d58-3ea5-7753-9956-10acbe8f175b",
+      "turn": "01a10d5c-1134-7a40-939c-8a07eee2f26a",
+      "status": "inProgress"
+    },
+    {
+      "agent": "e2e-alpha",
+      "binding": "b89818d3a91bf4545b646a68571aaf6b8",
+      "method": "turn/completed",
+      "thread": "01a10d58-3ea5-7753-9956-10acbe8f175b",
+      "turn": "01a10d5c-1134-7a40-939c-8a07eee2f26a",
+      "status": "completed"
+    },
+    {
+      "agent": "e2e-alpha",
+      "binding": "bdd3cb0600def4dc6874145a6f5db8385",
+      "method": "turn/started",
+      "thread": "01a10d4c-1d08-78d2-b234-4a3832669356",
+      "turn": "01a10d4c-3982-7711-8f46-067827ec9089",
+      "status": "inProgress"
+    },
+    {
+      "agent": "e2e-alpha",
+      "binding": "bdd3cb0600def4dc6874145a6f5db8385",
+      "method": "turn/completed",
+      "thread": "01a10d4c-1d08-78d2-b234-4a3832669356",
+      "turn": "01a10d4c-3982-7711-8f46-067827ec9089",
+      "status": "completed"
+    },
+    {
+      "agent": "e2e-alpha",
+      "binding": "bdd3cb0600def4dc6874145a6f5db8385",
+      "method": "turn/started",
+      "thread": "01a10d4c-1d08-78d2-b234-4a3832669356",
+      "turn": "01a10d4e-19b4-7032-8c1f-a54d97b10a40",
+      "status": "inProgress"
+    },
+    {
+      "agent": "e2e-alpha",
+      "binding": "bdd3cb0600def4dc6874145a6f5db8385",
+      "method": "turn/completed",
+      "thread": "01a10d4c-1d08-78d2-b234-4a3832669356",
+      "turn": "01a10d4e-19b4-7032-8c1f-a54d97b10a40",
+      "status": "completed"
+    },
+    {
+      "agent": "e2e-beta",
+      "binding": "b99b412cfc3794314a231f5090250ac1f",
+      "method": "turn/started",
+      "thread": "01a10d59-9416-7631-b530-a9387f8003f8",
+      "turn": "01a10d59-ad8a-7da2-99b6-91a795960465",
+      "status": "inProgress"
+    },
+    {
+      "agent": "e2e-beta",
+      "binding": "b99b412cfc3794314a231f5090250ac1f",
+      "method": "turn/completed",
+      "thread": "01a10d59-9416-7631-b530-a9387f8003f8",
+      "turn": "01a10d59-ad8a-7da2-99b6-91a795960465",
+      "status": "completed"
+    },
+    {
+      "agent": "e2e-beta",
+      "binding": "b99b412cfc3794314a231f5090250ac1f",
+      "method": "turn/started",
+      "thread": "01a10d59-9416-7631-b530-a9387f8003f8",
+      "turn": "01a10d5c-0824-72f1-87ac-87e9b98f2262",
+      "status": "inProgress"
+    },
+    {
+      "agent": "e2e-beta",
+      "binding": "b99b412cfc3794314a231f5090250ac1f",
+      "method": "turn/completed",
+      "thread": "01a10d59-9416-7631-b530-a9387f8003f8",
+      "turn": "01a10d5c-0824-72f1-87ac-87e9b98f2262",
+      "status": "completed"
+    }
+  ],
+  "sdk_results": [
+    {
+      "agent": "e2e-alpha",
+      "binding": "b75712931632c4f8da3a948ca9cb395f6",
+      "observed_at": "2026-10-05T18:42:38.806883+00:00",
+      "native_type": "AssistantMessage",
+      "local_submission_id": "s0b8479d871e943afb628c2277efa3a68",
+      "event": {
+        "content": [
+          {
+            "text": "Authentication required. Please use /login command to sign in to your account"
+          }
+        ],
+        "model": "hunyuan-2.0-instruct-ioa",
+        "parent_tool_use_id": null,
+        "error": null
+      }
+    },
+    {
+      "agent": "e2e-alpha",
+      "binding": "b75712931632c4f8da3a948ca9cb395f6",
+      "observed_at": "2026-10-05T18:42:38.806883+00:00",
+      "native_type": "ResultMessage",
+      "local_submission_id": "s0b8479d871e943afb628c2277efa3a68",
+      "event": {
+        "subtype": "error_during_execution",
+        "duration_ms": 41,
+        "duration_api_ms": 30,
+        "is_error": true,
+        "num_turns": 2,
+        "session_id": "01a10d5f-f98b-7300-a6f0-b73b738b5ed2",
+        "stop_reason": null,
+        "total_cost_usd": 0,
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 0
+        },
+        "result": null,
+        "structured_output": null,
+        "errors": [
+          "Authentication required. Please use /login command to sign in to your account"
+        ]
+      },
+      "completion": {
+        "id": "s0b8479d871e943afb628c2277efa3a68",
+        "status": "failed"
+      }
+    }
+  ],
+  "ack_receipts": {
+    "request": {
+      "id": "ack-m-e2e-luna-request-001",
+      "state": "published",
+      "receiver": "e2e-beta",
+      "binding": "b99b412cfc3794314a231f5090250ac1f",
+      "payload": {
+        "message_id": "m-e2e-luna-request-001"
+      }
+    },
+    "reply": {
+      "id": "ack-m-e2e-luna-reply-001",
+      "state": "published",
+      "receiver": "e2e-alpha",
+      "binding": "b89818d3a91bf4545b646a68571aaf6b8",
+      "payload": {
+        "message_id": "m-e2e-luna-reply-001"
+      }
+    }
+  },
+  "same_codex_relay": {
+    "old_binding": "bdd3cb0600def4dc6874145a6f5db8385",
+    "new_binding": "b89818d3a91bf4545b646a68571aaf6b8",
+    "old_checkpoint_in_native_boot": true,
+    "old_checkpoint_summary_in_native_boot": true,
+    "old_owner_released_evidence": "R12-alpha-final-show.json",
+    "new_owner_reads_old_notes_evidence": "M05-alpha-completion.json",
+    "new_checkpoint": {
+      "id": "c5f7451ea85324705a183fd4bae1e2358",
+      "created_at": "2026-10-05T18:35:02.551118+00:00",
+      "summary": "Batch M marker verification and message send",
+      "content": "Verified current binding b89818d3a91bf4545b646a68571aaf6b8 via agent.show. Read notes/result.md and confirmed marker AW-E2E-d723faeb0af548dab83cadb7b8327110. Preserved prior request e2e-alpha-second-stop-001 as historical unknown; did not replay it. Sent exactly one normal message to e2e-beta with request_id m-e2e-luna-request-001; platform returned real message ID m-e2e-luna-request-001, state published. No receive/ACK as beta, no Watch, no stop.",
+      "record_refs": [],
+      "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+    }
+  }
+}

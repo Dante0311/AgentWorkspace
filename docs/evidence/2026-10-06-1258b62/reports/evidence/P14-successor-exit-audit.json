@@ -1,0 +1,152 @@
+[
+  {
+    "pid": 272160,
+    "parent": 199320,
+    "alive": false,
+    "executable": "${E2E_ROOT}\\app\\Scripts\\python.exe"
+  },
+  {
+    "pid": 273344,
+    "parent": 272160,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 262896,
+    "parent": 272160,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 196664,
+    "parent": 262896,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex.exe"
+  },
+  {
+    "pid": 274952,
+    "parent": 196664,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_repl.exe"
+  },
+  {
+    "pid": 283896,
+    "parent": 196664,
+    "alive": false,
+    "executable": "${HOST_PATH}/blender-mcp-server.exe"
+  },
+  {
+    "pid": 106436,
+    "parent": 274952,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 259260,
+    "parent": 196664,
+    "alive": false,
+    "executable": "${HOST_PATH}/blender-mcp-server.exe"
+  },
+  {
+    "pid": 253032,
+    "parent": 283896,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 266280,
+    "parent": 259260,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 271888,
+    "parent": 196664,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node.exe"
+  },
+  {
+    "pid": 258368,
+    "parent": 283896,
+    "alive": false,
+    "executable": "${HOST_PATH}/python.exe"
+  },
+  {
+    "pid": 272720,
+    "parent": 259260,
+    "alive": false,
+    "executable": "${HOST_PATH}/python.exe"
+  },
+  {
+    "pid": 250536,
+    "parent": 258368,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 283180,
+    "parent": 272720,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 256860,
+    "parent": 271888,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 274664,
+    "parent": 271888,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_repl.exe"
+  },
+  {
+    "pid": 219092,
+    "parent": 262896,
+    "alive": false,
+    "executable": "${E2E_ROOT}\\app\\Scripts\\python.exe"
+  },
+  {
+    "pid": 42520,
+    "parent": 219092,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 238568,
+    "parent": 42520,
+    "alive": false,
+    "executable": "${E2E_ROOT}\\app\\Scripts\\python.exe"
+  },
+  {
+    "pid": 281952,
+    "parent": 238568,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 264828,
+    "parent": 196664,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex-code-mode-host.exe"
+  },
+  {
+    "pid": 197996,
+    "parent": 264828,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 269576,
+    "parent": 262896,
+    "alive": false,
+    "executable": "${HOST_PATH}/Program Files\\Git\\cmd\\git.exe"
+  },
+  {
+    "pid": 222832,
+    "parent": 269576,
+    "alive": false,
+    "executable": "${HOST_PATH}/Program Files\\Git\\mingw64\\bin\\git.exe"
+  }
+]

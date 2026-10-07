@@ -1,0 +1,32 @@
+{
+  "time": "2026-10-07T00:08:24.849787+08:00",
+  "max_actual_turns": 6,
+  "model": "gpt-6-luna",
+  "effort": "low",
+  "actual_started": 6,
+  "actual_completed": 6,
+  "reserved_initial": 1,
+  "external_outbound_max": 20,
+  "automatic_paid_retries": 0,
+  "stop_reserve": 1,
+  "outbound_requests": 2,
+  "outbound_provider_accepted": 2,
+  "turn_ids": [
+    "01a111d4-d38f-7fe1-abc8-3f4cafe01c81",
+    "01a111d5-c76b-7830-ac17-77c898f78294",
+    "01a111e0-468a-78a0-b9bc-4791369cfd7d",
+    "01a111ed-7f40-7f91-b24b-4a77e03614e7",
+    "01a111f0-836b-7583-94a6-0417bfdeb80d",
+    "01a111f0-da6b-74e1-a00d-a64ff35ee7a2"
+  ],
+  "execution_closed": true,
+  "unused_authorized_turns": 0,
+  "reserved_unconsumed_turns": 0,
+  "full_E2E": "PASS_REAL_SCOPED_BUSINESS_CHAIN_WITH_MANAGEMENT_CLEANUP",
+  "no_automatic_continuation": true,
+  "remaining_resume_max": 3,
+  "final_model_self_stop_completed": false,
+  "cleanup_operator": "management",
+  "late_extra_stop_turn_authorized": true,
+  "late_extra_authorization_used": false
+}

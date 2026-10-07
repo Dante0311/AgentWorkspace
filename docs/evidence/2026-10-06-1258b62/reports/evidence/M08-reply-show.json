@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-06T02:37:24.215815+08:00",
+  "finished_at": "2026-10-06T02:37:25.215842+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "message",
+    "show",
+    "--id",
+    "m-e2e-luna-reply-001"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"message\": {\"id\": \"m-e2e-luna-reply-001\", \"from\": {\"workspace\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"agent\": \"e2e-beta\"}, \"to\": {\"workspace\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"agent\": \"e2e-alpha\"}, \"created_at\": \"2026-10-05T18:36:09.275760+00:00\", \"message_refs\": [\"m-e2e-luna-request-001\"], \"delivery\": \"normal\", \"content\": \"M test reply: received marker AW-E2E-d723faeb0af548dab83cadb7b8327110 and acknowledged the original notification.\"}, \"ack\": null}}",
+  "stderr": ""
+}

@@ -1,0 +1,117 @@
+{
+  "time": "2026-10-06T00:25:34.145200+08:00",
+  "url": "http://127.0.0.1:59076",
+  "checks": [
+    {
+      "time": "2026-10-06T00:25:34.067825+08:00",
+      "method": "GET",
+      "path": "/api/state",
+      "expected": 401,
+      "actual": 401,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "application/json; charset=utf-8",
+      "body": "{\"error\": \"A local bearer token is required.\"}"
+    },
+    {
+      "time": "2026-10-06T00:25:34.068830+08:00",
+      "method": "GET",
+      "path": "/api/commands",
+      "expected": 401,
+      "actual": 401,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "application/json; charset=utf-8",
+      "body": "{\"error\": \"A local bearer token is required.\"}"
+    },
+    {
+      "time": "2026-10-06T00:25:34.080564+08:00",
+      "method": "POST",
+      "path": "/api/execute",
+      "expected": 401,
+      "actual": 401,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "application/json; charset=utf-8",
+      "body": "{\"error\": \"A local bearer token is required.\"}"
+    },
+    {
+      "time": "2026-10-06T00:25:34.082565+08:00",
+      "method": "GET",
+      "path": "/api/state",
+      "expected": 401,
+      "actual": 401,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "application/json; charset=utf-8",
+      "body": "{\"error\": \"A local bearer token is required.\"}"
+    },
+    {
+      "time": "2026-10-06T00:25:34.083566+08:00",
+      "method": "GET",
+      "path": "/api/state",
+      "expected": 403,
+      "actual": 403,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": "https://example.invalid",
+      "content_type": "application/json; charset=utf-8",
+      "body": "{\"error\": \"Cross-origin control is not allowed.\"}"
+    },
+    {
+      "time": "2026-10-06T00:25:34.099603+08:00",
+      "method": "GET",
+      "path": "/api/state",
+      "expected": 200,
+      "actual": 200,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "application/json; charset=utf-8",
+      "body": "{\"ok\": true, \"result\": {\"installation_id\": \"host-171b0e66bde3410c887638c80cb8bf4a\", \"workspaces\": [], \"agents\": [], \"errors\": []}}"
+    },
+    {
+      "time": "2026-10-06T00:25:34.116127+08:00",
+      "method": "GET",
+      "path": "/capabilities",
+      "expected": 200,
+      "actual": 200,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "text/plain; charset=utf-8",
+      "body": "[static package page: 2405 characters]"
+    },
+    {
+      "time": "2026-10-06T00:25:34.117120+08:00",
+      "method": "GET",
+      "path": "/setup",
+      "expected": 200,
+      "actual": 200,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "text/html; charset=utf-8",
+      "body": "[static package page: 12101 characters]"
+    },
+    {
+      "time": "2026-10-06T00:25:34.128172+08:00",
+      "method": "GET",
+      "path": "/sessions",
+      "expected": 200,
+      "actual": 200,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "text/html; charset=utf-8",
+      "body": "[static package page: 8024 characters]"
+    },
+    {
+      "time": "2026-10-06T00:25:34.145200+08:00",
+      "method": "GET",
+      "path": "/",
+      "expected": 200,
+      "actual": 200,
+      "authorization": "[REDACTED_CREDENTIAL]",
+      "origin": null,
+      "content_type": "text/html; charset=utf-8",
+      "body": "[static package page: 12101 characters]"
+    }
+  ],
+  "all_expected": true
+}

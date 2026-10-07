@@ -1,0 +1,23 @@
+{
+  "id": "g-maintainer-phase3-revoked-stop-001",
+  "binding": "b03a2ce413aa24da7bb85ab6247d8930e",
+  "text": "本轮临时grant已通过正式管理入口撤销，commands=[]、targets=[]。请按当前G任务第三阶段，对e2e-q-fork的notes/g-maintenance-scope.md仅尝试一次asset.write替换，必须使用刚才真实回读revision=0dd0390cf8293c2a337b718217b1690aac44453d5bbb2d882068adafe6d36a5f，预期权限拒绝，不能重试或绕过。然后仅在自己目录保存真实三阶段总结/checkpoint并agent.stop。既有sync-idle回执为applied、verification=degraded，它是正常空闲同步，不是历史异常恢复。全业务只用aw_execute，不碰其他实例、原记录或OS。",
+  "delivery": "normal",
+  "purpose": "user",
+  "state": "submitted",
+  "created_at": "2026-10-06T17:04:46.073085+00:00",
+  "sequence": 3,
+  "attempted_at": "2026-10-06T17:04:46.922830+00:00",
+  "result": {
+    "turn": {
+      "id": "01a1122c-c753-7ed3-9d13-e085bce9d34f",
+      "items": [],
+      "itemsView": "notLoaded",
+      "status": "inProgress",
+      "error": null,
+      "startedAt": null,
+      "completedAt": null,
+      "durationMs": null
+    }
+  }
+}

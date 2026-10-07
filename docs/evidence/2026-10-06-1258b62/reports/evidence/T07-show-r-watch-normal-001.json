@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-07T00:47:35.725468+08:00",
+  "finished_at": "2026-10-07T00:47:36.608653+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "message",
+    "show",
+    "--id",
+    "r-watch-normal-001"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"message\": {\"id\": \"r-watch-normal-001\", \"from\": {\"workspace\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"agent\": \"e2e-q-fork\"}, \"to\": {\"workspace\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"agent\": \"e2e-beta\"}, \"created_at\": \"2026-10-06T16:46:32.278297+00:00\", \"message_refs\": [], \"delivery\": \"normal\", \"content\": \"明确T批测试任务，第一段：虚构交接记录A。请在自身收到此通知的轮次记录第一段，等待下一条通知。\"}, \"ack\": null}}",
+  "stderr": ""
+}

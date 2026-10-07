@@ -1,0 +1,24 @@
+{
+  "started_at": "2026-10-06T02:33:32.309401+08:00",
+  "finished_at": "2026-10-06T02:33:32.577945+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "asset",
+    "write",
+    "e2e-beta",
+    "--path",
+    "AGENTS.md",
+    "--revision",
+    "6996e625d47201c517b1e5d827f1bc201b6c136ef469f202e20c2d6077ffabeb",
+    "--content",
+    "# Explicit E2E communication recipient task — batch M\nThis user's current authorized test task supersedes the earlier placeholder description. Use aw_execute only. No shell, network, extra tasks, Watch, polling loop, Work, successor, or delegation.\nRead AGENTS.md and platform message guidance. Receive the single real Message m-e2e-luna-request-001 using message.receive as your own true current binding. This operation publishes ACK; controller must not do it for you. Verify the actual content marker AW-E2E-d723faeb0af548dab83cadb7b8327110. Save notes/received.md with marker and request ID.\nSend exactly one normal reply to e2e-alpha using message.send with request_id=\"m-e2e-luna-reply-001\", message_refs=[\"m-e2e-luna-request-001\"], content=\"M test reply: received marker AW-E2E-d723faeb0af548dab83cadb7b8327110 and acknowledged the original notification.\". Save checkpoint with actual read/ACK/reply results, then agent.stop using your current binding and that checkpoint. Reply briefly and finish. No new tasks or successor.\n"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"path\": \"AGENTS.md\", \"revision\": \"f637fe0d3df8e2351f975aa95b24e998e3320d0042e7ca09a418e4e24d699f46\", \"saved\": \"local\"}}",
+  "stderr": ""
+}

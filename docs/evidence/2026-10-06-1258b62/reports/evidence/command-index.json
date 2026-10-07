@@ -1,0 +1,236 @@
+{
+  "time": "2026-10-06T00:30:41.770971+08:00",
+  "commands": [
+    {
+      "evidence": "A01-isolated-install.json",
+      "argv": [
+        "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "${E2E_ROOT}\\dist\\install.py",
+        "${E2E_ROOT}\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
+        "--destination",
+        "${E2E_ROOT}\\app"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:23:55.637333+08:00",
+      "finished_at": "2026-10-06T00:24:01.895196+08:00"
+    },
+    {
+      "evidence": "A02-version.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "--version"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:24:01.895196+08:00",
+      "finished_at": "2026-10-06T00:24:02.178872+08:00"
+    },
+    {
+      "evidence": "A03-help.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "--help"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:24:02.179875+08:00",
+      "finished_at": "2026-10-06T00:24:02.468821+08:00"
+    },
+    {
+      "evidence": "A04-scan.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "call",
+        "setup.scan"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:24:02.469824+08:00",
+      "finished_at": "2026-10-06T00:24:02.820184+08:00"
+    },
+    {
+      "evidence": "A05-workspace-list.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "workspace",
+        "list"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:24:02.820184+08:00",
+      "finished_at": "2026-10-06T00:24:03.120717+08:00"
+    },
+    {
+      "evidence": "A06-installed-origin.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\python.exe",
+        "-c",
+        "import agent_workspace,importlib.metadata as m,json; d=m.distribution('git-native-agent-workspace'); print(json.dumps({'module':agent_workspace.__file__,'version':d.version,'direct_url':json.loads(d.read_text('direct_url.json'))},indent=2))"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:24:03.121720+08:00",
+      "finished_at": "2026-10-06T00:24:03.286855+08:00"
+    },
+    {
+      "evidence": "A07-service-start.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "setup",
+        "--port",
+        "0",
+        "--open"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": null,
+      "started_at": "2026-10-06T00:25:33.423985+08:00",
+      "finished_at": null
+    },
+    {
+      "evidence": "A13-identical-install-repeat.json",
+      "argv": [
+        "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "${E2E_ROOT}\\dist\\install.py",
+        "${E2E_ROOT}\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
+        "--destination",
+        "${E2E_ROOT}\\app"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:28:08.523015+08:00",
+      "finished_at": "2026-10-06T00:28:08.963378+08:00"
+    },
+    {
+      "evidence": "A15a-install-interruption.json",
+      "argv": [
+        "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "${E2E_ROOT}\\dist\\install.py",
+        "${E2E_ROOT}\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
+        "--destination",
+        "${E2E_ROOT}\\disposable\\recovery-app"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 1,
+      "started_at": "2026-10-06T00:28:08.971397+08:00",
+      "finished_at": "2026-10-06T00:28:10.178607+08:00"
+    },
+    {
+      "evidence": "A15b-install-resume.json",
+      "argv": [
+        "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "${E2E_ROOT}\\dist\\install.py",
+        "${E2E_ROOT}\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
+        "--destination",
+        "${E2E_ROOT}\\disposable\\recovery-app"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:28:10.179607+08:00",
+      "finished_at": "2026-10-06T00:28:18.438254+08:00"
+    },
+    {
+      "evidence": "A15c-resumed-version.json",
+      "argv": [
+        "${E2E_ROOT}\\disposable\\recovery-app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "--version"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:28:18.439245+08:00",
+      "finished_at": "2026-10-06T00:28:19.371950+08:00"
+    },
+    {
+      "evidence": "A16-service-stop.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "setup",
+        "--port",
+        "0",
+        "--open"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 1,
+      "started_at": "2026-10-06T00:25:33.423985+08:00",
+      "finished_at": null
+    },
+    {
+      "evidence": "A18-final-workspace-list.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "workspace",
+        "list"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:30:40.388845+08:00",
+      "finished_at": "2026-10-06T00:30:40.727686+08:00"
+    },
+    {
+      "evidence": "A19-final-pip-check.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\python.exe",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:30:40.727686+08:00",
+      "finished_at": "2026-10-06T00:30:41.265754+08:00"
+    },
+    {
+      "evidence": "A20-final-packages.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\python.exe",
+        "-m",
+        "pip",
+        "list",
+        "--format=json"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 0,
+      "started_at": "2026-10-06T00:30:41.266272+08:00",
+      "finished_at": "2026-10-06T00:30:41.760898+08:00"
+    },
+    {
+      "evidence": "service-state.json",
+      "argv": [
+        "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+        "--home",
+        "${E2E_ROOT}\\data\\ordinary-home",
+        "setup",
+        "--port",
+        "0",
+        "--open"
+      ],
+      "cwd": "${E2E_ROOT}",
+      "exit_code": 1,
+      "started_at": "2026-10-06T00:25:33.423985+08:00",
+      "finished_at": null
+    }
+  ],
+  "notes": [
+    "A07/A16 describe long-running service lifecycle; its final exit code is in A16.",
+    "A15a nonzero exit is the intentional owned installer interruption.",
+    "A17 final read-only PowerShell inspection completed exit 0; its JSON records the actual state.",
+    "Browser actions and screenshots are separate real UI evidence, not shell exit codes.",
+    "Initial preparation commands are preserved in old root evidence, referenced by 00-provenance."
+  ]
+}

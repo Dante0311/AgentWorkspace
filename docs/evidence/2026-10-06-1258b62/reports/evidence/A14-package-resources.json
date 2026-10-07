@@ -1,0 +1,116 @@
+{
+  "time": "2026-10-06T00:28:08.970394+08:00",
+  "status": "PASS_REAL",
+  "files": [
+    {
+      "path": "definitions\\maintainer.md",
+      "sha256": "c140581ed6202b6584554330f71c3da65ad5842de1f5f3a86b32b94eb0fadae8",
+      "matches_baseline": true
+    },
+    {
+      "path": "definitions\\sentinel.md",
+      "sha256": "b6b59ae96f27e1a6cf87e695336a4e0bdb5867ee41859b3741e79213b5226aca",
+      "matches_baseline": true
+    },
+    {
+      "path": "definitions\\steward.md",
+      "sha256": "b24135713403aadbe31293b601eacb30bf2ddea963d3fe25b9df9543b197847a",
+      "matches_baseline": true
+    },
+    {
+      "path": "index.html",
+      "sha256": "010248dffd94cd5e0652648317a80bc18e10c0e966af94ef9e61dda8ca3ee255",
+      "matches_baseline": true
+    },
+    {
+      "path": "prompts\\capabilities.md",
+      "sha256": "efeaa4ecc3b6c06815bd43983c98c79e21b6c66f6e8e7883b763d4f1403528a5",
+      "matches_baseline": true
+    },
+    {
+      "path": "prompts\\checkpoints.md",
+      "sha256": "72025735091850de0fc225b614a3576175d568ada61adc314c5f351c36618307",
+      "matches_baseline": true
+    },
+    {
+      "path": "prompts\\desktop-projects.md",
+      "sha256": "4724bd9e6c5838a156036b04ba250ed445bb7f4ba97eca2e3db48cfd1fa59f27",
+      "matches_baseline": true
+    },
+    {
+      "path": "prompts\\entry.md",
+      "sha256": "9efe63d79d566c88fdc427c48341226da23f937c79dc013636966f2c9c4965a4",
+      "matches_baseline": true
+    },
+    {
+      "path": "prompts\\handoff.md",
+      "sha256": "c8e77d9f454e39da9ecb14f90df76683ad122ccdfd2f4172ab29da3de0136376",
+      "matches_baseline": true
+    },
+    {
+      "path": "prompts\\initialization.md",
+      "sha256": "7437956c9520138b374b69686e056cdd24e6eee6c240b954db0b4344f5bdcd45",
+      "matches_baseline": true
+    },
+    {
+      "path": "sessions.html",
+      "sha256": "211d97408a279698528669f2224c7fa438f869f71c2d63604b3588303a5c739e",
+      "matches_baseline": true
+    },
+    {
+      "path": "setup.html",
+      "sha256": "f0cc36e700ab8e04ced92551431245092ee3060b2e9f07e4f581c4223423528d",
+      "matches_baseline": true
+    },
+    {
+      "path": "skills\\agent\\SKILL.md",
+      "sha256": "47ac184ff0fffd0cca42a25717593f66014fcd0ef2c4e65b01eaf93415b1660b",
+      "matches_baseline": true
+    },
+    {
+      "path": "skills\\fork\\SKILL.md",
+      "sha256": "64ab69ba6433da0879d00b078186b8952014829f47b3c62888b72a65eff9e15a",
+      "matches_baseline": true
+    },
+    {
+      "path": "skills\\handoff\\SKILL.md",
+      "sha256": "b92435d6c885233347ace702057f59bb754a9b0c96ac7242bfbb1dd3bad1870c",
+      "matches_baseline": true
+    },
+    {
+      "path": "skills\\message\\SKILL.md",
+      "sha256": "b057f8ef9162c18edcf68678a0ff695c036353a2c22121fef63a47fed3cf7287",
+      "matches_baseline": true
+    },
+    {
+      "path": "skills\\relay\\SKILL.md",
+      "sha256": "7e2706ddec96438f04411ba5ae2c1a6139d7ec8fd2dad49b8b4d5f14db0dd069",
+      "matches_baseline": true
+    },
+    {
+      "path": "skills\\work\\SKILL.md",
+      "sha256": "3894f9c1fa2bc7e369c5fc29b8b2684cb52e4e0617fb8275ac7af932dae5dbab",
+      "matches_baseline": true
+    },
+    {
+      "path": "skills\\workspace\\SKILL.md",
+      "sha256": "70a9ccf409c0255cb681d2c00acea0078f831ddd084b6ab4282e0cb7621b24be",
+      "matches_baseline": true
+    }
+  ],
+  "skills": [
+    "skills\\agent\\SKILL.md",
+    "skills\\fork\\SKILL.md",
+    "skills\\handoff\\SKILL.md",
+    "skills\\message\\SKILL.md",
+    "skills\\relay\\SKILL.md",
+    "skills\\work\\SKILL.md",
+    "skills\\workspace\\SKILL.md"
+  ],
+  "definitions": [
+    "maintainer.md",
+    "sentinel.md",
+    "steward.md"
+  ],
+  "same_install_marker_preserved": true
+}

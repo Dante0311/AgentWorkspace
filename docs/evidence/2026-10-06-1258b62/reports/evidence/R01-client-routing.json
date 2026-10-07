@@ -1,0 +1,61 @@
+{
+  "time": "2026-10-06T02:15:59.611576+08:00",
+  "codex": {
+    "source": "${USER_HOME}\\.codex\\config.toml",
+    "model": "gpt-6-astra",
+    "effort": "xhigh",
+    "provider": "openai",
+    "provider_fields": {},
+    "profile": null,
+    "service_tier": "default",
+    "chatgpt_base_url": null,
+    "openai_base_url": null,
+    "executable": "${USER_HOME}\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\codex\\codex.exe",
+    "auth_status": "unconfirmed",
+    "auth_exit": 1
+  },
+  "claude": {
+    "process_routing": {},
+    "credential_presence": {
+      "ANTHROPIC_API_KEY": false,
+      "ANTHROPIC_AUTH_TOKEN": false,
+      "CLAUDE_CODE_OAUTH_TOKEN": false
+    },
+    "settings_source": "${USER_HOME}\\.claude\\settings.json",
+    "model": null,
+    "settings_routing": {},
+    "settings_credential_presence": {
+      "ANTHROPIC_API_KEY": false,
+      "ANTHROPIC_AUTH_TOKEN": false,
+      "CLAUDE_CODE_OAUTH_TOKEN": false
+    }
+  },
+  "buddy_packages": [
+    {
+      "source": "${USER_HOME}\\AppData\\Roaming\\npm\\node_modules\\@tencent-ai\\codebuddy-code\\package.json",
+      "name": "@tencent-ai/codebuddy-code",
+      "version": "2.149.0",
+      "bin": {
+        "codebuddy-code": "./bin/codebuddy",
+        "codebuddy": "./bin/codebuddy",
+        "cbc": "./bin/codebuddy",
+        "cbc-prewarm": "./bin/cbc-prewarm",
+        "codebuddy-lowmem": "./bin/codebuddy-lowmem"
+      }
+    },
+    {
+      "source": "${USER_HOME}\\AppData\\Local\\Programs\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\package.json",
+      "name": "@genie/agent-cli",
+      "version": "0.0.0",
+      "bin": {
+        "codebuddy-code": "./bin/codebuddy",
+        "codebuddy": "./bin/codebuddy",
+        "cbc": "./bin/codebuddy",
+        "cbc-prewarm": "./bin/cbc-prewarm",
+        "codebuddy-lowmem": "./bin/codebuddy-lowmem"
+      }
+    }
+  ],
+  "model_turns_used": 0,
+  "auth_or_private_files_read": false
+}

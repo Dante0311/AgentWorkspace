@@ -1,0 +1,10 @@
+{
+  "time": "2026-10-07T00:06:13.380052+08:00",
+  "operator": "management/controller under explicit authorized normal cleanup",
+  "model_calls_added": 0,
+  "binding": "b0ab72f3040a545a8a82320d01000f82c",
+  "checkpoint": "c3a06c5a7b4ea4286bd358946c91bd271",
+  "checkpoint_revision": "5b74ff43ef0cba105edf710fe774b9c8686caab7",
+  "not_model_self_stop": true,
+  "no_forced_release_or_lock_deletion": true
+}

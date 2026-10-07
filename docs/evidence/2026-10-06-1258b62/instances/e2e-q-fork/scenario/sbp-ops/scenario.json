@@ -1,0 +1,9 @@
+{
+  "simulation": true,
+  "required_inputs": [
+    "tile-A.txt",
+    "tile-B.txt"
+  ],
+  "repair_content": "fictional navigation tile B\n",
+  "scope": "this directory only"
+}

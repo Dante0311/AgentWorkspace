@@ -1,0 +1,13 @@
+{
+  "started_at": "2026-10-07T00:21:05.900179+08:00",
+  "finished_at": "2026-10-07T00:21:07.180151+08:00",
+  "argv": [
+    "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex.exe",
+    "login",
+    "status"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "Logged in using ChatGPT\n"
+}

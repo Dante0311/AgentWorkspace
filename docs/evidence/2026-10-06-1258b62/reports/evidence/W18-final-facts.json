@@ -1,0 +1,47 @@
+{
+  "time": "2026-10-07T00:08:24.848274+08:00",
+  "result": "PASS_REAL_SCOPED_BUSINESS_CHAIN_WITH_MANAGEMENT_CLEANUP",
+  "total_native_started": 6,
+  "total_native_completed": 6,
+  "wecom_outbound": 2,
+  "provider_accepted": 2,
+  "human_visible_confirmed": 2,
+  "real_wecom_authorization_events": 1,
+  "fixture_failed_events": 1,
+  "fixture_recovery_events": 1,
+  "repair": "Agent created only fictional tile-B after real channel authorization",
+  "artifact_sha256": "2ff4deccf19bcc95d68f8f048148578841e539999a3c73aa0535ddf3ee276c7b",
+  "normal_stop_operator": "management/controller under existing explicit authorization, not model self-stop",
+  "final_model_self_stop_completed": false,
+  "why": "Incorrect instruction to read protected .aw-local receipt; Agent truthfully refused to assume success",
+  "checkpoint": "c3a06c5a7b4ea4286bd358946c91bd271",
+  "checkpoint_revision": "5b74ff43ef0cba105edf710fe774b9c8686caab7",
+  "current_binding": null,
+  "released_binding": "b0ab72f3040a545a8a82320d01000f82c",
+  "handoff": "h0ab72f3040a545a8a82320d01000f82c",
+  "runner_alive": false,
+  "new_wecom_and_bridge_processes_alive": 0,
+  "no_seventh_model_turn": true,
+  "old_stop_input_state": "submitted",
+  "E2E_001_fixed": false,
+  "current_input_states": [
+    {
+      "id": "boot-b0ab72f3040a545a8a82320d01000f82c",
+      "state": "completed"
+    },
+    {
+      "id": "iab5c77e7fb3fb7c9e62dfd3868331c542f65e16c",
+      "state": "completed"
+    },
+    {
+      "id": "ie51d0f4ecb591fa255e7516481d0e587c79c2286",
+      "state": "completed"
+    }
+  ],
+  "human_correction_preserved": true,
+  "old_inbound_fault_inference_withdrawn": true,
+  "offline_replay_not_inferred": true,
+  "fixture_boundary": "Resume observer continued existing facts without replaying old Binding event IDs; generic cross-Binding fixture replay not validated",
+  "source_and_production_unchanged": true,
+  "Desktop_TTY_cross_Harness_production_validation": "not added"
+}

@@ -1,0 +1,17 @@
+{
+  "started_at": "2026-10-06T02:20:06.829187+08:00",
+  "finished_at": "2026-10-06T02:20:07.742536+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "workspace",
+    "show"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"schema\": 1, \"name\": \"e2e-local\", \"locator\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"friends\": {}, \"projects\": {}, \"setup_id\": \"setupc43bab4966e34765851333d07122cdfd\", \"caretakers\": {\"steward\": \"steward\", \"sentinel\": \"sentinel\", \"maintainer\": \"maintainer\"}, \"revision\": \"18a74dee76e48a76f2d58f4f78a6bb482153f53f\", \"access\": {\"address\": \"${E2E_ROOT}\\\\data\\\\workspace.git\", \"locator\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"instances\": {\"steward\": [\"${E2E_ROOT}\\\\data\\\\workspace-home\\\\instances\\\\e2e-local\\\\steward\"], \"sentinel\": [\"${E2E_ROOT}\\\\data\\\\workspace-home\\\\instances\\\\e2e-local\\\\sentinel\"], \"maintainer\": [\"${E2E_ROOT}\\\\data\\\\workspace-home\\\\instances\\\\e2e-local\\\\maintainer\"]}}}}",
+  "stderr": ""
+}

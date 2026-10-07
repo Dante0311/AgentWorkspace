@@ -1,0 +1,13 @@
+{
+  "started_at": "2026-10-06T23:14:39.981812+08:00",
+  "finished_at": "2026-10-06T23:14:40.076039+08:00",
+  "argv": [
+    "svn",
+    "info",
+    "${HOST_PATH}/SceneBuildPipeline"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "Path: ${HOST_PATH}/SceneBuildPipeline\r\nWorking Copy Root Path: ${HOST_PATH}/Tools\r\nWorking Copy Compatible With Version: 1.15\r\nWorking Copy Format: 32\r\nWorking Copy Store Pristine: no\r\nURL: https://internal.example.invalid/NRC_svn/client_proj/branches/ft_sbp_test_3/Sources/Tools/SceneBuildPipeline\r\nRelative URL: ^/branches/ft_sbp_test_3/Sources/Tools/SceneBuildPipeline\r\nRepository Root: https://internal.example.invalid/NRC_svn/client_proj\r\nRepository UUID: f66a6bea-a92b-11ea-b7ce-9db0f98c726b\r\nRevision: 1067288\r\nNode Kind: directory\r\nSchedule: normal\r\nLast Changed Author: [LOCAL_USER]\r\nLast Changed Rev: 1067225\r\nLast Changed Date: 2026-09-13 23:20:07 +0800 (����, 13 9�� 2026)\r\n\r\n",
+  "stderr": ""
+}

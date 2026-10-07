@@ -1,0 +1,15 @@
+{
+  "time": "2026-10-07T00:55:31.792346+08:00",
+  "initial_check": "all local bytes equal saved snapshot assertion failed before any G mutation or model start",
+  "locally_changed_paths": [
+    "records/bf000d594021742cea71d260e2399277f/runtime.jsonl"
+  ],
+  "branch_head": "0f8c6a54a861563a41ef982bc78d62d26d17ca63",
+  "saved_context_revision": "0f8c6a54a861563a41ef982bc78d62d26d17ca63",
+  "remote_unchanged_since_saved": true,
+  "three_way_overlap_possible": false,
+  "reason": "Native runtime events naturally append after model checkpoint. Branch/context identical means desired saved bytes unchanged; sync_agent preserves local-only changes under public contract. No logs cleared or overwritten.",
+  "target_current": null,
+  "target_runner_alive": false,
+  "decision": "continue normal authorized sync-idle with unchanged local log, report no-op synchronization rather than recovery"
+}

@@ -1,0 +1,25 @@
+{
+  "time": "2026-10-07T00:31:53.118549+08:00",
+  "closed": true,
+  "configured_model": "gpt-6-luna",
+  "effort": "low",
+  "estimated_turns": 5,
+  "actual_started": 5,
+  "actual_completed": 5,
+  "turn_ids": [
+    "01a11205-b8d6-7273-9206-86894cd22da3",
+    "01a11207-05b3-7372-b928-bec4686263f2",
+    "01a11208-084f-7d70-92bc-65c026f7e577",
+    "01a1120a-2cfe-72f2-8e91-3a0573e23779",
+    "01a1120b-8118-7622-84bb-a9fe5df96b30"
+  ],
+  "outbound_requests": 1,
+  "outbound_provider_accepted": 1,
+  "cumulative_wecom_outbound": 3,
+  "outbound_limit": 20,
+  "controller_paid_retries": 0,
+  "amount_or_model_api_count": "not independently observed",
+  "prior_codex_turns_R_M_W": 12,
+  "cumulative_codex_native_turns": 17,
+  "prior_HY_auth_failed_request_is_separate": true
+}

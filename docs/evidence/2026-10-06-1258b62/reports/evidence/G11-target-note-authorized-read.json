@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-07T01:04:42.132011+08:00",
+  "finished_at": "2026-10-07T01:04:42.464613+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "call",
+    "asset.read",
+    "--arguments",
+    "{\"agent_id\": \"e2e-q-fork\", \"path\": \"notes/g-maintenance-scope.md\"}"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"path\": \"notes/g-maintenance-scope.md\", \"content\": \"G批已授权的隔离维护笔记。sync-idle由maintainer真实受限工具完成；仅记录正常空闲同步，不代表故障恢复或Workspace全部健康。\", \"revision\": \"0dd0390cf8293c2a337b718217b1690aac44453d5bbb2d882068adafe6d36a5f\"}}",
+  "stderr": ""
+}

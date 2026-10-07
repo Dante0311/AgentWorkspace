@@ -1,0 +1,32 @@
+{
+  "time": "2026-10-06T23:59:32.016000+08:00",
+  "human_screenshot_message_time": "2026-10-06 23:51 Asia/Shanghai; minute precision",
+  "human_screenshot_message_content": "@E2E_TEST_BOT 同意修复模拟tile-B",
+  "actual_operator": "User manually sent; Lead did not operate UI",
+  "formal_bridge_ready_utc": "2026-10-06T15:55:42.888052+00:00",
+  "formal_bridge_ready_local": "2026-10-06 23:55:42.888052 Asia/Shanghai",
+  "screenshot_message_predates_resume_bridge_ready": true,
+  "total_native_started": 6,
+  "total_native_completed": 5,
+  "wecom_inbound_count": 1,
+  "tile_B_exists": true,
+  "current_binding_inputs": [
+    {
+      "id": "boot-b0ab72f3040a545a8a82320d01000f82c",
+      "state": "completed",
+      "purpose": "initial"
+    },
+    {
+      "id": "iab5c77e7fb3fb7c9e62dfd3868331c542f65e16c",
+      "state": "submitted",
+      "purpose": "user"
+    },
+    {
+      "id": "ie51d0f4ecb591fa255e7516481d0e587c79c2286",
+      "state": "completed",
+      "purpose": "user"
+    }
+  ],
+  "current_binding_has_inprogress_or_unknown": true,
+  "inference_limit": "This time gap explains why the screenshot alone cannot prove delivery to the resumed connection; no claim about upstream offline-message support."
+}

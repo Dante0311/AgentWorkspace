@@ -1,0 +1,19 @@
+{
+  "time": "2026-10-06T14:04:29.859108+08:00",
+  "batch": "N",
+  "approved_model": "gpt-6-luna",
+  "effort": "low",
+  "service": "existing official ChatGPT login",
+  "approved_max_new_turns": 6,
+  "approval": "user directly confirmed existing login/Luna-low/max6 via Lead",
+  "reserved_turns": 0,
+  "actual_model_turns": 0,
+  "remaining_unused": 6,
+  "new_native_sessions": 0,
+  "watch_enabled": false,
+  "transfer_requested": false,
+  "services_started": false,
+  "automatic_retries": 0,
+  "state": "closed_before_execution_due_to_user_priority_change",
+  "next_scope": "wait for enterprise WeChat direction; no autonomous sending or SBP business start"
+}

@@ -1,0 +1,187 @@
+- banner:
+  - generic: AW
+  - heading "Agent Workspace" [level=1]
+  - generic: 独立的工作空间，共享的协作记录。
+  - generic: 0.1 · Alpha
+- main:
+  - paragraph:
+    - link "新建普通会话（无需 Workspace）":
+      - /url: /sessions
+  - paragraph:
+    - link "当前版本支持范围与限制":
+      - /url: /capabilities
+    - text: · 当前不支持与尚未验证分开说明。
+  - heading "我的 Agent" [level=2]
+  - paragraph: 会话仍在你选择的 Desktop、CLI 或其他界面中进行。
+  - combobox "Workspace 筛选":
+    - option "全部 Workspace" [selected]
+    - option "e2e-local"
+  - button "刷新状态"
+  - button "创建 Agent"
+  - navigation "主要视图":
+    - button "Agent"
+    - button "Workspace"
+    - button "消息与工单"
+  - alert
+  - article:
+    - generic: active
+    - heading "验收读取实例" [level=3]
+    - generic: e2e-local / e2e-alpha
+    - paragraph: 这是明确授权的本轮验收任务。通过平台asset.read读取notes/source.md的随机标记，通过asset.write在notes/result.md写下该标记并保存真实checkpoint。简短回复后等待输入。仅使用平台工具，不运行shell、不联网、不发Message、不创建Work或后继，不委派子任务。
+    - generic: 当前入口
+    - generic: codebuddy
+    - generic: 会话
+    - generic: 01a10d5f-f98b-7300-a6f0-b73b738b5ed2
+    - generic: 自动投递
+    - generic: 关闭
+    - generic: 运行器
+    - generic: monitor_stopped（历史观测，进程已停止）
+    - button "详情"
+    - button "配置"
+    - button "桌面项目"
+    - button "Desktop 控制配置"
+    - button "交出"
+    - button "换新会话"
+    - button "切换 Harness"
+    - button "开启投递"
+    - button "启动运行器"
+    - button "交接进度"
+    - button "继续原交接"
+    - button "资料"
+    - button "检查点"
+    - button "版本差异"
+  - article:
+    - generic: 尚未进入
+    - heading "验收通信目标" [level=3]
+    - generic: e2e-local / e2e-beta
+    - paragraph: 仅用于本轮后续通信验收；尚未分派真实模型任务。
+    - generic: 当前入口
+    - generic: 未绑定
+    - generic: 会话
+    - generic: 尚无已确认会话
+    - generic: 自动投递
+    - generic: 关闭
+    - generic: 运行器
+    - generic: released（历史观测，进程已停止）
+    - button "详情"
+    - button "配置"
+    - button "桌面项目"
+    - button "Desktop 控制配置"
+    - button "进入新会话"
+    - button "交接进度"
+    - button "继续原交接"
+    - button "资料"
+    - button "检查点"
+    - button "版本差异"
+    - button "归档"
+  - article:
+    - generic: 尚未进入
+    - heading "隔离Fork合同验收" [level=3]
+    - generic: e2e-local / e2e-q-fork
+    - generic: 当前入口
+    - generic: 未绑定
+    - generic: 会话
+    - generic: 尚无已确认会话
+    - generic: 自动投递
+    - generic: 关闭
+    - generic: 运行器
+    - generic: released（历史观测，进程已停止）
+    - button "详情"
+    - button "配置"
+    - button "桌面项目"
+    - button "Desktop 控制配置"
+    - button "进入新会话"
+    - button "交接进度"
+    - button "继续原交接"
+    - button "资料"
+    - button "检查点"
+    - button "版本差异"
+    - button "归档"
+  - article:
+    - generic: 尚未进入
+    - heading "maintainer" [level=3]
+    - generic: e2e-local / maintainer
+    - generic: 当前入口
+    - generic: 未绑定
+    - generic: 会话
+    - generic: 尚无已确认会话
+    - generic: 自动投递
+    - generic: 关闭
+    - generic: 运行器
+    - generic: released（历史观测，进程已停止）
+    - button "详情"
+    - button "配置"
+    - button "桌面项目"
+    - button "Desktop 控制配置"
+    - button "进入新会话"
+    - button "交接进度"
+    - button "继续原交接"
+    - button "资料"
+    - button "检查点"
+    - button "版本差异"
+    - button "归档"
+  - article:
+    - generic: 尚未进入
+    - heading "sentinel" [level=3]
+    - generic: e2e-local / sentinel
+    - generic: 当前入口
+    - generic: 未绑定
+    - generic: 会话
+    - generic: 尚无已确认会话
+    - generic: 自动投递
+    - generic: 关闭
+    - generic: 运行器
+    - generic: not_running
+    - button "详情"
+    - button "配置"
+    - button "桌面项目"
+    - button "Desktop 控制配置"
+    - button "进入新会话"
+    - button "交接进度"
+    - button "继续原交接"
+    - button "资料"
+    - button "检查点"
+    - button "版本差异"
+    - button "归档"
+  - article:
+    - generic: 尚未进入
+    - heading "steward" [level=3]
+    - generic: e2e-local / steward
+    - generic: 当前入口
+    - generic: 未绑定
+    - generic: 会话
+    - generic: 尚无已确认会话
+    - generic: 自动投递
+    - generic: 关闭
+    - generic: 运行器
+    - generic: not_running
+    - button "详情"
+    - button "配置"
+    - button "桌面项目"
+    - button "Desktop 控制配置"
+    - button "进入新会话"
+    - button "交接进度"
+    - button "继续原交接"
+    - button "资料"
+    - button "检查点"
+    - button "版本差异"
+    - button "归档"
+  - generic: V1 · 身份归属一个 Workspace · Work 与共享 Definition 可选 · 本页面不是聊天客户端
+- dialog:
+  - heading "准备持久 Agent 的桌面项目" [level=2]
+  - paragraph: 主目录：${E2E_ROOT}\data\workspace-home\instances\e2e-local\e2e-q-fork。保存的只是本机偏好，不会自动创建原生项目、分区或会话。
+  - generic: 桌面端
+  - combobox "桌面端" [active]:
+    - option "Codex" [selected]
+    - option "Claude Code"
+    - option "WorkBuddy"
+  - generic: 项目显示名（可填用户已有名称）
+  - textbox "项目显示名（可填用户已有名称）": AW E2E H · Fork 项目（改名）
+  - generic: Codex 分区（只整理侧栏）
+  - textbox "Codex 分区（只整理侧栏）": AW E2E · e2e-local
+  - generic: 按需关联的产品目录，一行一个
+  - textbox "按需关联的产品目录，一行一个": ${E2E_ROOT}\fixtures\fictional-product
+  - generic: 不复制产品仓；保存引用不会改变原生文件访问权限。
+  - generic "手动准备步骤与限制"
+  - button "取消"
+  - button "执行"

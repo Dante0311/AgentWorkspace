@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-07T00:44:31.001776+08:00",
+  "finished_at": "2026-10-07T00:44:32.046325+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "message",
+    "list",
+    "--agent",
+    "e2e-q-fork",
+    "--unacked"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": []}",
+  "stderr": ""
+}

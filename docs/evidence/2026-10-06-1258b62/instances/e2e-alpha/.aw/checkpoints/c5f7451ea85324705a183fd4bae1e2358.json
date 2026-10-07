@@ -1,0 +1,8 @@
+{
+  "id": "c5f7451ea85324705a183fd4bae1e2358",
+  "created_at": "2026-10-05T18:35:02.551118+00:00",
+  "summary": "Batch M marker verification and message send",
+  "content": "Verified current binding b89818d3a91bf4545b646a68571aaf6b8 via agent.show. Read notes/result.md and confirmed marker AW-E2E-d723faeb0af548dab83cadb7b8327110. Preserved prior request e2e-alpha-second-stop-001 as historical unknown; did not replay it. Sent exactly one normal message to e2e-beta with request_id m-e2e-luna-request-001; platform returned real message ID m-e2e-luna-request-001, state published. No receive/ACK as beta, no Watch, no stop.",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

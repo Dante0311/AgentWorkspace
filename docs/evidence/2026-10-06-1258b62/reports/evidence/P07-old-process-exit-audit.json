@@ -1,0 +1,140 @@
+[
+  {
+    "pid": 271812,
+    "parent": 272352,
+    "alive": false,
+    "executable": "${E2E_ROOT}\\app\\Scripts\\python.exe"
+  },
+  {
+    "pid": 226864,
+    "parent": 271812,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 199320,
+    "parent": 271812,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 284040,
+    "parent": 199320,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex.exe"
+  },
+  {
+    "pid": 282420,
+    "parent": 284040,
+    "alive": false,
+    "executable": "${HOST_PATH}/blender-mcp-server.exe"
+  },
+  {
+    "pid": 246456,
+    "parent": 284040,
+    "alive": false,
+    "executable": "${HOST_PATH}/blender-mcp-server.exe"
+  },
+  {
+    "pid": 188740,
+    "parent": 282420,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 275936,
+    "parent": 284040,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_repl.exe"
+  },
+  {
+    "pid": 269716,
+    "parent": 246456,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 276204,
+    "parent": 282420,
+    "alive": false,
+    "executable": "${HOST_PATH}/python.exe"
+  },
+  {
+    "pid": 284264,
+    "parent": 284040,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node.exe"
+  },
+  {
+    "pid": 62284,
+    "parent": 275936,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 252084,
+    "parent": 246456,
+    "alive": false,
+    "executable": "${HOST_PATH}/python.exe"
+  },
+  {
+    "pid": 267404,
+    "parent": 276204,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 271612,
+    "parent": 252084,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 255220,
+    "parent": 284264,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 199708,
+    "parent": 284264,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\71e3f41277f96d73\\bin\\node_repl.exe"
+  },
+  {
+    "pid": 256020,
+    "parent": 284040,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex-code-mode-host.exe"
+  },
+  {
+    "pid": 279508,
+    "parent": 256020,
+    "alive": false,
+    "executable": "${HOST_PATH}/conhost.exe"
+  },
+  {
+    "pid": 260180,
+    "parent": 199320,
+    "alive": false,
+    "executable": "${E2E_ROOT}\\app\\Scripts\\python.exe"
+  },
+  {
+    "pid": 276424,
+    "parent": 260180,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  },
+  {
+    "pid": 45508,
+    "parent": 276424,
+    "alive": false,
+    "executable": "${E2E_ROOT}\\app\\Scripts\\python.exe"
+  },
+  {
+    "pid": 283272,
+    "parent": 45508,
+    "alive": false,
+    "executable": "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+  }
+]

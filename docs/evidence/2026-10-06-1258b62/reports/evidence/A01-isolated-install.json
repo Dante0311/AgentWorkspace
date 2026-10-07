@@ -1,0 +1,15 @@
+{
+  "started_at": "2026-10-06T00:23:55.637333+08:00",
+  "finished_at": "2026-10-06T00:24:01.895196+08:00",
+  "argv": [
+    "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "${E2E_ROOT}\\dist\\install.py",
+    "${E2E_ROOT}\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
+    "--destination",
+    "${E2E_ROOT}\\app"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "Processing ${E2E_ROOT}\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl\r\nInstalling collected packages: git-native-agent-workspace\r\nSuccessfully installed git-native-agent-workspace-0.1.0a1\r\n0.1.0a1\r\n{\"installed\": \"${E2E_ROOT}\\\\app\", \"start\": [\"${E2E_ROOT}\\\\app\\\\Scripts\\\\aw.exe\", \"setup\", \"--open\"], \"[TEST_CHANNEL_OR_USER]\": false}\r\n",
+  "stderr": ""
+}

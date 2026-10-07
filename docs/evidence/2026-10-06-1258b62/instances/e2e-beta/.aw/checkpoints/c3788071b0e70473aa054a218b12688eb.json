@@ -1,0 +1,8 @@
+{
+  "id": "c3788071b0e70473aa054a218b12688eb",
+  "created_at": "2026-10-06T16:29:06.729812+00:00",
+  "summary": "P批查询已回复并完成WeCom正常收尾；发送回执为SDK接受，用户可见未独立确认",
+  "content": "当前真实入口 Binding b4c8d06c2c2b846dd8cede789542b13b3（Codex）。本轮读取公开回执 channels/wecom/sent/p-ops-result-query-reply-001.json，核对 Binding、target [TEST_CHANNEL_OR_USER]、state=sent、receipt.errcode=0。此证明 SDK/provider 接受发送请求；用户可见确认未独立获得，不声称对方已读或看到。查询回复内容为 sim-build-2 模拟成功，导航产物两行 fictional navigation tile A/B，仅限隔离模拟，不证明生产 UE/CI 或真实烘焙。WeCom 与 sim-build 均已设置 enabled=false。最终记录 notes/p-final.md；详细查询记录 notes/p-query-result.md。未重发、未重做业务、未读取 .aw-local。现按正式正常收尾请求当前 Binding stop；原生 idle 尚待运行器观察。",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

@@ -1,0 +1,18 @@
+{
+  "started_at": "2026-10-06T02:35:27.585947+08:00",
+  "finished_at": "2026-10-06T02:35:33.408380+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "agent",
+    "start",
+    "e2e-beta"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"agent\": \"e2e-beta\", \"binding\": \"b99b412cfc3794314a231f5090250ac1f\", \"phase\": \"starting\", \"kind\": \"codex\", \"pid\": 218880, \"state\": \"starting_runner\"}}",
+  "stderr": ""
+}

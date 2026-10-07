@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-07T00:50:08.733940+08:00",
+  "finished_at": "2026-10-07T00:50:09.082203+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "call",
+    "asset.read",
+    "--arguments",
+    "{\"agent_id\": \"e2e-beta\", \"path\": \"notes/t-watch-order.md\"}"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"path\": \"notes/t-watch-order.md\", \"content\": \"# T批 Watch 消息顺序记录\\n\\n- 第一条原消息 ID：`r-watch-normal-001`\\n- 第一条 from：`workspace:setupc43bab4966e34765851333d07122cdfd` / `e2e-q-fork`\\n- 第一条 to：`workspace:setupc43bab4966e34765851333d07122cdfd` / `e2e-beta`\\n- 第一条 delivery：`normal`\\n- 第一条当前 Binding：`bfe56718746f34061bcf4334d686d159a`\\n- 第一条 ACK：`ack-r-watch-normal-001`，publication.state=`published`，receiver=`e2e-beta`，binding 匹配。\\n- 第一段：虚构交接记录A\\n\\n- 第二条原消息 ID：`r-watch-normal-002`\\n- 第二条 from：`workspace:setupc43bab4966e34765851333d07122cdfd` / `e2e-q-fork`\\n- 第二条 to：`workspace:setupc43bab4966e34765851333d07122cdfd` / `e2e-beta`\\n- 第二条 delivery：`normal`\\n- 第二条当前 Binding：`bfe56718746f34061bcf4334d686d159a`\\n- 第二条 message_refs：[`r-watch-normal-001`]，引用第一条。\\n- 第二条 ACK：`ack-r-watch-normal-002`，publication.state=`published`，receiver=`e2e-beta`，binding 匹配。\\n- 第二段：虚构交接记录B\\n- 实际顺序：先接收 `r-watch-normal-001`，后接收引用第一条的 `r-watch-normal-002`。\\n\", \"revision\": \"4e4d21bfa748a956a58246686785aec351e711ddb5c6df26875d22cdf4291f35\"}}",
+  "stderr": ""
+}

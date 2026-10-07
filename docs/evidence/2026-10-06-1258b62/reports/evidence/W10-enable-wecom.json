@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-06T23:55:19.051624+08:00",
+  "finished_at": "2026-10-06T23:55:19.328407+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "bridge",
+    "start",
+    "e2e-beta",
+    "--name",
+    "wecom"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"name\": \"wecom\", \"configured\": true, \"enabled\": true}}",
+  "stderr": ""
+}

@@ -1,0 +1,17 @@
+{
+  "started_at": "2026-10-07T00:44:26.140360+08:00",
+  "finished_at": "2026-10-07T00:44:27.417703+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "message",
+    "list"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": [{\"id\": \"m-e2e-luna-request-001\", \"from\": {\"workspace\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"agent\": \"e2e-alpha\"}, \"to\": {\"workspace\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"agent\": \"e2e-beta\"}, \"created_at\": \"2026-10-05T18:34:43.263831+00:00\", \"delivery\": \"normal\", \"notification_acknowledged\": true}, {\"id\": \"m-e2e-luna-reply-001\", \"from\": {\"workspace\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"agent\": \"e2e-beta\"}, \"to\": {\"workspace\": \"workspace:setupc43bab4966e34765851333d07122cdfd\", \"agent\": \"e2e-alpha\"}, \"created_at\": \"2026-10-05T18:36:09.275760+00:00\", \"delivery\": \"normal\", \"notification_acknowledged\": true}]}",
+  "stderr": ""
+}

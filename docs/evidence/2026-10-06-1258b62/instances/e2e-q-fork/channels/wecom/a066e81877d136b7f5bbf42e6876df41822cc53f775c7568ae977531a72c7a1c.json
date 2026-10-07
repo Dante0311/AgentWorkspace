@@ -1,0 +1,7 @@
+{
+  "event": "input",
+  "id": "b2d2731ee2919eaf6a965dcf53174946",
+  "sender": "T54690021A",
+  "target": "[TEST_CHANNEL_OR_USER]",
+  "text": "@E2E_TEST_BOT “请核对上次模拟导航导出的结果与产物”"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "M09-beta-stop",
+  "binding": "b99b412cfc3794314a231f5090250ac1f",
+  "text": "Do not repeat receive, ACK or send. Only finish the already authorized normal stop. Use aw_execute command asset.write arguments {path:notes/received.md, content:Received m-e2e-luna-request-001 marker AW-E2E-d723faeb0af548dab83cadb7b8327110; ACK and reply m-e2e-luna-reply-001 published.} if file does not already exist; if exists read it and preserve. Then command checkpoint.create arguments {binding:YOUR_CURRENT_REAL_BINDING,summary:M beta actual ACK reply and stop,content:Actual request receive and ACK publication succeeded; one reply published; previous checkpoint and stop guesses failed; this checkpoint records the actual effects.}. Use the returned real id in command agent.stop arguments {binding:YOUR_CURRENT_REAL_BINDING,checkpoint:RETURNED_REAL_CHECKPOINT_ID}. Identity is injected. No new messages or work. End turn after stop request.",
+  "delivery": "normal",
+  "purpose": "user",
+  "state": "submitted",
+  "created_at": "2026-10-05T18:38:16.078333+00:00",
+  "sequence": 2,
+  "attempted_at": "2026-10-05T18:38:17.629442+00:00",
+  "result": {
+    "turn": {
+      "id": "01a10d5c-0824-72f1-87ac-87e9b98f2262",
+      "items": [],
+      "itemsView": "notLoaded",
+      "status": "inProgress",
+      "error": null,
+      "startedAt": null,
+      "completedAt": null,
+      "durationMs": null
+    }
+  }
+}

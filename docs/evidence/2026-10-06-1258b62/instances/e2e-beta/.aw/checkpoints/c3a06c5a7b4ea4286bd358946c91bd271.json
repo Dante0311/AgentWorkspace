@@ -1,0 +1,8 @@
+{
+  "id": "c3a06c5a7b4ea4286bd358946c91bd271",
+  "created_at": "2026-10-06T16:06:05.189097+00:00",
+  "summary": "W批真实限定模拟业务完成；管理端正常收尾，模型本轮自停未完成",
+  "content": "管理端正常收尾（不是模型自身stop）。本批累计6轮Luna/low：初始化/失败调查/首次模型正常停止/恢复初始化补读日志/真实企微授权后限定修复/恢复事实自动复核。真实wecom入站87061719af64e13b06b1e5b7d3582ba5进入新Binding第5轮，Agent仅创建虚构tile-B；sim-build-2实际产物为tile A/tile B两行。企微累计2条均sent/errcode0，用户确认两条可见。第一次日志路径错误已补读；用户更正先前已发授权的说法，旧入站故障推断撤回，截图23:51与23:58:56实际收到事件对应关系不确定，不推断离线回放。第6轮Agent尝试asset.read受保护.aw-local发送记录被拒绝，因此没有自身checkpoint/stop；控制者核对真实发送后已关闭两个Bridge新触发，当前依据明确既有授权走公开checkpoint/stop管理入口，不增模型，不强制清资格。原模型笔记/失败事实/账本保留；源仓未改、生产UE/CI未执行。模拟夹具本次只续读新恢复，未重放旧Binding失败ID。原W首次stop输入submitted未修复；当前业务输入completed。参见reports/evidence/W16-business-chain-proof.json和W15-known-send-and-stop-block.json。",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

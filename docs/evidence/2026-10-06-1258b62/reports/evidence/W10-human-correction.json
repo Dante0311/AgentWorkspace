@@ -1,0 +1,9 @@
+{
+  "received_at": "2026-10-06T23:55:18.171954+08:00",
+  "source": "Direct user correction relayed by Lead",
+  "correction": "用户未理解回复要求；先前声称已发授权是误解，准备在连接恢复后实际回复。",
+  "supersedes_historical_authorization_sent_confirmation": true,
+  "previous_zero_inbound_proves_failure": false,
+  "prior_confirmations_preserved": true,
+  "new_channel_authorization_yet_received": false
+}

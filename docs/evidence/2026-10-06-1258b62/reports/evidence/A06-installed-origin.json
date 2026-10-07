@@ -1,0 +1,13 @@
+{
+  "started_at": "2026-10-06T00:24:03.121720+08:00",
+  "finished_at": "2026-10-06T00:24:03.286855+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\python.exe",
+    "-c",
+    "import agent_workspace,importlib.metadata as m,json; d=m.distribution('git-native-agent-workspace'); print(json.dumps({'module':agent_workspace.__file__,'version':d.version,'direct_url':json.loads(d.read_text('direct_url.json'))},indent=2))"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"module\": \"${E2E_ROOT}\\\\app\\\\Lib\\\\site-packages\\\\agent_workspace\\\\__init__.py\", \"version\": \"0.1.0a1\", \"direct_url\": {\"archive_info\": {\"hash\": \"sha256=0ec257b1ffc14ede077f023415fa52f013f2a83ed04042d31be1baa9eeafb048\", \"hashes\": {\"sha256\": \"0ec257b1ffc14ede077f023415fa52f013f2a83ed04042d31be1baa9eeafb048\"}}, \"url\": \"file:///${E2E_ROOT}/dist/git_native_agent_workspace-0.1.0a1-py3-none-any.whl\"}}",
+  "stderr": ""
+}

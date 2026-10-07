@@ -1,0 +1,24 @@
+{
+  "started_at": "2026-10-06T02:42:23.396392+08:00",
+  "finished_at": "2026-10-06T02:42:24.289550+08:00",
+  "argv": [
+    "${E2E_ROOT}\\codebuddy-app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "agent",
+    "configure-sdk",
+    "e2e-alpha",
+    "--kind",
+    "codebuddy",
+    "--model",
+    "hunyuan-2.0-instruct-ioa",
+    "--executable",
+    "${E2E_ROOT}\\codebuddy-app\\Lib\\site-packages\\codebuddy_agent_sdk\\bin\\codebuddy-headless.exe"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"configured\": true, \"entry_changed\": false, \"sessions_started\": false, \"model_access\": \"unchecked\", \"effort_support\": \"unchecked\", \"global_configuration_changed\": false}}",
+  "stderr": ""
+}

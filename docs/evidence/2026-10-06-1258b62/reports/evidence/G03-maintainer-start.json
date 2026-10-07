@@ -1,0 +1,18 @@
+{
+  "started_at": "2026-10-07T00:56:12.224530+08:00",
+  "finished_at": "2026-10-07T00:56:18.603032+08:00",
+  "argv": [
+    "${E2E_ROOT}\\app\\Scripts\\aw.exe",
+    "--home",
+    "${E2E_ROOT}\\data\\workspace-home",
+    "-w",
+    "e2e-local",
+    "agent",
+    "start",
+    "maintainer"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "{\"ok\": true, \"result\": {\"agent\": \"maintainer\", \"binding\": \"b03a2ce413aa24da7bb85ab6247d8930e\", \"phase\": \"starting\", \"kind\": \"codex\", \"pid\": 199328, \"state\": \"starting_runner\"}}",
+  "stderr": ""
+}

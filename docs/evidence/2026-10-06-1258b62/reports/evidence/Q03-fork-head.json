@@ -1,0 +1,15 @@
+{
+  "started_at": "2026-10-07T00:37:01.741648+08:00",
+  "finished_at": "2026-10-07T00:37:01.805891+08:00",
+  "argv": [
+    "git",
+    "--git-dir",
+    "${E2E_ROOT}\\data\\workspace.git",
+    "rev-parse",
+    "instance/e2e-q-fork"
+  ],
+  "cwd": "${E2E_ROOT}",
+  "exit_code": 0,
+  "stdout": "8308658c1344bfe75fc99867e52e0b4f7519dda0\n",
+  "stderr": ""
+}

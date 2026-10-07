@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-07T20:27:23.851026+08:00",
+  "finished_at": "2026-10-07T20:27:24.738538+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "repair-local",
+    "call",
+    "asset.read",
+    "--arguments",
+    "{\"agent_id\": \"repair-alpha\", \"path\": \"AGENTS.md\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"path\": \"AGENTS.md\",\r\n    \"content\": \"# 修复后交接验收\\n\\n这是用户明确授权的隔离修复验收任务。只使用 aw_execute 平台工具，不运行 Shell、联网、外部渠道或子代理。\\n每次正常 boot：asset.read 读取 AGENTS.md 和 notes/source.md，在 notes/boot-<当前binding>.md 写下本次绑定和读到的随机标识，然后简短确认并等待输入，不自行创建后继、不自行停止。\\n收到平台正式 handoff 请求：保存真实 checkpoint，调用 agent.stop，结束响应；不得访问 .aw-local。\\n收到后续明确收尾指令：严格使用该指令给出的结果路径与 checkpoint_id，读取真实源资产、写验证结果、checkpoint.create、agent.stop。只报告实际已返回的结果。管理端核对真实完成/释放，你不需要读取受保护账本。\\n这是全新独立批次，不执行旧批次或生产业务。\\n\\n\\n工作根为本目录。平台操作参见 `.agents/skills/`；不要将没有收到的任务当作默认任务。\\n\",\r\n    \"revision\": \"ff805a7f2c13ea251bf34581b6ede12e64d2f1135f42bc60882499d35c21bec0\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

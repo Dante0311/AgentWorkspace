@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-07T20:33:53.365740+08:00",
+  "finished_at": "2026-10-07T20:33:53.645484+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "repair-local",
+    "call",
+    "agent.transfer-profile",
+    "--arguments",
+    "{\"agent_id\": \"repair-alpha\", \"kind\": \"codex\", \"model\": \"gpt-6-luna\", \"effort\": \"low\", \"executable\": \"<USER_HOME>\\\\AppData\\\\Local\\\\OpenAI\\\\Codex\\\\bin\\\\5ea220ae823df3d7\\\\codex.exe\", \"request_id\": \"repair-transfer-001\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"id\": \"repair-transfer-001\",\r\n    \"old_binding\": \"b5c3219661559459fa9a25989219ece5e\",\r\n    \"target_binding\": \"b6e03436a69484d6a8dfd22c5767b8dd2\",\r\n    \"target_config\": {\r\n      \"kind\": \"codex\",\r\n      \"command\": [\r\n        \"<USER_HOME>\\\\AppData\\\\Local\\\\OpenAI\\\\Codex\\\\bin\\\\5ea220ae823df3d7\\\\codex.exe\",\r\n        \"-c\",\r\n        \"model=\\\"gpt-6-luna\\\"\",\r\n        \"-c\",\r\n        \"model_reasoning_effort=\\\"low\\\"\",\r\n        \"app-server\"\r\n      ],\r\n      \"sandbox\": \"workspace-write\",\r\n      \"model\": \"gpt-6-luna\"\r\n    },\r\n    \"state\": \"completed\",\r\n    \"created_at\": \"2026-10-07T12:29:25.877094+00:00\",\r\n    \"launch\": {\r\n      \"agent\": \"repair-alpha\",\r\n      \"binding\": \"b6e03436a69484d6a8dfd22c5767b8dd2\",\r\n      \"phase\": \"starting\",\r\n      \"kind\": \"codex\",\r\n      \"pid\": 260796,\r\n      \"state\": \"starting_runner\"\r\n    },\r\n    \"session\": \"01a11657-dd6a-7e20-8f00-7c254dd4e6aa\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

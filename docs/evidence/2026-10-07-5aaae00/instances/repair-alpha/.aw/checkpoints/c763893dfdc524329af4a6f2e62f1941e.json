@@ -1,0 +1,8 @@
+{
+  "id": "c763893dfdc524329af4a6f2e62f1941e",
+  "created_at": "2026-10-07T12:29:48.814697+00:00",
+  "summary": "新批次隔离修复验收入口已启动并记录启动事实；截至交出未开展业务修复或验收。",
+  "content": "阶段事实：当前原生会话为 Codex，workspace=repair-local，agent=repair-alpha，binding=b5c3219661559459fa9a25989219ece5e。读取本实例 AGENTS.md、notes/source.md、handoff Skill、checkpoint 提示及当前版本能力说明。notes/source.md 的原文为“修复后随机标识：54f487126a3bf311a789a4982d78da7e / 本文件仅为新批次隔离验收资产。”已写入 notes/boot-b5c3219661559459fa9a25989219ece5e.md，记录 binding 和随机标识。未开展修复、测试、Work 或旧批次/生产业务。未决：后续业务是否需要进行尚无决定；本次仅按用户指令交出。检查点仅包含实例分支实际文件版本，平台排除项仍按规则排除；未读取 .aw-local，也未获取外部产品仓或其他原生记录。",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

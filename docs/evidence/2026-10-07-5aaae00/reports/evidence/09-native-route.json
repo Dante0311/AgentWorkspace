@@ -1,0 +1,10 @@
+{
+  "codex_executable": "<USER_HOME>\\AppData\\Local\\OpenAI\\Codex\\bin\\5ea220ae823df3d7\\codex.exe",
+  "sha256": "3b8f6e33caa75f232558a3cf76ff9b87bb5ef6dbcf4996372f24e55c78b1b916",
+  "model": "gpt-6-luna",
+  "effort": "low",
+  "authentication": "existing official ChatGPT login; no authentication files read/copied/output",
+  "metadata_probe_model_invoked": false,
+  "base_url_override": false,
+  "global_config_changed": false
+}

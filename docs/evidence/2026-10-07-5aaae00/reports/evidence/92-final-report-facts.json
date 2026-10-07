@@ -1,0 +1,15 @@
+{
+  "finished_at": "2026-10-07T20:54:15.278650+08:00",
+  "source_commit": "5aaae00520374b022e0c38fa21f312f8e08629ba",
+  "wheel_sha256": "e9bcff1a015358643bafbc800d1beb7453dd36cbb8bd1c34a10e68d68ca309f7",
+  "normal_terminal_repair": "PASS_REAL scoped",
+  "transfer_terminal_repair": "PASS_REAL scoped",
+  "steer_terminal_residual": "OBSERVED submitted despite matching completed turn",
+  "original_workbuddy_js_entry": "BLOCKED WinError193 before authentication",
+  "codex_rounds": 13,
+  "external_messages": 0,
+  "remaining_batch_processes": 0,
+  "main_source_changed_by_executor": false,
+  "independent_review": "Lead owned, pending",
+  "report": "E2E-REPORT.md"
+}

@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-07T20:50:45.857841+08:00",
+  "finished_at": "2026-10-07T20:50:46.898727+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "repair-local",
+    "call",
+    "checkpoint.show",
+    "--arguments",
+    "{\"agent_id\": \"repair-beta\", \"checkpoint\": \"repair-watch-receiver-stop\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"id\": \"repair-watch-receiver-stop\",\r\n    \"agent\": \"repair-beta\",\r\n    \"revision\": \"195c85a77e110619807cd9d25941c0ac19b22c8b\",\r\n    \"path\": \".aw/checkpoints/repair-watch-receiver-stop.json\",\r\n    \"created_at\": \"2026-10-07T12:49:37.705735+00:00\",\r\n    \"excluded\": [\r\n      \".aw-local/\"\r\n    ],\r\n    \"record\": {\r\n      \"id\": \"repair-watch-receiver-stop\",\r\n      \"created_at\": \"2026-10-07T12:49:37.705735+00:00\",\r\n      \"summary\": \"已按顺序接收并ACK repair-watch-001与repair-watch-002；notes/watch-order.md记录两条通知ID、引用和随机标识。\",\r\n      \"content\": \"\",\r\n      \"record_refs\": [],\r\n      \"scope\": \"Saved instance files; external/runtime-unavailable state is not implied.\"\r\n    },\r\n    \"files\": [\r\n      \".agents/skills/agent/SKILL.md\",\r\n      \".agents/skills/fork/SKILL.md\",\r\n      \".agents/skills/handoff/SKILL.md\",\r\n      \".agents/skills/message/SKILL.md\",\r\n      \".agents/skills/relay/SKILL.md\",\r\n      \".agents/skills/work/SKILL.md\",\r\n      \".agents/skills/workspace/SKILL.md\",\r\n      \".aw/checkpoints/initial-b90eb318a30e84c78a80a1ba2d03ccd18.json\",\r\n      \".aw/checkpoints/repair-watch-receiver-stop.json\",\r\n      \".aw/creation.json\",\r\n      \".aw/identity.json\",\r\n      \".aw/prompts/capabilities.md\",\r\n      \".aw/prompts/checkpoints.md\",\r\n      \".aw/prompts/desktop-projects.md\",\r\n      \".aw/prompts/entry.md\",\r\n      \".aw/prompts/handoff.md\",\r\n      \".aw/prompts/initialization.md\",\r\n      \".aw/software.json\",\r\n      \"AGENTS.md\",\r\n      \"messages/repair-watch-001.json\",\r\n      \"messages/repair-watch-002.json\",\r\n      \"notes/watch-order.md\",\r\n      \"records/b90eb318a30e84c78a80a1ba2d03ccd18/runtime.jsonl\"\r\n    ]\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

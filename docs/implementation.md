@@ -2,6 +2,8 @@
 
 本页描述当前功能分支的实现事实，不替代 [design.md](design.md)。版本仍为 `0.1.0a1`，不是已完成全部目标和实机验收的正式 V1。实际恢复位置与逐次测试见 [development-checkpoint.md](development-checkpoint.md)，操作见 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
 
+2026-10-07 修复后 Windows 定向实测已完成：E2E-004 与 E2E-001 普通停工路径取得限定通过；E2E-001 busy insert/steer 残余、E2E-002 原 WorkBuddy 无扩展名入口启动失败仍待修。完整范围见下文“修复后 Windows 实机结果”和[新批次证据](evidence/2026-10-07-5aaae00/README.md)，历史登记不覆盖。
+
 ## 模块
 
 | 文件 | 当前职责 |
@@ -139,3 +141,15 @@ HY 失败后停止 Runner 但保留 Binding 执行资格，是当前合同下保
 ### 本批整合交付（2026-10-07）
 
 用户随后授权将两项修复推送并合入 `main`。整合以 `5ea4605` 为基线，保留已归档的原始 E2E 报告/日志以及 E2E-003 更正；产品代码没有在整合中扩展。[本次修复与验证记录](evidence/2026-10-07-e2e-fixes/README.md)附上三组重新执行的结果、修复前失败、来源和归档校验。上述“待修复”是原验收时的历史状态；目前为代码已修、官方账号/Windows/认证真实复测待完成，不能把开发回归通过追写成原基线验收通过。
+
+### 修复后 Windows 实机结果（2026-10-07）
+
+用户授权拉取修复后继续独立测试。本批固定产品提交 `5aaae00520374b022e0c38fa21f312f8e08629ba`，使用新隔离安装、数据与请求 ID，官方登录 `gpt-6-luna/low`；没有修改产品源码、旧账本、旧交接或旧 HY 资格。上节“复测待完成”是合入时的状态，当前以本节和[完整执行报告及独立复核](evidence/2026-10-07-5aaae00/README.md)为准。
+
+- **E2E-004：本轮同 Codex 范围通过。** 两笔自动交接均在首次公开状态查询前已持久保存 completed/session；后继自行停工后终态仍保留。相同旧 ID 仅读回原结果，没有额外输入/轮次；新合法入口与新交接成功，归档旧 ID 可读。未调用 advance/transfer-continue 推进结果。
+- **E2E-001：普通路径通过，busy insert/steer 残余仍待修。** 普通 boot/handoff/normal 的匹配完成事件、输入终态、显式检查点及释放一致，boot 自停复用显式快照。但一次忙碌时的公开 insert 返回顶层 `result.turnId`，`runtime.py` 的 `_complete_inputs` 仅读 `result.turn.id`；该原生轮次已 completed，输入仍 submitted。不是所有 insert 都失败，也没有证据表明 submitted 被自动重放。保留现场，不手改或重发已执行输入。[回执与完成事件对照](evidence/2026-10-07-5aaae00/reports/evidence/87-steer-terminal-ledger-mismatch.json)。
+- **E2E-002：实际入口启动失败，认证未到达。** 原选 WorkBuddy `resources/app.asar.unpacked/cli/bin/codebuddy` 是无扩展名 JS，未进入 `.js/.cjs/.mjs` 的 Node 适配。Node 已存在、固定 SDK 0.3.267 的真实 connect 仍 WinError 193；不能写成仅待登录或以 `.cjs` 协议夹具通过代替原入口启动。[真实控制连接](evidence/2026-10-07-5aaae00/reports/evidence/24-workbuddy-real-js-control.json)。
+- **Watch：限定副作用成立，存在一次管理端介入。** 两条本人 send/receive/ACK、同 session 顺序资产及双方本人 checkpoint/stop 已核对。第一通知轮在同轮等待第二通知，管理端一次 steer 澄清后才结束；无人介入自然流程未取得完整通过证据，不将该等待直接归因平台延迟。
+- **计数与收尾：** 13/13 原生轮次完成，12 个输入中 11 completed、1 submitted；两个测试实例 released、Runner 退出、最终进程审计无残留。121 项首跑 120 passed / 1 环境导入失败，安装同 wheel 后仅失败用例重查 1 passed；SDK 首跑 24 passed / 5 缺依赖 skipped，补固定依赖后仅原 5 项 5 passed。保留原失败、selector 零用例错误及模型参数/命名偏差，未重跑全部组制造首跑全绿。
+
+报告、检查点、独立复核、操作/事件 ID、定向测试日志、来源与归档 SHA256 及脱敏排除说明已按批次入仓。没有新增 Desktop、企微、自有服务、跨 Harness 真实业务、生产 UE/CI、远端 Git 业务、长期运行或完整 A–J 的证明；历史失败不被本次限定通过覆盖。

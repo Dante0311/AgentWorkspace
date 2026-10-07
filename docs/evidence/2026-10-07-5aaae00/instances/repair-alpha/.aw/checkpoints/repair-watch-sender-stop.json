@@ -1,0 +1,8 @@
+{
+  "id": "repair-watch-sender-stop",
+  "created_at": "2026-10-07T12:42:44.411141+00:00",
+  "summary": "本次隔离 normal Watch 发送已完成：向 repair-beta 仅发送两次 normal 消息，repair-watch-001 与 repair-watch-002（引用 repair-watch-001），两条均返回 state=published。实际返回记录保存在 notes/watch-sender.md。",
+  "content": "",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

@@ -1,0 +1,14 @@
+{
+  "started_at": "2026-10-07T20:36:11.235745+08:00",
+  "finished_at": "2026-10-07T20:40:39.405819+08:00",
+  "argv": [
+    "<E2E_ROOT>\\sdk-app\\Scripts\\python.exe",
+    "-u",
+    "-c",
+    "import sys;sys.path.append('<E2E_ROOT>\\\\build-app\\\\Lib\\\\site-packages');import pytest,codebuddy_agent_sdk,importlib.metadata;print('Actual SDK:',codebuddy_agent_sdk.__file__,importlib.metadata.version('codebuddy-agent-sdk'));raise SystemExit(pytest.main(['tests/test_codebuddy_windows_entry.py','tests/test_native_sdk.py','tests/test_native_failure.py','tests/test_sdk_metadata.py','-q','--basetemp','<E2E_ROOT>\\\\temp\\\\pytest-sdk','--junitxml','<E2E_ROOT>\\\\reports\\\\evidence\\\\43-windows-sdk-regression.xml']))"
+  ],
+  "cwd": "<E2E_ROOT>\\source",
+  "exit_code": 0,
+  "stdout": "Actual SDK: <E2E_ROOT>\\sdk-app\\Lib\\site-packages\\codebuddy_agent_sdk\\__init__.py 0.3.267\r\n....s.s.s.s..s...............                                            [100%]\r\n============================== warnings summary ===============================\r\n..\\build-app\\Lib\\site-packages\\_pytest\\config\\__init__.py:1345\r\n  <E2E_ROOT>\\build-app\\Lib\\site-packages\\_pytest\\config\\__init__.py:1345: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; anyio\r\n    self._mark_plugins_for_rewrite(hook, disable_autoload)\r\n\r\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\r\n24 passed, 5 skipped, 1 warning in 267.66s (0:04:27)\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,12 @@
+{
+  "initial_group": {
+    "passed": 120,
+    "failed": 1,
+    "failure": "test_os_lock_prevents_another_process subprocess could not import agent_workspace in build-only environment"
+  },
+  "correction": "Install exact fixed wheel into isolated test environment; no PYTHONPATH or fixture module injection; no product/test change",
+  "rerun_scope": "only failed OS lock test",
+  "recheck_passed": true,
+  "full_121_group_not_rerun": true,
+  "original_failure_retained": true
+}

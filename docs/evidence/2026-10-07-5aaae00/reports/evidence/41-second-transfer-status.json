@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-07T20:36:49.615204+08:00",
+  "finished_at": "2026-10-07T20:36:49.944382+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "repair-local",
+    "call",
+    "agent.transfer-status",
+    "--arguments",
+    "{\"agent_id\": \"repair-alpha\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"id\": \"repair-transfer-002\",\r\n    \"old_binding\": \"b5498a27dda6b403fb6a077e641c861f7\",\r\n    \"target_binding\": \"ba21c526be5c24387927df1e2897c7949\",\r\n    \"target_config\": {\r\n      \"kind\": \"codex\",\r\n      \"command\": [\r\n        \"<USER_HOME>\\\\AppData\\\\Local\\\\OpenAI\\\\Codex\\\\bin\\\\5ea220ae823df3d7\\\\codex.exe\",\r\n        \"-c\",\r\n        \"model=\\\"gpt-6-luna\\\"\",\r\n        \"-c\",\r\n        \"model_reasoning_effort=\\\"low\\\"\",\r\n        \"app-server\"\r\n      ],\r\n      \"sandbox\": \"workspace-write\",\r\n      \"model\": \"gpt-6-luna\"\r\n    },\r\n    \"state\": \"completed\",\r\n    \"created_at\": \"2026-10-07T12:34:58.222820+00:00\",\r\n    \"launch\": {\r\n      \"agent\": \"repair-alpha\",\r\n      \"binding\": \"ba21c526be5c24387927df1e2897c7949\",\r\n      \"phase\": \"starting\",\r\n      \"kind\": \"codex\",\r\n      \"pid\": 260284,\r\n      \"state\": \"starting_runner\"\r\n    },\r\n    \"session\": \"01a1165d-1adc-7a70-9b75-9599ea71aba0\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

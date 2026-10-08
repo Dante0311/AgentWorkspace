@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:58:10.903119+08:00",
+  "finished_at": "2026-10-08T12:58:17.034188+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "message.send",
+    "--arguments",
+    "{\"agent_id\": \"sentinel\", \"binding\": \"b101bf7595cd04d4085f766211eb3933b\", \"to\": \"steward\", \"content\": \"Explicit isolated publication fault stimulus; no production task.\", \"delivery\": \"normal\", \"request_id\": \"aw-maint-fault-001\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 2,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"id\": \"aw-maint-fault-001\",\r\n    \"type\": \"message\",\r\n    \"workspace\": \"maintenance-local\",\r\n    \"payload\": {\r\n      \"id\": \"aw-maint-fault-001\",\r\n      \"from\": {\r\n        \"workspace\": \"workspace:setupccb36af9281b49619fe9cbcbc00f4ac2\",\r\n        \"agent\": \"sentinel\"\r\n      },\r\n      \"to\": {\r\n        \"workspace\": \"workspace:setupccb36af9281b49619fe9cbcbc00f4ac2\",\r\n        \"agent\": \"steward\"\r\n      },\r\n      \"created_at\": \"2026-10-08T04:58:13.886362+00:00\",\r\n      \"message_refs\": [],\r\n      \"delivery\": \"normal\",\r\n      \"content\": \"Explicit isolated publication fault stimulus; no production task.\"\r\n    },\r\n    \"destinations\": [\r\n      \"<E2E_ROOT>\\\\data\\\\maintenance.git\"\r\n    ],\r\n    \"completed\": [],\r\n    \"sender\": \"sentinel\",\r\n    \"binding\": \"b101bf7595cd04d4085f766211eb3933b\",\r\n    \"error\": \"Git push rejected. Check access, branch rules, and that a local authority is a bare repo.\",\r\n    \"state\": \"pending\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T13:01:07.881203+08:00",
+  "finished_at": "2026-10-08T13:01:08.719451+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "maintenance.status",
+    "--arguments",
+    "{}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"worker_running\": false,\r\n    \"grantable_commands\": [\r\n      \"agent.archive\",\r\n      \"agent.configure-codex\",\r\n      \"agent.configure-sdk\",\r\n      \"agent.handoff\",\r\n      \"agent.input\",\r\n      \"agent.start\",\r\n      \"agent.sync\",\r\n      \"agent.transfer-continue\",\r\n      \"agent.transfer-profile\",\r\n      \"agent.update\",\r\n      \"agent.upgrade-tools\",\r\n      \"asset.write\",\r\n      \"bridge.switch\",\r\n      \"maintenance.repair\",\r\n      \"maintenance.schedule\",\r\n      \"message.watch\",\r\n      \"runtime.stop\",\r\n      \"setup.prepare-instance\"\r\n    ],\r\n    \"schedule\": {\r\n      \"owner\": \"host-f41ac1839e5b4021b038d94757a78fe7\",\r\n      \"owner_workspace\": \"maintenance-local\",\r\n      \"enabled\": false,\r\n      \"interval\": 30,\r\n      \"notify\": false,\r\n      \"generation\": \"schedule-475a47d7e8404b71bbb40f1006065b34\",\r\n      \"updated_at\": \"2026-10-08T04:59:43.542806+00:00\"\r\n    },\r\n    \"local_run\": {\r\n      \"generation\": \"schedule-7cd66927667244aaa091c5195b89adc5\",\r\n      \"last_attempt\": \"2026-10-08T04:59:29.732138+00:00\",\r\n      \"next_due\": 1791435599.7321382,\r\n      \"last_run\": \"2026-10-08T04:59:31.447943+00:00\",\r\n      \"report\": {\r\n        \"state\": \"degraded\",\r\n        \"observed_at\": \"2026-10-08T04:59:30.287115+00:00\",\r\n        \"revision\": \"7b79a81ff9876ea03286ecee6cb06c140600a696\",\r\n        \"issues\": [\r\n          {\r\n            \"code\": \"publication_pending\",\r\n            \"agent\": \"sentinel\",\r\n            \"operation\": \"aw-maint-fault-001\",\r\n            \"state\": \"pending\"\r\n          }\r\n        ],\r\n        \"unacknowledged_notifications\": {},\r\n        \"coverage\": {\r\n          \"local\": [\r\n            \"maintainer\",\r\n            \"sentinel\",\r\n            \"steward\"\r\n          ],\r\n          \"unobserved_remote\": []\r\n        }\r\n      },\r\n      \"state\": \"checked\",\r\n      \"notice\": {\r\n        \"id\": \"health-f5242c08aae54c66a6807bbd32b81e20\",\r\n        \"fingerprint\": \"384a90062962db0fa4caf39aeac56557efa7470e59d13806d38f0f2a54b555cb\",\r\n        \"binding\": \"b101bf7595cd04d4085f766211eb3933b\",\r\n        \"state\": \"queued\"\r\n      }\r\n    },\r\n    \"worker_error\": null,\r\n    \"grants\": {\r\n      \"maintainer\": {\r\n        \"commands\": [],\r\n        \"targets\": [],\r\n        \"updated_at\": \"2026-10-08T05:00:42.748539+00:00\"\r\n      }\r\n    }\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

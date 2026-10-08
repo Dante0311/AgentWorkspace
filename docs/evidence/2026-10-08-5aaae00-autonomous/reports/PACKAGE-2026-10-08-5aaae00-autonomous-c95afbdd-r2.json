@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-10-08T13:07:22.808213+08:00",
+  "package": "<E2E_ROOT>\\shareable\\2026-10-08-5aaae00-autonomous-c95afbdd-r2",
+  "archive": "<E2E_ROOT>\\shareable\\2026-10-08-5aaae00-autonomous-c95afbdd-r2.zip",
+  "archive_sha256": "5ef5442447f4442e8ebdf5c648db367a4434e442e3e166b5edb6d9040e101cfe",
+  "source_archive_pairs": 155,
+  "checked_files": 157,
+  "all_hashes_verified": true,
+  "zip_crc_verified": true,
+  "relative_links_verified": true,
+  "privacy_pattern_scan_passed": true
+}

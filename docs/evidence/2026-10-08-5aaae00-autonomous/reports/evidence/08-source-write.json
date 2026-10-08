@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:54:18.311048+08:00",
+  "finished_at": "2026-10-08T12:54:18.602107+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "watch-local",
+    "call",
+    "asset.write",
+    "--arguments",
+    "{\"agent_id\": \"watch-alpha\", \"path\": \"notes/source.md\", \"revision\": null, \"content\": \"random marker: f8e45861ceb449bc9b10f00cef198b90\\n\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"path\": \"notes/source.md\",\r\n    \"revision\": \"17384124e01c4040a6a70ed8d1a41f4c09cfc2e14c064d6d73bb36b2acde9436\",\r\n    \"saved\": \"local\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

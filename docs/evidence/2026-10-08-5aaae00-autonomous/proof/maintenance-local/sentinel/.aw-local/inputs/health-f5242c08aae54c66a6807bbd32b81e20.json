@@ -1,0 +1,22 @@
+{
+  "id": "health-f5242c08aae54c66a6807bbd32b81e20",
+  "binding": "b101bf7595cd04d4085f766211eb3933b",
+  "delivery": "normal",
+  "purpose": "maintenance",
+  "state": "completed",
+  "created_at": "2026-10-08T04:58:59.674922+00:00",
+  "sequence": 2,
+  "attempted_at": "2026-10-08T04:59:00.466461+00:00",
+  "result": {
+    "turn": {
+      "id": "01a119e1-07f8-7c03-8ca1-2c152fbd3413",
+      "items": [],
+      "itemsView": "notLoaded",
+      "status": "inProgress",
+      "error": null,
+      "startedAt": null,
+      "completedAt": null,
+      "durationMs": null
+    }
+  }
+}

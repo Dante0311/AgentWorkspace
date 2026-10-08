@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T13:00:47.179249+08:00",
+  "finished_at": "2026-10-08T13:00:47.954389+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "message.show",
+    "--arguments",
+    "{\"message_id\": \"aw-maint-result-001\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"message\": {\r\n      \"id\": \"aw-maint-result-001\",\r\n      \"from\": {\r\n        \"workspace\": \"workspace:setupccb36af9281b49619fe9cbcbc00f4ac2\",\r\n        \"agent\": \"maintainer\"\r\n      },\r\n      \"to\": {\r\n        \"workspace\": \"workspace:setupccb36af9281b49619fe9cbcbc00f4ac2\",\r\n        \"agent\": \"sentinel\"\r\n      },\r\n      \"created_at\": \"2026-10-08T05:00:05.116005+00:00\",\r\n      \"message_refs\": [\r\n        \"aw-maint-task-001\"\r\n      ],\r\n      \"delivery\": \"normal\",\r\n      \"content\": \"maintenance.repair request aw-maint-repair-001 completed: repair.state=applied, result.state=published. Re-read operation aw-maint-fault-001 is published. Follow-up workspace.doctor is healthy with no issues; target publication_pending disappeared. One unacknowledged notification remains for steward. This verifies publication reconciliation and doctor state only, not steward receipt or processing. Details saved locally in notes/maintenance-repair.md.\"\r\n    },\r\n    \"ack\": {\r\n      \"message_id\": \"aw-maint-result-001\"\r\n    }\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

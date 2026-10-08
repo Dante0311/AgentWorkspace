@@ -8,6 +8,8 @@
 
 同日桌面项目补测：工作台引用保存、改名、刷新和冲突保护通过；用户实际建立的 Codex 项目保留实例主目录与同一项目 ID，并手动归入匹配分区。该结论不包含原生 Desktop 会话、Binding 或自动交接。[本批完整证据](evidence/2026-10-08-5aaae00-desktop/README.md)。
 
+同日自主补测：无控制者纠偏的 normal Watch 与管家发布故障恢复取得限定实机通过，共 9 个 Codex 模型轮次；初始化工具约束、参数与笔记偏差保留。Desktop 真实控制连接和 busy 状态只读验证通过；tclaude 只完成无模型 SDK 预检，真实调用及交接等待用户选择模型。[执行报告、独立复核与完整证据](evidence/2026-10-08-5aaae00-autonomous/README.md)。
+
 ## 模块
 
 | 文件 | 当前职责 |
@@ -186,3 +188,15 @@ HY 失败后停止 Runner 但保留 Binding 执行资格，是当前合同下保
 用户手动建立 Codex 本地项目、关联文件夹并归入与引用名称一致的分区。原生只读接口确认最终项目 ID 与最初创建时一致、实例主目录保持、测试根下只有一个项目，目标分区包含该项目。用户截图显示实例目录为“主要”、产品目录作为另一文件夹；完整附加路径和 Desktop 应用版本号未独立取得。平台仍如实返回 `manual_setup_required` / `native_project_verified=false`，人工核对结论另列。
 
 产品文件未变，实例 `current=null` / `has_run=false`；没有启动模型、原生 Desktop 对话、Binding、handoff 或 relay，也不将本次项目整理复用写成多会话运行证明。服务 Ctrl+C 返回1，进程/端口已停止；本机测试项目、分区和数据保留。本批为用户操作及控制者复核，无第二执行者独立复核；[完整报告与证据](evidence/2026-10-08-5aaae00-desktop/README.md)记录来源/归档摘要及排除范围。
+
+### 自主通信、管家恢复与接入预检（2026-10-08）
+
+用户授权补齐当前可自主运行的实机用例。本批仍固定产品 `5aaae00` 与同一已校验 wheel，但新建隔离安装、AW_HOME、两个 Workspace 及测试实例，未修产品或旧现场。官方 Codex `gpt-6-luna/low` 共 9 个原生轮次，started/completed 均为 9；[完整报告及独立复核](evidence/2026-10-08-5aaae00-autonomous/README.md)按新批次保留。
+
+- **normal Watch：通信阶段无控制者纠偏，限定通过。** 4 轮完成两条 normal 消息、同一接收 session 的顺序资产、本人 ACK/checkpoint/stop。首次 boot 提前 receive 被拒绝、无效参数自行纠正、发送者笔记抄错第二条 from.agent 的偏差保留；真实消息/回执均为正确发送者，不以手抄笔记替代原始记录，也不称初始化严格遵循通过。
+- **管家 publication-reconcile：真实故障恢复闭环限定通过。** 控制者在可丢弃 bare Git authority 临时拒绝 main 推送，单次公开测试消息自然留下 pending；恢复底层写入条件后，正式 30 秒巡检通知 Sentinel，模型发送维修任务，Maintainer 经限定命令/目标授权补齐原消息，Sentinel 本人重新核对 operation 和 doctor。5 轮完成，实际 result=published，目标异常消失，已知 applied 的同维修 ID 回读未重复动作。控制者恢复 Git 条件不冒称维修员修复权限；不外推 unknown 结果重试或其他维修动作。
+- **工具遵循与清理：** Maintainer boot 的三次只读 Shell 尝试（两次失败、一次读取实例资料）及 Sentinel 初始化额外动作不符合严格测试指令，真正维修仍经受限平台工具完成。编排误判 pending 退出码的过程保留，接续未重发或重新注入。四个模型实例 released、Runner 退出，巡检关闭、授权撤销、临时 Git 配置恢复；给未启动 steward 的一条未读测试刺激保留，不代 ACK。共享原生服务归属未确认，不宣称全机服务清零。
+- **Desktop：真实只读控制部分通过。** 固定产品适配器连接本机已校验的 App Tools 安装组件，发现创建聊天/读状态/发消息等接口并读回当前调用聊天 busy，所建 RPC 进程已退出；退出方式未留证。未创建原生聊天或 Binding，也未投递/交接。产品 Desktop start 仍仅准备提示和深链，自动 transfer 仍拒绝 Desktop；上游接口存在不等于产品已完成接入。
+- **tclaude：无模型预检通过，真实交接未运行。** 用户指定已登录的内部包装器，使用其 Windows 原生入口，wrapper 0.1.8/upstream Claude Code 2.1.251、SDK 0.2.163 的 connect/get_server_info 成功，认证仍为 configured_unverified，query=0。等待用户模型选择后才增量执行 Codex → tclaude；该状态不是兼容性失败，更不证明 WorkBuddy 已修复。
+
+独立复核另列 `message.reconcile` 授权与受限维修入口可能不一致的静态疑点，尚未做实际越权测试或修复，不将指定路径通过扩成所有补齐入口授权闭合。E2E-001 busy insert/steer 与 E2E-002 原 WorkBuddy 入口缺陷仍保留。新包提供源/中间/最终归档 SHA256、必要日志、原生事件和排除说明；不含凭据、完整私人聊天、机器路径或可运行测试状态。

@@ -1,0 +1,10 @@
+{
+  "id": "c7d7578ed1a994ed2a29d334dd387847d",
+  "agent": "watch-alpha",
+  "revision": "7afa39787f2778ae3cf58fbd2706de7f448e26e6",
+  "path": ".aw/checkpoints/c7d7578ed1a994ed2a29d334dd387847d.json",
+  "created_at": "2026-10-08T04:55:51.154511+00:00",
+  "excluded": [
+    ".aw-local/"
+  ]
+}

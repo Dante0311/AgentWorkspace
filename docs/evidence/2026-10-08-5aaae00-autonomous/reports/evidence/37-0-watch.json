@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:58:03.527737+08:00",
+  "finished_at": "2026-10-08T12:58:05.607508+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "message.watch",
+    "--arguments",
+    "{\"agent_id\": \"sentinel\", \"operation\": \"start\", \"interval\": 3}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"enabled\": true,\r\n    \"interval\": 3,\r\n    \"binding\": \"b101bf7595cd04d4085f766211eb3933b\",\r\n    \"changed_at\": \"2026-10-08T04:58:05.580057+00:00\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

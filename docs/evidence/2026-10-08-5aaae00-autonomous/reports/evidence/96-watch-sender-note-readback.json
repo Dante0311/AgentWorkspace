@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T13:04:56.681345+08:00",
+  "finished_at": "2026-10-08T13:04:56.973316+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "watch-local",
+    "call",
+    "asset.read",
+    "--arguments",
+    "{\"agent_id\": \"watch-alpha\", \"path\": \"notes/watch-sender.md\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"path\": \"notes/watch-sender.md\",\r\n    \"content\": \"# Watch normal 发送结果\\n\\n- 本次 binding：`b1a328acff2754abcae00512d2036f112`（入口注入，`agent.show` 当前 binding 一致）。\\n- source 随机标识：`f8e45861ceb449bc9b10f00cef198b90`。\\n\\n## 第 1 条\\n\\n请求：`message.send`，`request_id=aw-watch-001`，目标 `watch-beta`，normal，内容：`A — f8e45861ceb449bc9b10f00cef198b90`。\\n\\n实际返回：\\n\\n```json\\n{\\\"id\\\":\\\"aw-watch-001\\\",\\\"type\\\":\\\"message\\\",\\\"workspace\\\":\\\"watch-local\\\",\\\"payload\\\":{\\\"id\\\":\\\"aw-watch-001\\\",\\\"from\\\":{\\\"workspace\\\":\\\"workspace:setup3518d9d3a00040f0bfc35a352ab28fa5\\\",\\\"agent\\\":\\\"watch-alpha\\\"},\\\"to\\\":{\\\"workspace\\\":\\\"workspace:setup3518d9d3a00040f0bfc35a352ab28fa5\\\",\\\"agent\\\":\\\"watch-beta\\\"},\\\"created_at\\\":\\\"2026-10-08T04:55:26.199543+00:00\\\",\\\"message_refs\\\":[],\\\"delivery\\\":\\\"normal\\\",\\\"content\\\":\\\"A — f8e45861ceb449bc9b10f00cef198b90\\\"},\\\"destinations\\\":[\\\"<E2E_ROOT>\\\\\\\\data\\\\\\\\watch.git\\\"],\\\"completed\\\":[\\\"<E2E_ROOT>\\\\\\\\data\\\\\\\\watch.git\\\"],\\\"sender\\\":\\\"watch-alpha\\\",\\\"binding\\\":\\\"b1a328acff2754abcae00512d2036f112\\\",\\\"state\\\":\\\"published\\\"}\\n```\\n\\n## 第 2 条\\n\\n请求：`message.send`，`request_id=aw-watch-002`，目标 `watch-beta`，normal，内容：`B — f8e45861ceb449bc9b10f00cef198b90`，`message_refs=[aw-watch-001]`。\\n\\n实际返回：\\n\\n```json\\n{\\\"id\\\":\\\"aw-watch-002\\\",\\\"type\\\":\\\"message\\\",\\\"workspace\\\":\\\"watch-local\\\",\\\"payload\\\":{\\\"id\\\":\\\"aw-watch-002\\\",\\\"from\\\":{\\\"workspace\\\":\\\"workspace:setup3518d9d3a00040f0bfc35a352ab28fa5\\\",\\\"agent\\\":\\\"watch-beta\\\"},\\\"to\\\":{\\\"workspace\\\":\\\"workspace:setup3518d9d3a00040f0bfc35a352ab28fa5\\\",\\\"agent\\\":\\\"watch-beta\\\"},\\\"created_at\\\":\\\"2026-10-08T04:55:32.260037+00:00\\\",\\\"message_refs\\\":[\\\"aw-watch-001\\\"],\\\"delivery\\\":\\\"normal\\\",\\\"content\\\":\\\"B — f8e45861ceb449bc9b10f00cef198b90\\\"},\\\"destinations\\\":[\\\"<E2E_ROOT>\\\\\\\\data\\\\\\\\watch.git\\\"],\\\"completed\\\":[\\\"<E2E_ROOT>\\\\\\\\data\\\\\\\\watch.git\\\"],\\\"sender\\\":\\\"watch-alpha\\\",\\\"binding\\\":\\\"b1a328acff2754abcae00512d2036f112\\\",\\\"state\\\":\\\"published\\\"}\\n```\\n\\n未读取接收方消息或代 ACK；未等待 ACK，未重试发送。\\n\",\r\n    \"revision\": \"e5f4c5e2e8d05fd2b788e625d54e07526fb4ba5af4186ed8b35e5ec009330cb0\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

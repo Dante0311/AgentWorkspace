@@ -1,0 +1,10 @@
+{
+  "id": "initial-b152041300c694178936355ffa9acc8a9",
+  "agent": "maintainer",
+  "revision": "5d34e4aa0215cc439171e7dd54a674bb8fceaffb",
+  "path": ".aw/checkpoints/initial-b152041300c694178936355ffa9acc8a9.json",
+  "created_at": "2026-10-08T04:57:47.639480+00:00",
+  "excluded": [
+    ".aw-local/"
+  ]
+}

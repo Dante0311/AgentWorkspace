@@ -1,0 +1,5 @@
+{
+  "source_observation": "observer shell only",
+  "batch_native_clients": [],
+  "commandlines_excluded": true
+}

@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:57:18.168317+08:00",
+  "finished_at": "2026-10-08T12:57:23.345380+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "agent.start",
+    "--arguments",
+    "{\"agent_id\": \"maintainer\", \"open_app\": false}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"agent\": \"maintainer\",\r\n    \"binding\": \"b152041300c694178936355ffa9acc8a9\",\r\n    \"phase\": \"starting\",\r\n    \"kind\": \"codex\",\r\n    \"pid\": 76220,\r\n    \"state\": \"starting_runner\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

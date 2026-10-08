@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:34:42.165589+08:00",
+  "finished_at": "2026-10-08T14:34:42.895708+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "message.show",
+    "--arguments",
+    "{\"message_id\": \"aw-transfer-message-001\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"message\": {\r\n      \"id\": \"aw-transfer-message-001\",\r\n      \"from\": {\r\n        \"workspace\": \"workspace:setupfb6e7cba63f24e718a65fc79167a8040\",\r\n        \"agent\": \"transfer-peer\"\r\n      },\r\n      \"to\": {\r\n        \"workspace\": \"workspace:setupfb6e7cba63f24e718a65fc79167a8040\",\r\n        \"agent\": \"transfer-agent\"\r\n      },\r\n      \"created_at\": \"2026-10-08T06:33:14.069458+00:00\",\r\n      \"message_refs\": [],\r\n      \"delivery\": \"normal\",\r\n      \"content\": \"隔离同身份自动交接/真实消息测试。随机标识：6ef47b430cc648b2920451ba6fe7416d\"\r\n    },\r\n    \"ack\": {\r\n      \"message_id\": \"aw-transfer-message-001\"\r\n    }\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

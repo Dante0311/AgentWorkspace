@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-10-08T14:37:09.8775724+08:00",
+  "known_test_runner_pids": [
+    78244,
+    67744,
+    67444,
+    52444
+  ],
+  "known_test_runner_pids_alive": [],
+  "batch_native_clients": [],
+  "other_tclaude_claude": [
+    {
+      "pid": 58892,
+      "parent_pid": 57196,
+      "name": "claude.exe",
+      "command_mentions_batch": false,
+      "ownership": "not_proven_batch_exclusive"
+    },
+    {
+      "pid": 83476,
+      "parent_pid": 74208,
+      "name": "tclaude.exe",
+      "command_mentions_batch": false,
+      "ownership": "not_proven_batch_exclusive"
+    }
+  ],
+  "shared_service_stopped": false,
+  "claim": "Known test runners exited; batch-associated native client process not observed. Unproven shared services left unchanged; no claim all daemons stopped."
+}

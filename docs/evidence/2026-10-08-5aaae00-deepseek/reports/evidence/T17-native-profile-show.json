@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:29:59.449558+08:00",
+  "finished_at": "2026-10-08T14:30:00.245261+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "agent.show",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"id\": \"transfer-agent\",\r\n    \"name\": \"transfer-agent\",\r\n    \"description\": \"明确授权的隔离同身份自动交接/真实消息测试\",\r\n    \"branch\": \"instance/transfer-agent\",\r\n    \"archived\": false,\r\n    \"current\": null,\r\n    \"has_run\": false,\r\n    \"handoff\": null,\r\n    \"created_at\": \"2026-10-08T06:29:53.799866+00:00\",\r\n    \"creation\": {\r\n      \"request_id\": \"transfer-agent-create\",\r\n      \"fingerprint\": \"f4bc7167c1b6f829bc971d9d8157b334d2b777e219e6c0a8dab8bb23004239c2\"\r\n    },\r\n    \"revision\": \"da8ceeec2bb23899f70682a3aeef5f1a4093de06\",\r\n    \"binding\": null,\r\n    \"directories\": [\r\n      \"<E2E_ROOT>\\\\data\\\\home\\\\instances\\\\transfer-local\\\\transfer-agent\"\r\n    ],\r\n    \"runtime\": {\r\n      \"state\": \"not_running\",\r\n      \"runner_alive\": false\r\n    },\r\n    \"watch\": {\r\n      \"enabled\": false\r\n    },\r\n    \"configured_kind\": \"claude\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

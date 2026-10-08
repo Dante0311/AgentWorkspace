@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:29:59.175381+08:00",
+  "finished_at": "2026-10-08T14:29:59.448550+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "agent.configure",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\", \"value\": {\"kind\": \"claude\", \"executable\": \"<USER_HOME>\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@tencent\\\\tclaude\\\\node_modules\\\\@tencent\\\\tclaude-win32-x64\\\\tclaude.exe\", \"model\": \"claude-deepseek-v4.1-flash[1m]\", \"effort\": \"low\", \"provider\": {\"base_url\": \"\", \"env_key\": \"\"}, \"allowed_tools\": []}}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"configured\": true,\r\n    \"entry_changed\": false\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

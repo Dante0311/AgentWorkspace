@@ -8,7 +8,7 @@
 
 同日桌面项目补测：工作台引用保存、改名、刷新和冲突保护通过；用户实际建立的 Codex 项目保留实例主目录与同一项目 ID，并手动归入匹配分区。该结论不包含原生 Desktop 会话、Binding 或自动交接。[本批完整证据](evidence/2026-10-08-5aaae00-desktop/README.md)。
 
-同日自主补测：无控制者纠偏的 normal Watch 与管家发布故障恢复取得限定实机通过，共 9 个 Codex 模型轮次；初始化工具约束、参数与笔记偏差保留。Desktop 真实控制连接和 busy 状态只读验证通过；tclaude 只完成无模型 SDK 预检，真实调用及交接等待用户选择模型。[执行报告、独立复核与完整证据](evidence/2026-10-08-5aaae00-autonomous/README.md)。
+同日自主补测：无控制者纠偏的 normal Watch 与管家发布故障恢复取得限定实机通过，共 9 个 Codex 模型轮次；初始化工具约束、参数与笔记偏差保留。Desktop 真实控制连接和 busy 状态只读验证通过；该批 tclaude 为选型前的无模型 SDK 预检。[执行报告、独立复核与完整证据](evidence/2026-10-08-5aaae00-autonomous/README.md)。随后用户选择 DeepSeek，新增 3 个 Codex 轮次、2 次 tclaude query，公开完整配置路径的跨 Harness 交接、消息 ACK 与本人停工限定通过；便捷入口不接受模型 ID 方括号的问题及工具遵循偏差仍保留。[DeepSeek 增量报告与独立复核](evidence/2026-10-08-5aaae00-deepseek/README.md)。
 
 ## 模块
 
@@ -200,3 +200,13 @@ HY 失败后停止 Runner 但保留 Binding 执行资格，是当前合同下保
 - **tclaude：无模型预检通过，真实交接未运行。** 用户指定已登录的内部包装器，使用其 Windows 原生入口，wrapper 0.1.8/upstream Claude Code 2.1.251、SDK 0.2.163 的 connect/get_server_info 成功，认证仍为 configured_unverified，query=0。等待用户模型选择后才增量执行 Codex → tclaude；该状态不是兼容性失败，更不证明 WorkBuddy 已修复。
 
 独立复核另列 `message.reconcile` 授权与受限维修入口可能不一致的静态疑点，尚未做实际越权测试或修复，不将指定路径通过扩成所有补齐入口授权闭合。E2E-001 busy insert/steer 与 E2E-002 原 WorkBuddy 入口缺陷仍保留。新包提供源/中间/最终归档 SHA256、必要日志、原生事件和排除说明；不含凭据、完整私人聊天、机器路径或可运行测试状态。
+
+### Codex → tclaude / DeepSeek 真实交接增量（2026-10-08）
+
+用户随后选择 DeepSeek，从 tclaude 实际目录选用 `claude-deepseek-v4.1-flash[1m]`、配置 `low`，沿用已登录的内部包装器及服务。固定产品仍为 `5aaae00`，复用已核验隔离安装、新建 Workspace 和实例；未修改产品源码或全局配置。选型前的 query=0 报告保持历史事实，[本增量报告、独立复核与证据](evidence/2026-10-08-5aaae00-deepseek/README.md)另行归档。
+
+公开 `agent.configure-sdk` 在模型调用前拒绝 ID 中的方括号，是已复现且未修复的便捷入口兼容问题。确认原操作未执行后，通过已有公开 `agent.configure(value)` / `agent.transfer(target_config)` 完整配置路径原样传入该 ID；这条成功路径不关闭便捷入口问题。原生 init 回报精确请求 ID，Assistant 回报 `deepseek/deepseek-flash`；只能证明包装器回报的路由，`low` 只确认配置传递，未取得服务端实际强度回报。
+
+真实增量为旧 Codex boot/handoff 两轮、发送方 Codex 一轮及 tclaude boot/Watch 两次 query，均完成。旧模型本人保存随机资产、检查点并交接，平台自动启动后继；同一实例身份和工作根保持，新 Binding/session 建立。后继读回原检查点和资产、本人收信并发布 ACK、保存结果及检查点后自行停工。旧 Binding 写入被拒绝且操作未记录；两端 released、Runner 退出、Watch 关闭，transfer 完成状态在后继停止后仍保持。独立复核确认关键平台副作用和原生记录一致。
+
+严格工具指令未通过：后继首轮有四次原生 Read；整组另有六次参数错误（Codex 四次、tclaude 两次），均在各自原轮自行纠正，无控制者追加提示或重放。部分中文工具输出乱码原因未定位。共享原生服务未证独占而保持不动，不宣称全机服务退出。本批没有修复或重测 WorkBuddy、busy insert/steer，也不扩展为 Desktop、反向交接、全矩阵或长期运行通过。

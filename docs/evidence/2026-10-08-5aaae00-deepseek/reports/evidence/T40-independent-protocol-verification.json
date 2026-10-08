@@ -1,0 +1,168 @@
+{
+  "time": "2026-10-08T14:36:34.438339+08:00",
+  "checks": {
+    "same_identity": true,
+    "same_root": true,
+    "native_session_changed": true,
+    "transfer_completed": true,
+    "old_binding_released": true,
+    "new_binding_released": true,
+    "peer_released": true,
+    "target_runner_exited": true,
+    "old_binding_probe_absent": true,
+    "message_published": true,
+    "message_marker_matches": true,
+    "ack_published": true,
+    "notes_markers_match": true,
+    "relay_old_checkpoint_matches": true,
+    "native_exact_init": true,
+    "native_assistant_route": true,
+    "native_two_success_results": true,
+    "result_model_usage_exact": true,
+    "watch_disabled": true,
+    "doctor_healthy": true
+  },
+  "all_passed": true,
+  "old_binding": {
+    "id": "b03737ac951374b90824d9f583824e2f5",
+    "agent": "transfer-agent",
+    "kind": "codex",
+    "phase": "released",
+    "session": "01a11a34-91a4-7991-a42e-5a2396ce06e9",
+    "created_at": "2026-10-08T06:30:10.553797+00:00",
+    "handoff": null,
+    "checkpoint": "c7caaca4521c94bdf9b1f0186bdae127d",
+    "stop_requested_at": "2026-10-08T06:31:04.642018+00:00",
+    "stopped_at": "2026-10-08T06:31:09.251833+00:00"
+  },
+  "new_binding": {
+    "id": "bfdecfd797423449ba36c659de7e3d63e",
+    "agent": "transfer-agent",
+    "kind": "claude",
+    "phase": "released",
+    "session": "c08cf6ec-8245-4b10-a3d2-aaca6377effe",
+    "created_at": "2026-10-08T06:31:15.435638+00:00",
+    "handoff": "h03737ac951374b90824d9f583824e2f5",
+    "checkpoint": "cd0940423d2f74518b059295fd0da29b4",
+    "stop_requested_at": "2026-10-08T06:34:31.350980+00:00",
+    "stopped_at": "2026-10-08T06:34:36.877454+00:00"
+  },
+  "old_handoff": {
+    "id": "h03737ac951374b90824d9f583824e2f5",
+    "agent": "transfer-agent",
+    "entry": "b03737ac951374b90824d9f583824e2f5",
+    "checkpoint": "c7caaca4521c94bdf9b1f0186bdae127d",
+    "created_at": "2026-10-08T06:31:09.251833+00:00",
+    "consumed_by": "bfdecfd797423449ba36c659de7e3d63e"
+  },
+  "final_handoff": {
+    "id": "hfdecfd797423449ba36c659de7e3d63e",
+    "agent": "transfer-agent",
+    "entry": "bfdecfd797423449ba36c659de7e3d63e",
+    "checkpoint": "cd0940423d2f74518b059295fd0da29b4",
+    "created_at": "2026-10-08T06:34:36.877454+00:00",
+    "consumed_by": null
+  },
+  "checkpoint_pointers": [
+    {
+      "id": "initial-b03737ac951374b90824d9f583824e2f5",
+      "agent": "transfer-agent",
+      "revision": "b3704f16506a1aaf3dd874719c315e25bb2a39cf",
+      "path": ".aw/checkpoints/initial-b03737ac951374b90824d9f583824e2f5.json",
+      "created_at": "2026-10-08T06:30:40.487723+00:00",
+      "excluded": [
+        ".aw-local/"
+      ]
+    },
+    {
+      "id": "c7caaca4521c94bdf9b1f0186bdae127d",
+      "agent": "transfer-agent",
+      "revision": "d5539c7be887d72fd1e960fad5514e196590e6c1",
+      "path": ".aw/checkpoints/c7caaca4521c94bdf9b1f0186bdae127d.json",
+      "created_at": "2026-10-08T06:30:57.712538+00:00",
+      "excluded": [
+        ".aw-local/"
+      ]
+    },
+    {
+      "id": "initial-bfdecfd797423449ba36c659de7e3d63e",
+      "agent": "transfer-agent",
+      "revision": "efceaf8f11b3b8d7479a94eb9947a506c945f898",
+      "path": ".aw/checkpoints/initial-bfdecfd797423449ba36c659de7e3d63e.json",
+      "created_at": "2026-10-08T06:32:34.882518+00:00",
+      "excluded": [
+        ".aw-local/"
+      ]
+    },
+    {
+      "id": "cd0940423d2f74518b059295fd0da29b4",
+      "agent": "transfer-agent",
+      "revision": "12acc1105c8b093ea4c10884fd4b8e16f92ef8a3",
+      "path": ".aw/checkpoints/cd0940423d2f74518b059295fd0da29b4.json",
+      "created_at": "2026-10-08T06:34:16.933583+00:00",
+      "excluded": [
+        ".aw-local/"
+      ]
+    }
+  ],
+  "codex_counts": {
+    "transfer-agent": {
+      "turn/started": 2,
+      "turn/completed": 2
+    },
+    "transfer-peer": {
+      "turn/started": 1,
+      "turn/completed": 1
+    }
+  },
+  "sdk_query_terminal_count": 2,
+  "parsed_json_records": [
+    "T00-authorized-profile.json",
+    "T01-public-typed-model-rejected.json",
+    "T02-no-query-sdk-handshake.json",
+    "T03-profile-recovery-boundary.json",
+    "T10-transfer-authorized-profile.json",
+    "T11-transfer-workspace.json",
+    "T12-transfer-marker.json",
+    "T13-0-create.json",
+    "T13-1-create.json",
+    "T14-0-read.json",
+    "T14-1-read.json",
+    "T15-0-task.json",
+    "T15-1-task.json",
+    "T16-0-source.json",
+    "T16-1-source.json",
+    "T17-0-codex.json",
+    "T17-1-codex.json",
+    "T17-native-profile-save.json",
+    "T17-native-profile-show.json",
+    "T18-transfer-codex-start.json",
+    "T19-codex-boot-complete.json",
+    "T20-codex-origin-read.json",
+    "T21-old-identity-binding.json",
+    "T22-public-exact-profile-transfer.json",
+    "T23-request-boundary.json",
+    "T24-target-relay-completed.json",
+    "T25-tclaude-relay-asset.json",
+    "T26-new-identity-binding.json",
+    "T27-old-binding-write-rejected.json",
+    "T28-old-binding-operation-absent.json",
+    "T29-target-watch-on.json",
+    "T30-peer-start.json",
+    "T31-final-native-observation.json",
+    "T32-transfer-agent-show.json",
+    "T32-transfer-peer-show.json",
+    "T33-transfer-final.json",
+    "T34-message-show.json",
+    "T35-ack-operation.json",
+    "T36-message-asset.json",
+    "T36-relay-asset.json",
+    "T36-sender-asset.json",
+    "T37-final-doctor.json",
+    "T38-checkpoint-list.json",
+    "T39-deepseek-native-facts.json"
+  ],
+  "marker": "6ef47b430cc648b2920451ba6fe7416d",
+  "claim": "Platform effects and native wrapper route verified; not independent model weights verification",
+  "strict_aw_only": false
+}

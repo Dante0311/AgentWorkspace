@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:32:41.337069+08:00",
+  "finished_at": "2026-10-08T14:32:41.602808+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "message.operation",
+    "--arguments",
+    "{\"operation_id\": \"deepseek-old-binding-invalid-001\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"id\": \"deepseek-old-binding-invalid-001\",\r\n    \"state\": \"not_recorded\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

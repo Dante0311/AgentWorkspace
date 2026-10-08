@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:30:07.084424+08:00",
+  "finished_at": "2026-10-08T14:30:07.348809+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "asset.write",
+    "--arguments",
+    "{\"agent_id\": \"transfer-peer\", \"path\": \"notes/source.md\", \"revision\": null, \"content\": \"random marker: 6ef47b430cc648b2920451ba6fe7416d\\n\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"path\": \"notes/source.md\",\r\n    \"revision\": \"550670ac7335c0aa905abcb69a99ccdf9027830604c6e7b3160040a57685271f\",\r\n    \"saved\": \"local\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

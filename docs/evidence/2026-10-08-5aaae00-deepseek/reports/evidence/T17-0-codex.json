@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:30:00.246261+08:00",
+  "finished_at": "2026-10-08T14:30:00.930303+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "agent.configure-codex",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\", \"model\": \"gpt-6-luna\", \"effort\": \"low\", \"executable\": \"<USER_HOME>\\\\AppData\\\\Local\\\\OpenAI\\\\Codex\\\\bin\\\\9691020b546a15b2\\\\codex.exe\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"configured\": true,\r\n    \"entry_changed\": false,\r\n    \"model_access\": \"unchecked\",\r\n    \"effort_support\": \"unchecked\",\r\n    \"credential_state\": \"not_validated\",\r\n    \"sessions_started\": false,\r\n    \"global_configuration_changed\": false\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

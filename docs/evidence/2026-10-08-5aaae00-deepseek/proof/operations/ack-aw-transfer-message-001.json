@@ -1,0 +1,17 @@
+{
+  "id": "ack-aw-transfer-message-001",
+  "type": "ack",
+  "workspace": "transfer-local",
+  "payload": {
+    "message_id": "aw-transfer-message-001"
+  },
+  "destinations": [
+    "<E2E_ROOT>\\data\\transfer.git"
+  ],
+  "completed": [
+    "<E2E_ROOT>\\data\\transfer.git"
+  ],
+  "receiver": "transfer-agent",
+  "binding": "bfdecfd797423449ba36c659de7e3d63e",
+  "state": "published"
+}

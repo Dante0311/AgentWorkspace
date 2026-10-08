@@ -1,0 +1,8 @@
+{
+  "id": "c2ada5d0f20974299976abba279304162",
+  "created_at": "2026-10-08T06:33:29.646131+00:00",
+  "summary": "已确认当前 Binding 与消息能力，向 transfer-agent 发送一条 normal 测试消息并记录发送结果。",
+  "content": "读取了本地 AGENTS.md、notes/source.md、message Skill 与能力/检查点说明。当前有效 Binding 为 b7d19e1bd46414a4e89dbe69e40c9724c（Codex）。仅调用一次 message.send，request_id/message id aw-transfer-message-001；消息含随机标识 6ef47b430cc648b2920451ba6fe7416d，平台返回 published，目标目的地完成。已保存 notes/transfer-sender.md。未查询或声称接收方 ACK/已读。",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

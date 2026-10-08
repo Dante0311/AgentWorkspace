@@ -1,0 +1,90 @@
+FFFF....FFF.                                                             [100%]
+=================================== FAILURES ===================================
+_ test_one_native_turn_finishes_normal_input_and_all_busy_steers[completed-completed] _
+tests/test_local_state.py:297: in test_one_native_turn_finishes_normal_input_and_all_busy_steers
+    assert all(read_json(input_path(local_app, i))['state'] == expected
+E   assert False
+E    +  where False = all(<generator object test_one_native_turn_finishes_normal_input_and_all_busy_steers.<locals>.<genexpr> at 0x7f925140ae40>)
+_ test_one_native_turn_finishes_normal_input_and_all_busy_steers[failed-failed] _
+tests/test_local_state.py:297: in test_one_native_turn_finishes_normal_input_and_all_busy_steers
+    assert all(read_json(input_path(local_app, i))['state'] == expected
+E   assert False
+E    +  where False = all(<generator object test_one_native_turn_finishes_normal_input_and_all_busy_steers.<locals>.<genexpr> at 0x7f925140b540>)
+_ test_one_native_turn_finishes_normal_input_and_all_busy_steers[interrupted-failed] _
+tests/test_local_state.py:297: in test_one_native_turn_finishes_normal_input_and_all_busy_steers
+    assert all(read_json(input_path(local_app, i))['state'] == expected
+E   assert False
+E    +  where False = all(<generator object test_one_native_turn_finishes_normal_input_and_all_busy_steers.<locals>.<genexpr> at 0x7f925140b440>)
+______ test_steer_without_matching_completion_is_not_promoted_or_replayed ______
+tests/test_local_state.py:319: in test_steer_without_matching_completion_is_not_promoted_or_replayed
+    assert read_json(input_path(local_app, 'submitted'))['state'] == 'completed'
+E   AssertionError: assert 'submitted' == 'completed'
+E     
+E     - completed
+E     + submitted
+_ test_stop_drains_only_matched_terminal_events_before_release[True-completed-completed] _
+tests/test_e2e_terminal_state.py:117: in test_stop_drains_only_matched_terminal_events_before_release
+    runner.run()
+src/agent_workspace/runtime.py:526: in run
+    self._run_owned()
+src/agent_workspace/runtime.py:622: in _run_owned
+    result = app.finish_stop(workspace, aid, self.binding, observed_idle=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_e2e_terminal_state.py:114: in release
+    assert read_json(folder / "stop-input.json")["state"] == expected
+E   AssertionError: assert 'submitted' == 'completed'
+E     
+E     - completed
+E     + submitted
+_ test_stop_drains_only_matched_terminal_events_before_release[True-failed-failed] _
+tests/test_e2e_terminal_state.py:117: in test_stop_drains_only_matched_terminal_events_before_release
+    runner.run()
+src/agent_workspace/runtime.py:526: in run
+    self._run_owned()
+src/agent_workspace/runtime.py:622: in _run_owned
+    result = app.finish_stop(workspace, aid, self.binding, observed_idle=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_e2e_terminal_state.py:114: in release
+    assert read_json(folder / "stop-input.json")["state"] == expected
+E   AssertionError: assert 'submitted' == 'failed'
+E     
+E     - failed
+E     + submitted
+_ test_stop_drains_only_matched_terminal_events_before_release[True-interrupted-failed] _
+tests/test_e2e_terminal_state.py:117: in test_stop_drains_only_matched_terminal_events_before_release
+    runner.run()
+src/agent_workspace/runtime.py:526: in run
+    self._run_owned()
+src/agent_workspace/runtime.py:622: in _run_owned
+    result = app.finish_stop(workspace, aid, self.binding, observed_idle=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_e2e_terminal_state.py:114: in release
+    assert read_json(folder / "stop-input.json")["state"] == expected
+E   AssertionError: assert 'submitted' == 'failed'
+E     
+E     - failed
+E     + submitted
+=========================== short test summary info ============================
+FAILED tests/test_local_state.py::test_one_native_turn_finishes_normal_input_and_all_busy_steers[completed-completed] - assert False
+ +  where False = all(<generator object test_one_native_turn_finishes_normal_input_and_all_busy_steers.<locals>.<genexpr> at 0x7f925140ae40>)
+FAILED tests/test_local_state.py::test_one_native_turn_finishes_normal_input_and_all_busy_steers[failed-failed] - assert False
+ +  where False = all(<generator object test_one_native_turn_finishes_normal_input_and_all_busy_steers.<locals>.<genexpr> at 0x7f925140b540>)
+FAILED tests/test_local_state.py::test_one_native_turn_finishes_normal_input_and_all_busy_steers[interrupted-failed] - assert False
+ +  where False = all(<generator object test_one_native_turn_finishes_normal_input_and_all_busy_steers.<locals>.<genexpr> at 0x7f925140b440>)
+FAILED tests/test_local_state.py::test_steer_without_matching_completion_is_not_promoted_or_replayed - AssertionError: assert 'submitted' == 'completed'
+  
+  - completed
+  + submitted
+FAILED tests/test_e2e_terminal_state.py::test_stop_drains_only_matched_terminal_events_before_release[True-completed-completed] - AssertionError: assert 'submitted' == 'completed'
+  
+  - completed
+  + submitted
+FAILED tests/test_e2e_terminal_state.py::test_stop_drains_only_matched_terminal_events_before_release[True-failed-failed] - AssertionError: assert 'submitted' == 'failed'
+  
+  - failed
+  + submitted
+FAILED tests/test_e2e_terminal_state.py::test_stop_drains_only_matched_terminal_events_before_release[True-interrupted-failed] - AssertionError: assert 'submitted' == 'failed'
+  
+  - failed
+  + submitted
+7 failed, 5 passed, 45 deselected in 6.85s

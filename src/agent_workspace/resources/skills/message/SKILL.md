@@ -27,3 +27,5 @@ show 不 ACK；receive 尝试读取后保存单字段 ACK，正文失败也确�
 已确认通知不重复开展业务；需要回看用 show。ACK 未发布成功前保留工具结果，补齐原操作，不新增消息或盲目重复副作用。
 normal 等队头可投递且入口空闲，insert 不因忙等待，但不越过队头。回复仍用 send --ref MESSAGE_ID。
 跨 Workspace 的双写由 Git Backend 完成。工具返回 pending/outcome_unknown 时只补齐原 ID。
+
+直接调用 message.reconcile 只能补齐本实例当前入口产生的原操作；知道其他实例的 operation ID 不代表获得授权。管家处理其他实例时，必须使用已获对应目标授权的 maintenance.repair（publication-reconcile）。不更换旧回执中的 Binding，也不借补齐重发原业务。

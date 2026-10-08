@@ -1,0 +1,22 @@
+...........FFF.........................                                  [100%]
+=================================== FAILURES ===================================
+_ test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/bin/env node\r\n] _
+tests/test_codebuddy_windows_entry.py:150: in test_known_node_hashbangs_select_the_existing_sdk_transport
+    assert client._transport._get_cli_path() == str(Path(node).resolve())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute '_get_cli_path'
+_ test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/bin/node\n] _
+tests/test_codebuddy_windows_entry.py:150: in test_known_node_hashbangs_select_the_existing_sdk_transport
+    assert client._transport._get_cli_path() == str(Path(node).resolve())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute '_get_cli_path'
+_ test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/local/bin/node\n] _
+tests/test_codebuddy_windows_entry.py:150: in test_known_node_hashbangs_select_the_existing_sdk_transport
+    assert client._transport._get_cli_path() == str(Path(node).resolve())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute '_get_cli_path'
+=========================== short test summary info ============================
+FAILED tests/test_codebuddy_windows_entry.py::test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/bin/env node\r\n] - AttributeError: 'NoneType' object has no attribute '_get_cli_path'
+FAILED tests/test_codebuddy_windows_entry.py::test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/bin/node\n] - AttributeError: 'NoneType' object has no attribute '_get_cli_path'
+FAILED tests/test_codebuddy_windows_entry.py::test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/local/bin/node\n] - AttributeError: 'NoneType' object has no attribute '_get_cli_path'
+3 failed, 36 passed in 15.73s

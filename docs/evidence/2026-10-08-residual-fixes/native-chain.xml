@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="22.072" timestamp="2026-10-08T13:47:25.700598+00:00" hostname="REDACTED"><testcase classname="tests.test_native_transfer" name="test_native_transfer_and_message[codex-codex]" time="22.045" /></testsuite></testsuites>

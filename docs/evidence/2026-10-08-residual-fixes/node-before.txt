@@ -1,0 +1,45 @@
+..FF.F.....FFF                                                           [100%]
+=================================== FAILURES ===================================
+_ test_selected_js_runs_via_node_and_auth_result_stays_separate[codebuddy-False] _
+tests/test_codebuddy_windows_entry.py:71: in test_selected_js_runs_via_node_and_auth_result_stays_separate
+    adapter.connect()
+src/agent_workspace/native_sdk.py:130: in connect
+    raise Unavailable(self.failure)
+E   agent_workspace.util.Unavailable: Native SDK failed (PermissionError); inspect the local native event record.
+_ test_selected_js_runs_via_node_and_auth_result_stays_separate[codebuddy-True] _
+tests/test_codebuddy_windows_entry.py:71: in test_selected_js_runs_via_node_and_auth_result_stays_separate
+    adapter.connect()
+src/agent_workspace/native_sdk.py:130: in connect
+    raise Unavailable(self.failure)
+E   agent_workspace.util.Unavailable: Native SDK failed (PermissionError); inspect the local native event record.
+___ test_missing_node_fails_preflight_without_binding_or_handoff[codebuddy] ____
+tests/test_codebuddy_windows_entry.py:103: in test_missing_node_fails_preflight_without_binding_or_handoff
+    with pytest.raises(Unavailable, match="Node"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE <class 'agent_workspace.util.Unavailable'>
+_ test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/bin/env node\r\n] _
+tests/test_codebuddy_windows_entry.py:151: in test_known_node_hashbangs_select_the_existing_sdk_transport
+    assert client._custom_transport is not None
+E   assert None is not None
+E    +  where None = <codebuddy_agent_sdk.client.CodeBuddySDKClient object at 0x7f604c2ce650>._custom_transport
+_ test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/bin/node\n] _
+tests/test_codebuddy_windows_entry.py:151: in test_known_node_hashbangs_select_the_existing_sdk_transport
+    assert client._custom_transport is not None
+E   assert None is not None
+E    +  where None = <codebuddy_agent_sdk.client.CodeBuddySDKClient object at 0x7f604b959370>._custom_transport
+_ test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/local/bin/node\n] _
+tests/test_codebuddy_windows_entry.py:151: in test_known_node_hashbangs_select_the_existing_sdk_transport
+    assert client._custom_transport is not None
+E   assert None is not None
+E    +  where None = <codebuddy_agent_sdk.client.CodeBuddySDKClient object at 0x7f604c2afce0>._custom_transport
+=========================== short test summary info ============================
+FAILED tests/test_codebuddy_windows_entry.py::test_selected_js_runs_via_node_and_auth_result_stays_separate[codebuddy-False] - agent_workspace.util.Unavailable: Native SDK failed (PermissionError); inspect the local native event record.
+FAILED tests/test_codebuddy_windows_entry.py::test_selected_js_runs_via_node_and_auth_result_stays_separate[codebuddy-True] - agent_workspace.util.Unavailable: Native SDK failed (PermissionError); inspect the local native event record.
+FAILED tests/test_codebuddy_windows_entry.py::test_missing_node_fails_preflight_without_binding_or_handoff[codebuddy] - Failed: DID NOT RAISE <class 'agent_workspace.util.Unavailable'>
+FAILED tests/test_codebuddy_windows_entry.py::test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/bin/env node\r\n] - assert None is not None
+ +  where None = <codebuddy_agent_sdk.client.CodeBuddySDKClient object at 0x7f604c2ce650>._custom_transport
+FAILED tests/test_codebuddy_windows_entry.py::test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/bin/node\n] - assert None is not None
+ +  where None = <codebuddy_agent_sdk.client.CodeBuddySDKClient object at 0x7f604b959370>._custom_transport
+FAILED tests/test_codebuddy_windows_entry.py::test_known_node_hashbangs_select_the_existing_sdk_transport[#!/usr/local/bin/node\n] - assert None is not None
+ +  where None = <codebuddy_agent_sdk.client.CodeBuddySDKClient object at 0x7f604c2afce0>._custom_transport
+6 failed, 8 passed in 2.50s

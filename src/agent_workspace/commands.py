@@ -19,7 +19,7 @@ USER_MANAGEMENT = {"session.prepare", "session.open", "session.show", "agent.des
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
                    "maintenance.grant", "maintenance.schedule", "maintenance.repair"}
-CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input"}
+CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile"}
 
 
 def assets(app, operation, workspace, agent_id, path=None, content=None, revision=None, directory=None):

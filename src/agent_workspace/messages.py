@@ -74,12 +74,18 @@ class Messages:
                 "binding": receipt["binding"],
                 "agent": receipt.get("sender") or receipt.get("receiver")}
 
-    def reconcile(self, operation_id):
+    def reconcile(self, operation_id, workspace=None, agent_id=None, binding=None):
         path = self.app.home / "operations" / (slug(operation_id) + ".json")
         with locked(path.with_suffix(".lock")):
             receipt = read_json(path)
             if receipt is None:
                 raise Error("No local publication receipt for that operation.")
+            # Model calls carry their entry; internal sends and authorized repairs
+            # have already checked their scope before reaching this backend.
+            caller = (workspace, agent_id, binding)
+            owner = (receipt["workspace"], receipt.get("sender") or receipt.get("receiver"), receipt["binding"])
+            if caller != (None, None, None) and caller != owner:
+                raise Conflict("Publication belongs to another entry; use an authorized maintenance.repair for another instance.")
             payload = receipt["payload"]
             for address in receipt["destinations"]:
                 if address in receipt["completed"]:

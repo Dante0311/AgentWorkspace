@@ -1,5 +1,7 @@
 # V1 实现进展
 
+> **2026-10-08 残余问题修复：** 以 `71bd058` 的源码为基线，已补直接消息补齐的调用者授权、忙时 steer 回执关联、无扩展名 Node 入口识别及带方括号模型 ID。开发侧定向验证通过，不代替 Windows／真实模型复测；原 WorkBuddy 入口头部和认证仍待核对，安装清理 WinError 145 原因未确定。参见[本批修复登记与完整证据](evidence/2026-10-08-residual-fixes/README.md)。下文既有失败和验收结论保留为各自批次的历史事实。
+
 本页描述当前功能分支的实现事实，不替代 [design.md](design.md)。版本仍为 `0.1.0a1`，不是已完成全部目标和实机验收的正式 V1。实际恢复位置与逐次测试见 [development-checkpoint.md](development-checkpoint.md)，操作见 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
 
 2026-10-07 修复后 Windows 定向实测已完成：E2E-004 与 E2E-001 普通停工路径取得限定通过；E2E-001 busy insert/steer 残余、E2E-002 原 WorkBuddy 无扩展名入口启动失败仍待修。完整范围见下文“修复后 Windows 实机结果”和[新批次证据](evidence/2026-10-07-5aaae00/README.md)，历史登记不覆盖。

@@ -1,0 +1,221 @@
+{
+  "baseline": "71bd0581a0c509c2ddc9daa2b8e545891cedc4b0",
+  "baseline_verified_subtrees": {
+    "src": "772c2ba28f12fc45d0fd2cf5ddb9ca0df61b69f8",
+    "tests": "ba743f4e502673c52e49dadfd4ac59f4dd330012",
+    "scripts": "8a2180c654a53eee693fa188652368e85e52b60f"
+  },
+  "local_snapshot_scope": "Source, tests and scripts verified against upstream trees; historical evidence not fully materialized. Deliver changes as patches on the real upstream checkout, not this synthetic Git history.",
+  "local_product_commits": [
+    "45a35fd4cfc758b6a0786922b3bceaec04208e4c",
+    "886755e2b3dbb8e835e3ca60c86de575d44c3a28",
+    "b55b60681c1ac65ab6cf83d89582643d6785478c",
+    "79fef1a69391df8de621185da64297e85f3626dd"
+  ],
+  "environment": {
+    "os": "Linux",
+    "python": "3.13.5",
+    "node": "22.16.0",
+    "codebuddy-agent-sdk": "0.3.267",
+    "claude-agent-sdk": "0.2.163"
+  },
+  "logs": [
+    {
+      "file": "authority-after.txt",
+      "source_sha256": "b2e3b0eb8220a86153407f2088385b73382671bed179bd792dbbaa5c17ab1a5f",
+      "archive_sha256": "b2e3b0eb8220a86153407f2088385b73382671bed179bd792dbbaa5c17ab1a5f",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "authority-after.xml",
+      "source_sha256": "8735b9fbadbb575fd694551644af1d8b113b776a42378c278a07a187984202e5",
+      "archive_sha256": "2a2dfbe72675042bc747a50038c12a66bddb4ba0c5cef9f1c3ef4355c9145520",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "authority-before.txt",
+      "source_sha256": "7cf60ef7590c35c2324a960b619c075e7a27321422e241208ea00a75ce76b258",
+      "archive_sha256": "7cf60ef7590c35c2324a960b619c075e7a27321422e241208ea00a75ce76b258",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "build-final.txt",
+      "source_sha256": "871c96dd593fa03fd0316baf82cfdb7ce02f5942a79162c16372dcedc4590dac",
+      "archive_sha256": "c0088457e19146e4757d2fd2f3c7bf705176e3abca4f8415701f330ab35f7e23",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "build.txt",
+      "source_sha256": "f7312836ee5b82f8278c931071e334e1316f8d85a230745621a5a196bd60c08b",
+      "archive_sha256": "4ae8caffd07e33db656b9b8006974bec830b27243791c373414ad34938be476d",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "guidance.txt",
+      "source_sha256": "1276fabb89f4526de7771be91f926526a315104e45461cfccd937f56b61fd9f3",
+      "archive_sha256": "1276fabb89f4526de7771be91f926526a315104e45461cfccd937f56b61fd9f3",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "guidance.xml",
+      "source_sha256": "3ee25a5f0cdc3e85e6b96504af795b6940fca097f56f069b3abaab3c94f0e1d3",
+      "archive_sha256": "fe2c3d5192171a59bcaf5d5b704b389c6b0ebca8f97d9b8442103fbd3d001d32",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "model-after.txt",
+      "source_sha256": "0558c60504ce528fa317103baa119089c84bb530409e22bc2114f702215b243c",
+      "archive_sha256": "0558c60504ce528fa317103baa119089c84bb530409e22bc2114f702215b243c",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "model-after.xml",
+      "source_sha256": "61a09d90fad61fb63dd8794fee7825e5f2434376af094544fb259f1fc79b7374",
+      "archive_sha256": "3ea65cf0005204defaed34a51f0ef60e6034988da2d79886d49ba940d7b35f7a",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "model-before.txt",
+      "source_sha256": "014004fe4f3ecb7e77f62e5e0f244de7c8475fd94659f38b80bb3525c2878418",
+      "archive_sha256": "014004fe4f3ecb7e77f62e5e0f244de7c8475fd94659f38b80bb3525c2878418",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "model-selector-error.txt",
+      "source_sha256": "4db244d858737c5d88e975aed93b34d67530142ecb2555a1a4ce7fbe79f10460",
+      "archive_sha256": "4db244d858737c5d88e975aed93b34d67530142ecb2555a1a4ce7fbe79f10460",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "native-chain.txt",
+      "source_sha256": "23e4bcb80b819b2081be4f6f52dad1f4873ec1ee48cb76b8d7819babbcfa2278",
+      "archive_sha256": "23e4bcb80b819b2081be4f6f52dad1f4873ec1ee48cb76b8d7819babbcfa2278",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "native-chain.xml",
+      "source_sha256": "c994fbb3280ecb44c51fc1afe470c88ac463325c833fff906414391be17b35f2",
+      "archive_sha256": "297e525f4a60644722308666e52acc954741b93a92a404aedd26d6257eba4c95",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "node-after.txt",
+      "source_sha256": "f02407db2b804d222d457206c90ff0ee9244d55dee34489a4a23d806f860e07b",
+      "archive_sha256": "f02407db2b804d222d457206c90ff0ee9244d55dee34489a4a23d806f860e07b",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "node-after.xml",
+      "source_sha256": "8196c1175af7bad2697b4a1e28c7f71c9c29ab23527ac01927d031c0f8d00841",
+      "archive_sha256": "168f3b614b09610df2b88b8e75ee9fa0bcac27030368d5fae4330bde6a946a7e",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "node-before.txt",
+      "source_sha256": "60fbe03a40826a2b0571a66fac57e78a8e3c06c28b7c2f77d9127e6b2f1c0b6f",
+      "archive_sha256": "60fbe03a40826a2b0571a66fac57e78a8e3c06c28b7c2f77d9127e6b2f1c0b6f",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "node-test-observation-error.txt",
+      "source_sha256": "2401c1f01dbf6751b37cb5e15667943bbe33ca351bfd4a2ae65f2bd152f3da09",
+      "archive_sha256": "2401c1f01dbf6751b37cb5e15667943bbe33ca351bfd4a2ae65f2bd152f3da09",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "node-test-observation-error.xml",
+      "source_sha256": "e83dcd3655cea223b63f9b1d82df0e375965ab6a248b578d63697e9fa8c63b75",
+      "archive_sha256": "c79c814fa75e3be7d7fcd97f2a1a03ab941d82739a3bd82d21210110bc4d6d36",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "smoke-linux.txt",
+      "source_sha256": "788802dd55a85e5dba15de30ba863070a90b95dacc88745475a8b3b231ac774f",
+      "archive_sha256": "788802dd55a85e5dba15de30ba863070a90b95dacc88745475a8b3b231ac774f",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "steer-after.txt",
+      "source_sha256": "f7109231eae3d6f5edd55efb1546a9fbb4d3791e5fe136c06210228ef835b801",
+      "archive_sha256": "f7109231eae3d6f5edd55efb1546a9fbb4d3791e5fe136c06210228ef835b801",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "steer-after.xml",
+      "source_sha256": "50ef3bb8eb21314312dde1a5abf7fc7f11aa0d10397cdc15932d3922c4af5495",
+      "archive_sha256": "b519a5a1f41a38733bc3b80ce76aadf18bb0d19239e084b545c06fc800f1a92e",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "steer-before.txt",
+      "source_sha256": "8665e21601fb00878841fe10a9cee267d4c799482d575c21cd7751bc107e8511",
+      "archive_sha256": "8665e21601fb00878841fe10a9cee267d4c799482d575c21cd7751bc107e8511",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "steer-fixture-draft.txt",
+      "source_sha256": "94893a94936156520582b2b8e24973a68db7d1aa4abc97da9d6a15d16383b6d7",
+      "archive_sha256": "94893a94936156520582b2b8e24973a68db7d1aa4abc97da9d6a15d16383b6d7",
+      "redaction": "test container absolute paths and XML hostname only"
+    },
+    {
+      "file": "wheel-payload.json",
+      "source_sha256": "e9a4582dd1d387633cfa757457f678243e93f7732150bef23b249964374522f5",
+      "archive_sha256": "e9a4582dd1d387633cfa757457f678243e93f7732150bef23b249964374522f5",
+      "redaction": "test container absolute paths and XML hostname only"
+    }
+  ],
+  "real_user_model_invoked": false,
+  "windows_kernel_tested": false,
+  "original_evidence_changed": false,
+  "remote_pushed": false,
+  "changed_source_sha256": {
+    "src/agent_workspace/commands.py": "5a8f726f92465a9de88e0b581e89515a7acc6793b5b6446461eb4d7002ec1bc8",
+    "src/agent_workspace/harness_config.py": "3dc5fb161c871a94b1720568f92bd4713b1eb6d1e3e39f0fb6bc0463ef576f46",
+    "src/agent_workspace/messages.py": "ddbf1496d2be3195c39e80d85c3f44265981333feb342b8941c09d69de8f1b38",
+    "src/agent_workspace/native_sdk.py": "aa05cbbd916fa71e0344f5d994a02cee1479ebdf2d26841e357fde01601df3e5",
+    "src/agent_workspace/resources/skills/message/SKILL.md": "1d7213af73306573c5e6b07d6e90a22f955dcc2ed8b6ff6f4f25caeb8a2b96a2",
+    "src/agent_workspace/runtime.py": "938517e82c676327cd7a9721aa5b614e648edb8f5e7c05181812a3c8c585ccb9",
+    "tests/test_codebuddy_windows_entry.py": "7827dcb68a028a69f8955ba3791d81eb3cc76e80a443b38378762a3132993e49",
+    "tests/test_e2e_terminal_state.py": "9e6560622657e1bf415825922fb0b5e445ed99a725a115256c3579426d1bc8d7",
+    "tests/test_harness_config.py": "aedcded091e065693fcd74ab43203564411f177fbea889356dd24e4608455189",
+    "tests/test_local_state.py": "74d2b829ac136a83da213cb7c22d87fb18d77b7207b532bb38819564e6ba90ad",
+    "tests/test_reconcile_authority.py": "3536ba1151c632309d43d1ca40ada1f70c20d663e24a66a5dd15c565c91bcfd0"
+  },
+  "test_results": {
+    "authority": {
+      "tests": 101,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "steer": {
+      "tests": 84,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "node": {
+      "tests": 39,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "model": {
+      "tests": 117,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "documentation_hunk_scope": "Only a leading status note in docs/implementation.md; its current upstream first paragraph was verified. No full historical documentation snapshot is delivered.",
+  "final_wheel": {
+    "changed_since_successful_smoke": [
+      "agent_workspace/resources/skills/message/SKILL.md",
+      "git_native_agent_workspace-0.1.0a1.dist-info/RECORD"
+    ],
+    "all_packaged_python_and_resources_match_working_source": true,
+    "final_wheel_sha256": "d648ab8c6864eb5cfa72908215697db6547b056e963de8d1e1141a42a8fa278d",
+    "official_model_invoked": false
+  }
+}

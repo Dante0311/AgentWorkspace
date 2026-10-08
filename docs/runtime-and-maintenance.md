@@ -87,7 +87,7 @@ aw -w demo agent transfer-continue helper
 
 `transfer-continue` 只推进原记录，不另造后继。结果不明先检查原会话/记录；不能删除 `.aw-local/transfer.json`、锁或 Binding 强行重试。状态含义：`handoff_requested` 等原端交出，`starting` 等原生入口，`session_bound` 等接手轮次完成，`completed` 已观察到后继和检查点；`relay_failed`/`outcome_unknown` 不等于可从头重做。
 
-目标缺程序/凭据/SDK 时，不开始交出。旧会话真正丢失且没有交接点时仍阻塞；正常自动化不是强制接管后门。当前自动 transfer 接受 `codex`、`claude`、`codebuddy` 受管入口，不把 Desktop 替换成后台 CLI。
+目标缺程序/凭据/SDK 时，不开始交出。旧会话真正丢失且没有交接点时仍阻塞；正常自动化不是强制接管后门。自动 transfer 接受 `codex`、`claude`、`codebuddy`，以及已捕获实际控制连接并核验已有本地项目的 `desktop`。不把 Desktop 替换成后台 CLI。桌面首次准备和操作见 [Codex Desktop](usage.md#42-codex-desktop)。
 
 手动保底仍有效：旧端 handoff；用户在同一实例目录打开新 Harness 后，按 relay 提示取得并绑定真实新会话。手动模式的停工确认来自当前所有者明确确认，不是平台证明外部进程已经终止。
 
@@ -141,7 +141,7 @@ aw -w demo maintenance repair helper --repair-action sync-idle --request-id repa
 
 新建实例带有 `.aw/prompts/capabilities.md`，message/relay Skill 引导读取。自动或手动 `agent start` 生成的首次进入与接手提示总是附带当前安装包的说明和实际 Binding 类型，不信任旧 checkpoint 中的能力副本。已有实例可显式使用 `agent upgrade-tools` 更新受管说明，保留本地修改冲突检查，不覆盖 AGENTS.md 或用户资料。已经运行的模型不会因软件更新自动读到新规则，需用户明确让它读取更新材料，或在下次接手时加载。
 
-开发测试中的“真实客户端”指已安装的原生可执行程序、SDK、平台工具和 Git；模型响应是回环 API 夹具。它验证通信和副作用，不证明真实模型质量、费用、账号权限、长期运行或任何 Desktop 已验收。参见 [开发检查点](development-checkpoint.md) 与当前提交的 CI。
+开发测试中的原生客户端回环用例使用协议夹具，不能证明真实模型、账号或 Desktop。本批另做了 Windows Codex Desktop / App Tools 0.1.5 / gpt-6-luna 的限定实测，保留修复前失败和模型偏差，见 [桌面接入报告](evidence/2026-10-08-codex-desktop-integration/README.md)。未测的跨 Harness、busy insert、桌面重启恢复和长期运行不由该结果代验收。源码测试与当前提交的 CI 仍分别记录。
 
 截至 2026-10-04 核对的外部入口说明：[Codex App Server](https://developers.openai.com/codex/app-server)、[Claude Desktop](https://code.claude.com/docs/en/desktop)、[CodeBuddy SDK](https://www.codebuddy.ai/docs/cli/sdk)。这些不是我们已经实现对应全部能力的证明，使用特定版本前须重新核对。
 
@@ -149,11 +149,11 @@ aw -w demo maintenance repair helper --repair-action sync-idle --request-id repa
 
 2026-10-04 的接口核对区分“原生产品能做”与“第三方能可靠控制”：
 
-- Codex Desktop：已有指定拥有者 MCP 的连接代码，需取得用户版本实际暴露的创建、投递和状态接口及参数。深链或后台 App Server 均不能证明原 Desktop 新会话已建立；不通过冒充调用方或绕过工具授权补接口。
+- Codex Desktop（2026-10-08 更新）：已核实实际桌面 MCP 的 `list_projects`、`create_thread`、`read_thread` 和 `send_message_to_thread`，接入已有项目的自动创建、目录核验、绑定、输入轮次跟踪及交接。首次项目准备和真实连接捕获仍需用户完成，跨版本自动发现未提供。不能编造调用方、把深链打开或后台 App Server 当成桌面创建成功。
 - Claude Desktop：[官方对照](https://code.claude.com/docs/en/desktop#feature-comparison)仍将脚本自动化与 Agent SDK 列为 CLI 能力。文档有 `/desktop`、桌面会话间消息等功能，但这不等于已提供可由 AgentWorkspace 调用的完整会话控制接口；当前不能据此承诺自动配置和接管原生窗口。
 - WorkBuddy：[开放平台](https://open.workbuddy.cn/docs/third-party-app)及[本地助理 API](https://open.workbuddy.cn/docs/openapi)确实提供消息、在线状态和历史查询。该路线要求应用注册、相应 Scope 与用户授权；还需核实其是否能指定实例工作根、创建独立会话、观察停工并选择模型。不会为暂未确认的适配引入一整套 OAuth 服务，也不能宣称 WorkBuddy 没有任何通信 API。
 
-完整 Desktop 自动化保留为设计方向，但本版按支持范围明确标为不支持，不承诺输入账号即可启用。后续增加支持须取得合法控制接口与能力证据，不要求用户提交账号密码或整份私有会话。上游接口未知与本版未接入是两件事，不能互相代替；已支持路径的实机验收和这些公开限制分别列明。
+Claude/WorkBuddy Desktop 完整自动化仍未接入；Codex Desktop 需要上述项目和实际控制连接条件，不承诺输入账号即可启用。后续扩展须取得合法控制接口与能力证据，不要求用户提交账号密码或整份私有会话。上游接口未知与本版未接入是两件事；已支持路径的实机验收与剩余限制分别列明。
 
 ## 6. 实机验收顺序
 

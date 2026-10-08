@@ -1,0 +1,45 @@
+{
+  "before": {
+    "id": "desktop-probe",
+    "name": "desktop-probe",
+    "description": "本实例现用于用户授权的 Codex Desktop 自动启动、消息和同实例交接隔离验收。\n首次正式进入：用平台 asset.write 保存 notes/desktop-bootstrap.txt，内容为 DESKTOP_BOOTSTRAP_9f84a3c1，然后保存一次 checkpoint 并结束本轮。\n接手时：读取该已保存资产，使用真实 CODEX_THREAD_ID 写 notes/desktop-relay.txt，内容包含旧标记和本次真实聊天 ID；保存 checkpoint 后结束本轮。\n只处理本轮明确测试通知。不得查询或修改产品目录、创建其他实例或聊天、安排业务、发送外部消息、轮询或 sleep 等待后续消息。\nhandoff 请求到来时保存实际资料和 checkpoint，调用 agent.stop，随后立即结束本轮，不自行启动后继。\n所有平台操作使用正式进入材料提供的 aw call --desktop-agent 命令前缀，身份由实际桌面聊天校验。\n",
+    "branch": "instance/desktop-probe",
+    "archived": false,
+    "current": "b8fd5550a9562494db897b731f25fd407",
+    "has_run": true,
+    "handoff": null,
+    "created_at": "2026-10-08T03:47:51.369007+00:00",
+    "revision": "99eeaef5456ea33c20a0d06bf9e6386290aade88",
+    "binding": {
+      "id": "b8fd5550a9562494db897b731f25fd407",
+      "agent": "desktop-probe",
+      "kind": "desktop",
+      "phase": "active",
+      "session": "01a11a6e-2e37-7860-a43a-5fa7fe6230df",
+      "created_at": "2026-10-08T07:33:06.886049+00:00",
+      "handoff": null
+    },
+    "directories": [
+      "<FIXTURE_ROOT>\\instances\\desktop-probe"
+    ],
+    "runtime": {
+      "pid": 57588,
+      "binding": "b8fd5550a9562494db897b731f25fd407",
+      "observed_at": "2026-10-08T07:47:44.359408+00:00",
+      "state": "monitor_stopped",
+      "entry_still_owned": true,
+      "runner_alive": false
+    },
+    "watch": {
+      "enabled": true,
+      "interval": 2,
+      "binding": "b8fd5550a9562494db897b731f25fd407",
+      "changed_at": "2026-10-08T07:37:19.798921+00:00"
+    },
+    "configured_kind": "desktop"
+  },
+  "start": {
+    "pid": 84008,
+    "state": "starting_runner"
+  }
+}

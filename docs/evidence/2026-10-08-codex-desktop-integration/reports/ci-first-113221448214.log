@@ -1,0 +1,345 @@
+2026-10-08T08:30:15.2538464Z Current runner version: '2.337.0'
+2026-10-08T08:30:15.2562529Z ##[group]Runner Image Provisioner
+2026-10-08T08:30:15.2563373Z Hosted Compute Agent
+2026-10-08T08:30:15.2564066Z Version: 20260901.588
+2026-10-08T08:30:15.2564731Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-08T08:30:15.2565496Z Build Date: 2026-09-01T19:56:44Z
+2026-10-08T08:30:15.2566196Z Worker ID: {ff4762c1-7f5c-4e32-a555-b22aa45c7cb3}
+2026-10-08T08:30:15.2566898Z Azure Region: centralus
+2026-10-08T08:30:15.2567518Z ##[endgroup]
+2026-10-08T08:30:15.2568911Z ##[group]Operating System
+2026-10-08T08:30:15.2569559Z Ubuntu
+2026-10-08T08:30:15.2570163Z 24.04.5
+2026-10-08T08:30:15.2570705Z LTS
+2026-10-08T08:30:15.2571265Z ##[endgroup]
+2026-10-08T08:30:15.2572310Z ##[group]Runner Image
+2026-10-08T08:30:15.2572932Z Image: ubuntu-24.04
+2026-10-08T08:30:15.2573581Z Version: 20260927.320.1
+2026-10-08T08:30:15.2574811Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-08T08:30:15.2576458Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-08T08:30:15.2577423Z ##[endgroup]
+2026-10-08T08:30:15.2578595Z ##[group]GITHUB_TOKEN Permissions
+2026-10-08T08:30:15.2580515Z Contents: read
+2026-10-08T08:30:15.2581234Z Metadata: read
+2026-10-08T08:30:15.2582242Z ##[endgroup]
+2026-10-08T08:30:15.2585261Z Secret source: Actions
+2026-10-08T08:30:15.2586247Z Cache mode: write
+2026-10-08T08:30:15.2587016Z Prepare workflow directory
+2026-10-08T08:30:15.2920348Z Prepare all required actions
+2026-10-08T08:30:15.2969287Z Getting action download info
+2026-10-08T08:30:15.5732884Z Download action repository 'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' (SHA:fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09)
+2026-10-08T08:30:15.6860835Z Download action repository 'actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1' (SHA:ece7cb06caefa5fff74198d8649806c4678c61a1)
+2026-10-08T08:30:15.8644373Z Complete job name: Test / ubuntu-latest / Python 3.11
+2026-10-08T08:30:15.9413175Z ##[group]Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+2026-10-08T08:30:15.9414262Z with:
+2026-10-08T08:30:15.9414707Z   persist-credentials: false
+2026-10-08T08:30:15.9415253Z   repository: Dante0311/AgentWorkspace
+2026-10-08T08:30:15.9419275Z   token: ***
+2026-10-08T08:30:15.9419703Z   ssh-strict: true
+2026-10-08T08:30:15.9420152Z   ssh-user: git
+2026-10-08T08:30:15.9420577Z   clean: true
+2026-10-08T08:30:15.9421025Z   sparse-checkout-cone-mode: true
+2026-10-08T08:30:15.9421539Z   fetch-depth: 1
+2026-10-08T08:30:15.9422237Z   fetch-tags: false
+2026-10-08T08:30:15.9422690Z   show-progress: true
+2026-10-08T08:30:15.9423128Z   lfs: false
+2026-10-08T08:30:15.9423535Z   submodules: false
+2026-10-08T08:30:15.9423981Z   set-safe-directory: true
+2026-10-08T08:30:15.9424486Z   allow-unsafe-pr-checkout: false
+2026-10-08T08:30:15.9425269Z ##[endgroup]
+2026-10-08T08:30:16.0421532Z Syncing repository: Dante0311/AgentWorkspace
+2026-10-08T08:30:16.0424430Z ##[group]Getting Git version info
+2026-10-08T08:30:16.0425697Z Working directory is '<CI_HOME>/work/AgentWorkspace/AgentWorkspace'
+2026-10-08T08:30:16.0427618Z [command]/usr/bin/git version
+2026-10-08T08:30:16.0512210Z git version 2.55.0
+2026-10-08T08:30:16.0543618Z ##[endgroup]
+2026-10-08T08:30:16.0558923Z Temporarily overriding HOME='<CI_HOME>/work/_temp/fbfed5de-6e25-47d0-83d2-ea0dfa07b348' before making global git config changes
+2026-10-08T08:30:16.0562265Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-08T08:30:16.0567198Z [command]/usr/bin/git config --global --add safe.directory <CI_HOME>/work/AgentWorkspace/AgentWorkspace
+2026-10-08T08:30:16.0626627Z Deleting the contents of '<CI_HOME>/work/AgentWorkspace/AgentWorkspace'
+2026-10-08T08:30:16.0631375Z ##[group]Initializing the repository
+2026-10-08T08:30:16.0635872Z [command]/usr/bin/git init <CI_HOME>/work/AgentWorkspace/AgentWorkspace
+2026-10-08T08:30:16.0762129Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-08T08:30:16.0764544Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-08T08:30:16.0766261Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-08T08:30:16.0767567Z hint: call:
+2026-10-08T08:30:16.0768394Z hint:
+2026-10-08T08:30:16.0769238Z hint: 	git config --global init.defaultBranch <name>
+2026-10-08T08:30:16.0770302Z hint:
+2026-10-08T08:30:16.0775462Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-08T08:30:16.0784856Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-08T08:30:16.0786140Z hint:
+2026-10-08T08:30:16.0786870Z hint: 	git branch -m <name>
+2026-10-08T08:30:16.0787700Z hint:
+2026-10-08T08:30:16.0788720Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-08T08:30:16.0790470Z Initialized empty Git repository in <CI_HOME>/work/AgentWorkspace/AgentWorkspace/.git/
+2026-10-08T08:30:16.0793643Z [command]/usr/bin/git remote add origin https://github.com/Dante0311/AgentWorkspace
+2026-10-08T08:30:16.0851034Z ##[endgroup]
+2026-10-08T08:30:16.0852592Z ##[group]Disabling automatic garbage collection
+2026-10-08T08:30:16.0854336Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-08T08:30:16.0887587Z ##[endgroup]
+2026-10-08T08:30:16.0888786Z ##[group]Setting up auth
+2026-10-08T08:30:16.0893997Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-08T08:30:16.0929018Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-08T08:30:16.1366981Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-08T08:30:16.1404251Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-08T08:30:16.1629918Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-08T08:30:16.1666971Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-08T08:30:16.1889935Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-08T08:30:16.1930423Z ##[endgroup]
+2026-10-08T08:30:16.1931261Z ##[group]Fetching the repository
+2026-10-08T08:30:16.1940398Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +aca15b69af374e03ea3509019310c0bbe4f10cc1:refs/remotes/pull/13/merge
+2026-10-08T08:30:16.9254810Z From https://github.com/Dante0311/AgentWorkspace
+2026-10-08T08:30:16.9256694Z  * [new ref]         aca15b69af374e03ea3509019310c0bbe4f10cc1 -> pull/13/merge
+2026-10-08T08:30:16.9260266Z ##[endgroup]
+2026-10-08T08:30:16.9262096Z ##[group]Determining the checkout info
+2026-10-08T08:30:16.9263987Z ##[endgroup]
+2026-10-08T08:30:16.9269066Z [command]/usr/bin/git sparse-checkout disable
+2026-10-08T08:30:16.9363160Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-08T08:30:16.9403947Z ##[group]Checking out the ref
+2026-10-08T08:30:16.9406436Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/13/merge
+2026-10-08T08:30:17.0098399Z Note: switching to 'refs/remotes/pull/13/merge'.
+2026-10-08T08:30:17.0099517Z 
+2026-10-08T08:30:17.0100285Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-08T08:30:17.0102311Z changes and commit them, and you can discard any commits you make in this
+2026-10-08T08:30:17.0104085Z state without impacting any branches by switching back to a branch.
+2026-10-08T08:30:17.0105094Z 
+2026-10-08T08:30:17.0105808Z If you want to create a new branch to retain commits you create, you may
+2026-10-08T08:30:17.0107445Z do so (now or later) by using -c with the switch command. Example:
+2026-10-08T08:30:17.0108616Z 
+2026-10-08T08:30:17.0109025Z   git switch -c <new-branch-name>
+2026-10-08T08:30:17.0109744Z 
+2026-10-08T08:30:17.0110293Z Or undo this operation with:
+2026-10-08T08:30:17.0111059Z 
+2026-10-08T08:30:17.0111979Z   git switch -
+2026-10-08T08:30:17.0112968Z 
+2026-10-08T08:30:17.0114379Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-08T08:30:17.0116380Z 
+2026-10-08T08:30:17.0118072Z HEAD is now at aca15b6 Merge 073ba84b96f6ff7001eed2ce83cddd8d3dec8dd5 into 5aaae00520374b022e0c38fa21f312f8e08629ba
+2026-10-08T08:30:17.0123382Z ##[endgroup]
+2026-10-08T08:30:17.0162306Z [command]/usr/bin/git log -1 --format=%H
+2026-10-08T08:30:17.0190402Z aca15b69af374e03ea3509019310c0bbe4f10cc1
+2026-10-08T08:30:17.0200027Z ##[group]Removing auth
+2026-10-08T08:30:17.0203817Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-08T08:30:17.0238445Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-08T08:30:17.0464825Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-08T08:30:17.0495294Z http.https://github.com/.extraheader
+2026-10-08T08:30:17.0502862Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-08T08:30:17.0540332Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-08T08:30:17.0765475Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-08T08:30:17.0798883Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-08T08:30:17.1038447Z ##[endgroup]
+2026-10-08T08:30:17.1426444Z ##[group]Run actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+2026-10-08T08:30:17.1428168Z with:
+2026-10-08T08:30:17.1429024Z   python-version: 3.11
+2026-10-08T08:30:17.1430017Z   check-latest: false
+2026-10-08T08:30:17.1440651Z   token: ***
+2026-10-08T08:30:17.1441760Z   update-environment: true
+2026-10-08T08:30:17.1443041Z   allow-prereleases: false
+2026-10-08T08:30:17.1444090Z   freethreaded: false
+2026-10-08T08:30:17.1445049Z ##[endgroup]
+2026-10-08T08:30:17.2827563Z ##[group]Installed versions
+2026-10-08T08:30:17.2928315Z Successfully set up CPython (3.11.16)
+2026-10-08T08:30:17.2930343Z ##[endgroup]
+2026-10-08T08:30:17.3163995Z ##[group]Run python -m pip install -e ".[test]"
+2026-10-08T08:30:17.3165526Z [36;1mpython -m pip install -e ".[test]"[0m
+2026-10-08T08:30:17.3509153Z shell: /usr/bin/bash -e {0}
+2026-10-08T08:30:17.3510262Z env:
+2026-10-08T08:30:17.3511371Z   pythonLocation: <CI_TOOLCACHE>/Python/3.11.16/x64
+2026-10-08T08:30:17.3513468Z   PKG_CONFIG_PATH: <CI_TOOLCACHE>/Python/3.11.16/x64/lib/pkgconfig
+2026-10-08T08:30:17.3515340Z   Python_ROOT_DIR: <CI_TOOLCACHE>/Python/3.11.16/x64
+2026-10-08T08:30:17.3516975Z   Python2_ROOT_DIR: <CI_TOOLCACHE>/Python/3.11.16/x64
+2026-10-08T08:30:17.3518652Z   Python3_ROOT_DIR: <CI_TOOLCACHE>/Python/3.11.16/x64
+2026-10-08T08:30:17.3520320Z   LD_LIBRARY_PATH: <CI_TOOLCACHE>/Python/3.11.16/x64/lib
+2026-10-08T08:30:17.3521878Z ##[endgroup]
+2026-10-08T08:30:18.2139970Z Obtaining file://<CI_HOME>/work/AgentWorkspace/AgentWorkspace
+2026-10-08T08:30:18.2156939Z   Installing build dependencies: started
+2026-10-08T08:30:19.0959775Z   Installing build dependencies: finished with status 'done'
+2026-10-08T08:30:19.0965545Z   Checking if build backend supports build_editable: started
+2026-10-08T08:30:19.5236734Z   Checking if build backend supports build_editable: finished with status 'done'
+2026-10-08T08:30:19.5246661Z   Getting requirements to build editable: started
+2026-10-08T08:30:19.8587642Z   Getting requirements to build editable: finished with status 'done'
+2026-10-08T08:30:19.8596970Z   Preparing editable metadata (pyproject.toml): started
+2026-10-08T08:30:20.0517429Z   Preparing editable metadata (pyproject.toml): finished with status 'done'
+2026-10-08T08:30:20.1567362Z Collecting pytest>=8 (from git-native-agent-workspace==0.1.0a1)
+2026-10-08T08:30:20.2222405Z   Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+2026-10-08T08:30:20.2419600Z Collecting iniconfig>=1.0.1 (from pytest>=8->git-native-agent-workspace==0.1.0a1)
+2026-10-08T08:30:20.2520511Z   Downloading iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+2026-10-08T08:30:20.2740532Z Collecting packaging>=22 (from pytest>=8->git-native-agent-workspace==0.1.0a1)
+2026-10-08T08:30:20.2841588Z   Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+2026-10-08T08:30:20.3029617Z Collecting pluggy<2,>=1.5 (from pytest>=8->git-native-agent-workspace==0.1.0a1)
+2026-10-08T08:30:20.3129823Z   Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+2026-10-08T08:30:20.3391989Z Collecting pygments>=2.7.2 (from pytest>=8->git-native-agent-workspace==0.1.0a1)
+2026-10-08T08:30:20.3495728Z   Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+2026-10-08T08:30:20.3641939Z Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+2026-10-08T08:30:20.4104862Z Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+2026-10-08T08:30:20.4231581Z Downloading iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+2026-10-08T08:30:20.4348476Z Downloading packaging-26.3-py3-none-any.whl (129 kB)
+2026-10-08T08:30:20.4486264Z Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+2026-10-08T08:30:20.4811842Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 47.1 MB/s  0:00:00
+2026-10-08T08:30:20.5044200Z Building wheels for collected packages: git-native-agent-workspace
+2026-10-08T08:30:20.5054027Z   Building editable for git-native-agent-workspace (pyproject.toml): started
+2026-10-08T08:30:20.7393120Z   Building editable for git-native-agent-workspace (pyproject.toml): finished with status 'done'
+2026-10-08T08:30:20.7398784Z   Created wheel for git-native-agent-workspace: filename=git_native_agent_workspace-0.1.0a1-0.editable-py3-none-any.whl size=6215 sha256=6330248130166f245edf9e6220abeb1f8650f23cf508a8e62ed97befcb8c97fc
+2026-10-08T08:30:20.7400806Z   Stored in directory: /tmp/pip-ephem-wheel-cache-vb82jjm5/wheels/a8/4b/c9/4617ba3de7b67789815ee20e593fc813aa9e57f316eb332800
+2026-10-08T08:30:20.7441478Z Successfully built git-native-agent-workspace
+2026-10-08T08:30:20.7729752Z Installing collected packages: pygments, pluggy, packaging, iniconfig, git-native-agent-workspace, pytest
+2026-10-08T08:30:21.7593260Z 
+2026-10-08T08:30:21.7603010Z Successfully installed git-native-agent-workspace-0.1.0a1 iniconfig-2.3.1 packaging-26.3 pluggy-1.6.0 pygments-2.21.0 pytest-9.1.1
+2026-10-08T08:30:21.8225436Z ##[group]Run python scripts/check.py
+2026-10-08T08:30:21.8225803Z [36;1mpython scripts/check.py[0m
+2026-10-08T08:30:21.8292211Z shell: /usr/bin/bash -e {0}
+2026-10-08T08:30:21.8292476Z env:
+2026-10-08T08:30:21.8292747Z   pythonLocation: <CI_TOOLCACHE>/Python/3.11.16/x64
+2026-10-08T08:30:21.8293186Z   PKG_CONFIG_PATH: <CI_TOOLCACHE>/Python/3.11.16/x64/lib/pkgconfig
+2026-10-08T08:30:21.8293623Z   Python_ROOT_DIR: <CI_TOOLCACHE>/Python/3.11.16/x64
+2026-10-08T08:30:21.8294003Z   Python2_ROOT_DIR: <CI_TOOLCACHE>/Python/3.11.16/x64
+2026-10-08T08:30:21.8294388Z   Python3_ROOT_DIR: <CI_TOOLCACHE>/Python/3.11.16/x64
+2026-10-08T08:30:21.8294768Z   LD_LIBRARY_PATH: <CI_TOOLCACHE>/Python/3.11.16/x64/lib
+2026-10-08T08:30:21.8295088Z ##[endgroup]
+2026-10-08T08:30:41.5677095Z ssssssss................................................................ [ 16%]
+2026-10-08T08:30:57.0457601Z ..............F.....F................................................... [ 33%]
+2026-10-08T08:31:00.7849220Z ........................................................................ [ 49%]
+2026-10-08T08:31:23.7580067Z ........................................................................ [ 66%]
+2026-10-08T08:31:55.1058487Z ..............s..ssssssss.sssssssss..................................... [ 83%]
+2026-10-08T08:32:06.4003056Z ............................sss.........................ssssssssssssss.. [ 99%]
+2026-10-08T08:32:07.6426180Z .                                                                        [100%]
+2026-10-08T08:32:07.6426782Z =================================== FAILURES ===================================
+2026-10-08T08:32:07.6427489Z __________________ test_one_input_pass_reads_each_record_once __________________
+2026-10-08T08:32:07.6427989Z 
+2026-10-08T08:32:07.6428160Z local_app = <Mock id='139626291372816'>
+2026-10-08T08:32:07.6428856Z monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7efd477faa10>
+2026-10-08T08:32:07.6429418Z 
+2026-10-08T08:32:07.6429823Z     def test_one_input_pass_reads_each_record_once(local_app, monkeypatch):
+2026-10-08T08:32:07.6430612Z         folder = local_app.root() / ".aw-local/inputs"
+2026-10-08T08:32:07.6431222Z         for index in range(100):
+2026-10-08T08:32:07.6431959Z             record = enqueue(local_app, f"old-{index}")
+2026-10-08T08:32:07.6432547Z             write_json(folder / f"old-{index}.json", {**record, "state": "completed"})
+2026-10-08T08:32:07.6433282Z         initial = enqueue(local_app, "boot", purpose="initial")
+2026-10-08T08:32:07.6434079Z         write_json(folder / "boot.json", {**initial, "state": "submitted", "result": {"turn": {"id": "t0"}}})
+2026-10-08T08:32:07.6434993Z         enqueue(local_app, "new")
+2026-10-08T08:32:07.6435493Z         reads = Mock(wraps=runtime.read_json)
+2026-10-08T08:32:07.6436105Z         monkeypatch.setattr(runtime, "read_json", reads)
+2026-10-08T08:32:07.6436702Z         runner = runner_for(local_app)
+2026-10-08T08:32:07.6437392Z         runner.adapter.completed.put({"id": "t0", "status": "completed"})
+2026-10-08T08:32:07.6438107Z         records = runner._read_inputs()
+2026-10-08T08:32:07.6438602Z         assert len(records) == 2
+2026-10-08T08:32:07.6439091Z         runner._complete_inputs(records)
+2026-10-08T08:32:07.6439499Z         runner._inputs(records)
+2026-10-08T08:32:07.6440013Z         counts = Counter(call.args[0] for call in reads.call_args_list if call.args[0].parent == folder)
+2026-10-08T08:32:07.6440648Z >       assert len(counts) == 102 and set(counts.values()) == {1}
+2026-10-08T08:32:07.6441107Z E       AssertionError: assert (102 == 102 and {1, 2} == {1}
+2026-10-08T08:32:07.6442702Z E        +  where 102 = len(Counter({PosixPath('<CI_TEST_ROOT>/pytest-0/test_one_input_pass_reads_each0/.aw-local/inputs/new.json'): 2, Pos...son'): 1, PosixPath('<CI_TEST_ROOT>/pytest-0/test_one_input_pass_reads_each0/.aw-local/inputs/old-39.json'): 1}))
+2026-10-08T08:32:07.6443960Z E         
+2026-10-08T08:32:07.6444205Z E         Extra items in the left set:
+2026-10-08T08:32:07.6444840Z E         2
+2026-10-08T08:32:07.6445038Z E         
+2026-10-08T08:32:07.6445230Z E         Full diff:
+2026-10-08T08:32:07.6445442Z E           {
+2026-10-08T08:32:07.6445635Z E               1,
+2026-10-08T08:32:07.6445825Z E         +     2,
+2026-10-08T08:32:07.6446013Z E           })
+2026-10-08T08:32:07.6446129Z 
+2026-10-08T08:32:07.6446281Z tests/test_dispatch_efficiency.py:175: AssertionError
+2026-10-08T08:32:07.6446734Z ________ test_poll_rechecks_ownership_and_conditional_publication[None] ________
+2026-10-08T08:32:07.6447045Z 
+2026-10-08T08:32:07.6447194Z local_app = <Mock id='139626291231504'>, failure_at = None
+2026-10-08T08:32:07.6447475Z 
+2026-10-08T08:32:07.6447769Z     @pytest.mark.parametrize("failure_at", ["binding", "commit", None])
+2026-10-08T08:32:07.6448398Z     def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_at):
+2026-10-08T08:32:07.6448849Z         store = local_app.store.return_value
+2026-10-08T08:32:07.6449307Z         store.snapshot.return_value = message_snapshot({"message-index/m.json": incoming("m")})
+2026-10-08T08:32:07.6449756Z         adapter = Mock()
+2026-10-08T08:32:07.6450003Z         adapter.status.return_value = "idle"
+2026-10-08T08:32:07.6450474Z         if failure_at == "binding":
+2026-10-08T08:32:07.6450857Z             local_app.require_binding.side_effect = [({}, {}), Conflict("new binding")]
+2026-10-08T08:32:07.6451264Z         if failure_at == "commit":
+2026-10-08T08:32:07.6451818Z             store.change.side_effect = Conflict("shared state advanced")
+2026-10-08T08:32:07.6452201Z         if failure_at:
+2026-10-08T08:32:07.6452434Z             with pytest.raises(Conflict):
+2026-10-08T08:32:07.6452761Z                 Messages(local_app).poll(*ACTOR, adapter=adapter)
+2026-10-08T08:32:07.6453102Z             adapter.notify.assert_not_called()
+2026-10-08T08:32:07.6453381Z         else:
+2026-10-08T08:32:07.6453768Z >           assert Messages(local_app).poll(*ACTOR, adapter=adapter)["state"] == "notified_waiting_ack"
+2026-10-08T08:32:07.6454260Z                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-08T08:32:07.6454464Z 
+2026-10-08T08:32:07.6454582Z tests/test_dispatch_efficiency.py:238: 
+2026-10-08T08:32:07.6454916Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-10-08T08:32:07.6455157Z 
+2026-10-08T08:32:07.6455343Z self = <agent_workspace.messages.Messages object at 0x7efd477d5e50>
+2026-10-08T08:32:07.6455774Z workspace = 'sea', agent_id = 'alice', binding = 'b-current'
+2026-10-08T08:32:07.6456209Z adapter = <Mock id='139626294242320'>, directory = None, retry_seconds = 60
+2026-10-08T08:32:07.6456573Z max_attempts = 3
+2026-10-08T08:32:07.6456693Z 
+2026-10-08T08:32:07.6456905Z     def poll(self, workspace, agent_id, binding, *, adapter=None, directory=None,
+2026-10-08T08:32:07.6457315Z              retry_seconds=60, max_attempts=3):
+2026-10-08T08:32:07.6457613Z         store = self.app.store(workspace)
+2026-10-08T08:32:07.6457893Z         snap = store.snapshot()
+2026-10-08T08:32:07.6458256Z         self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
+2026-10-08T08:32:07.6458706Z         messages = self._list(snap, agent_id, unacked=True)
+2026-10-08T08:32:07.6459096Z         if not messages:
+2026-10-08T08:32:07.6459331Z             return {"state": "empty"}
+2026-10-08T08:32:07.6459588Z         message = messages[0]
+2026-10-08T08:32:07.6459977Z         notification = {"message_id": message["id"], "workspace": workspace, "agent": agent_id,
+2026-10-08T08:32:07.6460463Z                         "binding": binding, "delivery": message["delivery"]}
+2026-10-08T08:32:07.6460798Z         if adapter is None:
+2026-10-08T08:32:07.6461145Z             return {"state": "awaiting_manual_receive", "notification": notification}
+2026-10-08T08:32:07.6461924Z         if message["delivery"] == "insert" and getattr(adapter, "supports_insert", True) is False:
+2026-10-08T08:32:07.6462708Z             return {"state": "delivery_unsupported", "message_id": message["id"], "delivery": "insert",
+2026-10-08T08:32:07.6463762Z                     "instruction": "当前接入不支持 insert；队头与原消息保留。告知用户，按其选择主动接收原消息或交接到支持的入口；不要重发副本、改写 delivery 或伪造 ACK。"}
+2026-10-08T08:32:07.6464236Z         state = adapter.status()
+2026-10-08T08:32:07.6464494Z         if state == "unknown":
+2026-10-08T08:32:07.6464759Z             return {"state": "entry_state_unknown"}
+2026-10-08T08:32:07.6465101Z         if state == "busy" and message["delivery"] == "normal":
+2026-10-08T08:32:07.6465510Z             return {"state": "waiting_idle", "message_id": message["id"]}
+2026-10-08T08:32:07.6465898Z         dispatch_path = f"dispatch/{agent_id}.json"
+2026-10-08T08:32:07.6466198Z         snap = store.snapshot()
+2026-10-08T08:32:07.6466554Z         self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
+2026-10-08T08:32:07.6466963Z         previous = snap.json(dispatch_path, {})
+2026-10-08T08:32:07.6467249Z         attempts = 0
+2026-10-08T08:32:07.6467625Z         if previous.get("message_id") == message["id"] and previous.get("binding") == binding:
+2026-10-08T08:32:07.6468064Z             attempts = previous["attempts"]
+2026-10-08T08:32:07.6468409Z             if time.time() < previous["attempted_at"] + retry_seconds:
+2026-10-08T08:32:07.6468958Z                 return {"state": "waiting_ack", "message_id": message["id"]}
+2026-10-08T08:32:07.6469322Z             if attempts >= max_attempts:
+2026-10-08T08:32:07.6469723Z                 return {"state": "notification_retry_exhausted", "message_id": message["id"]}
+2026-10-08T08:32:07.6470268Z         dispatch = {**notification, "attempts": attempts + 1, "attempted_at": time.time()}
+2026-10-08T08:32:07.6470849Z         # A shared attempt record arbitrates separate local copies, not just one process's lock.
+2026-10-08T08:32:07.6471354Z         store.change("main", {dispatch_path: encode(dispatch)},
+2026-10-08T08:32:07.6472205Z             {dispatch_path: snap.entries.get(dispatch_path), f"agents/{agent_id}.json": snap.entries[f"agents/{agent_id}.json"],
+2026-10-08T08:32:07.6473062Z              f"bindings/{binding}.json": snap.entries[f"bindings/{binding}.json"], f"acks/{message['id']}.json": None}, "Claim notification attempt")
+2026-10-08T08:32:07.6473741Z         _, entry = self.app.require_binding(workspace, agent_id, binding)
+2026-10-08T08:32:07.6474111Z >       if entry["kind"] == "desktop":
+2026-10-08T08:32:07.6474362Z            ^^^^^^^^^^^^^
+2026-10-08T08:32:07.6474581Z E       KeyError: 'kind'
+2026-10-08T08:32:07.6474714Z 
+2026-10-08T08:32:07.6474839Z src/agent_workspace/messages.py:237: KeyError
+2026-10-08T08:32:07.6475190Z =========================== short test summary info ============================
+2026-10-08T08:32:07.6475944Z FAILED tests/test_dispatch_efficiency.py::test_one_input_pass_reads_each_record_once - AssertionError: assert (102 == 102 and {1, 2} == {1}
+2026-10-08T08:32:07.6477265Z  +  where 102 = len(Counter({PosixPath('<CI_TEST_ROOT>/pytest-0/test_one_input_pass_reads_each0/.aw-local/inputs/new.json'): 2, Pos...son'): 1, PosixPath('<CI_TEST_ROOT>/pytest-0/test_one_input_pass_reads_each0/.aw-local/inputs/old-39.json'): 1}))
+2026-10-08T08:32:07.6478243Z   
+2026-10-08T08:32:07.6478447Z   Extra items in the left set:
+2026-10-08T08:32:07.6478684Z   2
+2026-10-08T08:32:07.6478849Z   
+2026-10-08T08:32:07.6479018Z   Full diff:
+2026-10-08T08:32:07.6479202Z     {
+2026-10-08T08:32:07.6479375Z         1,
+2026-10-08T08:32:07.6479548Z   +     2,
+2026-10-08T08:32:07.6479718Z     })
+2026-10-08T08:32:07.6480212Z FAILED tests/test_dispatch_efficiency.py::test_poll_rechecks_ownership_and_conditional_publication[None] - KeyError: 'kind'
+2026-10-08T08:32:07.6480825Z 2 failed, 388 passed, 43 skipped in 105.43s (0:01:45)
+2026-10-08T08:32:07.6836728Z ##[error]Process completed with exit code 1.
+2026-10-08T08:32:07.6985105Z Post job cleanup.
+2026-10-08T08:32:07.7862630Z [command]/usr/bin/git version
+2026-10-08T08:32:07.7912535Z git version 2.55.0
+2026-10-08T08:32:07.7947131Z Temporarily overriding HOME='<CI_HOME>/work/_temp/53aedfeb-8454-4494-b8df-d3ee911d43b8' before making global git config changes
+2026-10-08T08:32:07.7948536Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-08T08:32:07.7952973Z [command]/usr/bin/git config --global --add safe.directory <CI_HOME>/work/AgentWorkspace/AgentWorkspace
+2026-10-08T08:32:07.7995056Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-08T08:32:07.8032036Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-08T08:32:07.8306360Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-08T08:32:07.8344923Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-08T08:32:07.8667864Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-08T08:32:07.8722180Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-08T08:32:07.9212632Z Cleaning up orphan processes
+

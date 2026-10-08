@@ -97,14 +97,7 @@ MCP 启动命令是 `aw mcp`。给对应会话的进程配置 `AW_HOME`、`AW_WO
 
 ### 4.2 Codex Desktop
 
-```sh
-aw -w sea agent configure helper --config '{"kind":"desktop"}'
-aw -w sea agent start helper --open
-```
-
-`--open` 请求打开新会话 composer，用户仍需实际发送入口提示词。版本不支持 deep link 时，只显示提示词和待绑定状态。
-
-自动通知需要桌面自己的 MCP 控制接口；在真实 Desktop 会话内执行：
+先在 Codex 手动建立或选择一个已有本地项目，把该 Agent 的实例目录设为主目录；项目和分区沿用用户既有布局。随后在用户授权的真实 Codex 桌面聊天中捕获桌面自己的 MCP 控制连接：
 
 ```sh
 aw -w sea agent capture-desktop helper --command '["node","ACTUAL_INSTALLED_CODEX_APP_TOOLS/server.mjs"]'
@@ -112,15 +105,21 @@ aw -w sea agent capture-desktop helper --command '["node","ACTUAL_INSTALLED_CODE
 
 这里路径由安装环境确定，不是仓库提供的文件。命令读取该会话真实的 `CODEX_APP_TOOLS_PIPE_PATH` 和 `CODEX_THREAD_ID`，只保存到 `.aw-local/runtime.json`。不能从外部终端编造这两个值。
 
-随后在新会话中完成真实 ID 绑定。PowerShell 中可用：
+回到工作台或用户终端，保存模型选择并启动：
 
-```powershell
-aw -w sea agent bind helper --binding BINDING --session $env:CODEX_THREAD_ID
-aw -w sea runtime start helper
+```sh
+aw -w sea agent configure-desktop helper --model MODEL_ID --effort low
+aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-如果首先需要配置路径，可先 `configure --config @runtime.json`，再在新 Desktop 会话里 capture。适配器验证 `tools/list` 中实际有 `read_thread`、`send_message_to_thread`；不知道会话状态就不投递。它只启动桌面附带 MCP 客户端，不启动第二个 app-server，不通过 exec resume 抢 writer。
+模型和强度可省略以沿用桌面默认配置；同一实例主目录匹配多个项目时，用 `--project-id` 明确选择。配置和启动都会读取实际项目列表核对主目录。缺项目或控制接口时先报错，不预留第二个执行入口。
+
+运行器通过 `create_thread` 在该项目创建真实新聊天，读取实际 ID 与 `cwd` 后才绑定。第一轮仅建立连接；正式进入材料随后作为输入交付。桌面 Agent 使用提示中的 `aw call --desktop-agent` 命令前缀，由真实 `CODEX_THREAD_ID` 约束平台身份，不继承管理权限。输入先通过 `runtime.receive-input` 关联当前原生轮次；只有该轮明确完成才记录完成并为初次进入发布检查点，发送回执或 idle 本身不算业务完成。
+
+工作台“换新会话”或 `agent renew` 在旧会话保存检查点、stop 并被观察到 idle 后，自动在同一项目创建新聊天。未知创建结果保留原回执，不自动重试开第二个聊天。自动 transfer 也接受含真实控制连接的 `desktop` 配置；其他入口不会暗中替代 Desktop。
+
+只配置 `kind=desktop` 而未捕获控制连接时，仍保留原手动提示词/深链和真实 ID 绑定路径。深链打开不是自动创建成功。适配器只启动桌面附带 MCP 客户端，不启动第二个 app-server，不通过 exec resume 抢 writer。
 
 Desktop 重启后命名管道可能变化。可从实际会话再次 capture；运行器只在原绑定仍有效且未请求 handoff 时重连。连续失败停下报告，不创造新的会话 ID。当前尚不能承诺无配置的跨版本自动发现。
 

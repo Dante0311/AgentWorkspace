@@ -17,9 +17,9 @@ READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "ag
 USER_MANAGEMENT = {"session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
-                   "agent.configure-sdk", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
+                   "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
                    "maintenance.grant", "maintenance.schedule", "maintenance.repair"}
-CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send"}
+CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input"}
 
 
 def assets(app, operation, workspace, agent_id, path=None, content=None, revision=None, directory=None):
@@ -171,9 +171,11 @@ def command_map(app):
         "agent.stop": partial(stop_entry, app), "agent.handoff": partial(runtime.handoff_request, app),
         "agent.input": partial(runtime.queue_input, app),
         "agent.capture-desktop": partial(runtime.configure_desktop, app),
+        "agent.configure-desktop": partial(runtime.desktop_profile, app),
         "agent.upgrade-tools": partial(upgrade_tools, app),
         "runtime.start": partial(runtime_launch, app), "runtime.stop": partial(runtime_stop, app),
         "runtime.status": app.show,
+        "runtime.receive-input": partial(runtime.receive_input, app),
         "work.create": app.work_create, "work.list": app.work_list, "work.show": app.work_show,
         "work.update": app.work_update, "work.deliver": app.work_deliver,
         "message.send": messages.send, "message.list": messages.list, "message.show": messages.show,

@@ -137,9 +137,8 @@ def serve(app, port=8765, open_browser=False, setup=False):
         server.server_close()
 
 
-def mcp(app):
-    actor = None
-    if os.environ.get("AW_AGENT") and os.environ.get("AW_BINDING"):
+def mcp(app, actor=None):
+    if actor is None and os.environ.get("AW_AGENT") and os.environ.get("AW_BINDING"):
         actor = (os.environ["AW_WORKSPACE"], os.environ["AW_AGENT"], os.environ["AW_BINDING"])
     for line in sys.stdin:
         try:

@@ -20,6 +20,7 @@ def parser():
     domains = p.add_subparsers(dest="domain", required=True)
     call = domains.add_parser("call", help="Invoke the same JSON operation used by HTTP/MCP.")
     call.add_argument("command")
+    call.add_argument("--desktop-agent", help="Bind this call to the actual CODEX_THREAD_ID of a Desktop instance.")
     call.add_argument("--arguments", default="{}", help="JSON object, or @file.json")
     serve = domains.add_parser("serve", help="Local workbench and authenticated HTTP tools.")
     serve.add_argument("--port", type=int, default=8765)
@@ -56,7 +57,7 @@ def parser():
 
     ag = actions("agent", ["create", "import", "list", "show", "connect", "configure", "versions", "update",
         "promote", "archive", "unarchive", "start", "bind", "stop", "handoff", "renew", "fork", "input",
-        "capture-desktop", "sync", "upgrade-tools", "configure-codex", "configure-sdk",
+        "capture-desktop", "configure-desktop", "sync", "upgrade-tools", "configure-codex", "configure-sdk",
         "transfer", "transfer-profile", "transfer-continue", "transfer-status", "desktop-project", "desktop-project-save"])
     for key, sub in ag.items():
         if key != "list":
@@ -87,6 +88,9 @@ def parser():
     ag["input"].add_argument("--text", required=True)
     ag["input"].add_argument("--delivery", choices=["normal", "insert"], default="normal")
     ag["capture-desktop"].add_argument("--command", help="JSON argv array of the actual desktop MCP server.")
+    ag["configure-desktop"].add_argument("--model", default="")
+    ag["configure-desktop"].add_argument("--effort", default="")
+    ag["configure-desktop"].add_argument("--project-id", default="")
 
     for key in ("configure-codex", "configure-sdk", "transfer-profile"):
         ag[key].add_argument("--allow-http", action="store_true",
@@ -217,6 +221,12 @@ def main(argv=None):
             if not os.environ.get("AW_WORKSPACE"):
                 raise Error("An inherited model identity requires AW_WORKSPACE.")
             actor = (os.environ["AW_WORKSPACE"], os.environ["AW_AGENT"], os.environ["AW_BINDING"])
+        if actor is None:
+            from .runtime import desktop_directory_actor
+            operation = options.get("command") if domain == "call" else domain + "." + str(action)
+            actor = desktop_directory_actor(app, operation)
+        if actor and not workspace:
+            workspace = actor[0]
         if actor and (domain in ("serve", "setup") or (domain in ("maintenance", "runtime") and action == "run")):
             raise Error("Starting a server or worker is a user-management operation.")
         if domain == "session" and action == "run":
@@ -234,7 +244,7 @@ def main(argv=None):
             return 0
         if domain == "mcp":
             from .server import mcp
-            mcp(app)
+            mcp(app, actor=actor)
             return 0
         if domain == "runtime" and action == "run":
             from .runtime import Runner
@@ -242,6 +252,12 @@ def main(argv=None):
             return 0
         if domain == "call":
             command, args = options["command"], parse_json(options["arguments"])
+            if options.get("desktop_agent"):
+                from .runtime import desktop_actor
+                desktop_identity = desktop_actor(app, workspace, options["desktop_agent"])
+                if actor and actor != desktop_identity:
+                    raise Error("Inherited identity differs from the actual Desktop session.")
+                actor = desktop_identity
         else:
             command, args = domain + "." + action, options
             file = args.pop("content_file", None)

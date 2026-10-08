@@ -1,0 +1,11 @@
+{
+  "fixture_root": "<FIXTURE_ROOT>\\instances\\desktop-probe",
+  "new_home": "<TEST_ROOT>\\home",
+  "product_sha256": {
+    "AGENTS.md": "7a9cf0ac8d9205f9954b79e74e958bee0b59b02c5e91f477c3bc23f1c42add3f",
+    "README.md": "66bf2ad846be554641d9fe18ebc62b63130e1e76598906c0a5b98e8ecc5cecf2"
+  },
+  "description": "本实例现用于用户授权的 Codex Desktop 自动启动、消息和同实例交接隔离验收。\n首次正式进入：用平台 asset.write 保存 notes/desktop-bootstrap.txt，内容为 DESKTOP_BOOTSTRAP_9f84a3c1，然后保存一次 checkpoint 并结束本轮。\n接手时：读取该已保存资产，使用真实 CODEX_THREAD_ID 写 notes/desktop-relay.txt，内容包含旧标记和本次真实聊天 ID；保存 checkpoint 后结束本轮。\n只处理本轮明确测试通知。不得查询或修改产品目录、创建其他实例或聊天、安排业务、发送外部消息、轮询或 sleep 等待后续消息。\nhandoff 请求到来时保存实际资料和 checkpoint，调用 agent.stop，随后立即结束本轮，不自行启动后继。\n所有平台操作使用正式进入材料提供的 aw call --desktop-agent 命令前缀，身份由实际桌面聊天校验。\n",
+  "baseline": "5aaae00520374b022e0c38fa21f312f8e08629ba",
+  "wheel_sha256": "f727984cc7ef70b42db2f4fd4714a4ab6ceaf595c8fe27a0207cf07c45da2bc6"
+}

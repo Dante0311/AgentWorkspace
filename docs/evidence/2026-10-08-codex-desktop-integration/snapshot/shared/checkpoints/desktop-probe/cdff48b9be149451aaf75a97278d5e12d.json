@@ -1,0 +1,10 @@
+{
+  "id": "cdff48b9be149451aaf75a97278d5e12d",
+  "agent": "desktop-probe",
+  "revision": "ce568bac5e77bd72969b9e44a079fd080df59d5c",
+  "path": ".aw/checkpoints/cdff48b9be149451aaf75a97278d5e12d.json",
+  "created_at": "2026-10-08T07:38:15.218867+00:00",
+  "excluded": [
+    ".aw-local/"
+  ]
+}

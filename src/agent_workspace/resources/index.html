@@ -103,7 +103,9 @@ async function desktopProject(a){
  }catch(e){$('error').textContent=e.message}
 }
 
-function configureDesktop(a){form('Desktop / 手动入口配置','本版仅提供 Codex Desktop 的手动控制连接配置，接口待实机确认；不支持完整自动创建或自动跨端交接。Claude/WorkBuddy Desktop 未接入，不用 CLI 替代。',[{key:'value',label:'运行配置 JSON',kind:'json',multiline:true,required:true,value:JSON.stringify({kind:'desktop'},null,2)}],v=>command('agent.configure',{...base(a),...v}))}
+function configureDesktop(a){form('Codex 桌面配置','先在真实 Codex 聊天完成一次 capture-desktop，并把实例目录设为已有项目的主目录。保存时核验项目；随后“进入新会话”和“换新会话”会自动复用它。留空模型和强度沿用桌面默认配置。',[
+ {key:'model',label:'模型 ID（可选）'},{key:'effort',label:'推理强度（可选）'},
+ {key:'project_id',label:'已有项目 ID（仅同一主目录对应多个项目时填写）'}],v=>command('agent.configure-desktop',{...base(a),...v}))}
 function transferAgent(a){const request_id=crypto.randomUUID();form('切换 Harness 并接手','先预检目标，再请求旧会话保存并交出。新会话成功绑定且完成 relay 后才算完成；失败请查看原交接，不要重复创建。',runtimeFields(a),v=>command('agent.transfer-profile',{...base(a),...v,request_id}))}
 function scheduleMaintenance(w){form('配置巡检计划','程序负责定时。只有工作台服务或 aw maintenance run 运行时才执行；通知会进入已启动 Sentinel，会产生模型调用。',[{key:'enabled',label:'计划',options:[['false','停止'],['true','启用']]},{key:'interval',label:'间隔（秒，至少 30）',value:'300'},{key:'notify',label:'发现异常时通知巡检员',options:[['false','只保存报告，不调用模型'],['true','通知当前 Sentinel 会话']]}],v=>command('maintenance.schedule',{workspace:w.alias,enabled:v.enabled==='true',interval:Number(v.interval),notify:v.notify==='true'}))}
 async function caretakerGrant(w){

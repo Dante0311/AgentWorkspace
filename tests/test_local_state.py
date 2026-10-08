@@ -269,3 +269,55 @@ def test_managed_assets_remain_readable(local_app):
     result = commands.assets(local_app, "read", "sea", "alice", path="./.aw/identity.json")
     assert result["content"] == "identity"
     assert result["path"] == ".aw/identity.json"
+
+
+@pytest.mark.parametrize('status,expected', [('completed', 'completed'), ('failed', 'failed'), ('interrupted', 'failed')])
+def test_one_native_turn_finishes_normal_input_and_all_busy_steers(local_app, status, expected):
+    runner = local_runner(local_app)
+    runner.adapter.session = 'actual-session'
+    runner.adapter.turn_id = 't1'
+    runner.adapter.rpc = Mock()
+    runner.adapter.rpc.request.side_effect = lambda method, params: (
+        {'turnId': 't1'} if method == 'turn/steer' else {'turn': {'id': 't1'}})
+    # Use Codex.notify itself: turn/start and turn/steer really return different shapes.
+    runner.adapter.notify = runtime.Codex.notify.__get__(runner.adapter)
+    enqueue(local_app, 'first task', request_id='normal')
+    runner._inputs()
+    runner.adapter.status.return_value = 'busy'
+    for identifier in ('insert-one', 'insert-two'):
+        enqueue(local_app, identifier, request_id=identifier, delivery='insert')
+        runner._inputs()
+        assert read_json(input_path(local_app, identifier))['result'] == {'turnId': 't1'}
+    assert [call.args[0] for call in runner.adapter.rpc.request.call_args_list] == ['turn/start', 'turn/steer', 'turn/steer']
+    runner._complete_inputs()  # A receipt alone is not a completed native turn.
+    assert all(read_json(input_path(local_app, i))['state'] == 'submitted'
+               for i in ('normal', 'insert-one', 'insert-two'))
+    runner.adapter.completed.put({'id': 't1', 'status': status})
+    runner._complete_inputs()
+    assert all(read_json(input_path(local_app, i))['state'] == expected
+               for i in ('normal', 'insert-one', 'insert-two'))
+    for identifier in ('insert-one', 'insert-two'):
+        enqueue(local_app, identifier, request_id=identifier, delivery='insert')
+    runner._inputs()
+    assert runner.adapter.rpc.request.call_count == 3
+    local_app.checkpoint.assert_not_called()
+
+
+def test_steer_without_matching_completion_is_not_promoted_or_replayed(local_app):
+    runner = local_runner(local_app)
+    for identifier, state, binding in [('submitted', 'submitted', 'b-current'),
+                                     ('unknown', 'outcome_unknown', 'b-current'),
+                                     ('old', 'submitted', 'b-old')]:
+        item = enqueue(local_app, identifier, request_id=identifier, delivery='insert')
+        write_json(input_path(local_app, identifier), {**item, 'state': state, 'binding': binding,
+                                                      'result': {'turnId': 'our-turn'}})
+    runner.adapter.completed.put({'id': 'another-turn', 'status': 'completed'})
+    runner._complete_inputs()
+    assert read_json(input_path(local_app, 'submitted'))['state'] == 'submitted'
+    runner.adapter.completed.put({'id': 'our-turn', 'status': 'completed'})
+    runner._complete_inputs()
+    assert read_json(input_path(local_app, 'submitted'))['state'] == 'completed'
+    assert read_json(input_path(local_app, 'unknown'))['state'] == 'outcome_unknown'
+    assert read_json(input_path(local_app, 'old'))['state'] == 'submitted'
+    runner._inputs()
+    runner.adapter.notify.assert_not_called()

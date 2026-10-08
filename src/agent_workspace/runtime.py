@@ -742,7 +742,9 @@ class Runner:
                 turn = self.adapter.completed.get_nowait()
                 completed[turn["id"]] = turn
         for path, item in records:
-            turn_id = item.get("result", {}).get("turn", {}).get("id")
+            result = item.get("result", {})
+            # Codex turn/start returns turn.id; busy turn/steer returns turnId.
+            turn_id = result.get("turn", {}).get("id") or result.get("turnId")
             if item["state"] == "submitted" and turn_id in completed:
                 item["state"] = "completed" if completed[turn_id].get("status") == "completed" else "failed"
                 write_json(path, item)

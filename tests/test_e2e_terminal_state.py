@@ -34,7 +34,7 @@ def prepare_successor(app, monkeypatch):
     return record, root, spawn
 
 
-def install_native(app, monkeypatch, *, terminal="completed", stop_on_boot=False, late=False, close_error=False):
+def install_native(app, monkeypatch, *, terminal="completed", stop_on_boot=False, late=False, close_error=False, steer_receipt=False):
     """Use the real Runner; emit explicit events, including events drained on close."""
     class Native(runtime.Codex):
         def __init__(self, app, workspace, aid, binding, root, config, session=None):
@@ -62,7 +62,7 @@ def install_native(app, monkeypatch, *, terminal="completed", stop_on_boot=False
                     self.completed.put(turn)
             else:
                 self.completed.put(turn)
-            return {"turn": {"id": turn["id"]}}
+            return {"turnId": turn["id"]} if steer_receipt and delivery == "insert" else {"turn": {"id": turn["id"]}}
 
         def close(self):
             if close_error:
@@ -89,15 +89,17 @@ class Steps:
 
 @pytest.mark.parametrize("terminal,expected", [("completed", "completed"), ("failed", "failed"),
                                                ("interrupted", "failed"), (None, "submitted")])
-def test_stop_drains_only_matched_terminal_events_before_release(app, monkeypatch, terminal, expected):
+@pytest.mark.parametrize("steer_receipt", [False, True])
+def test_stop_drains_only_matched_terminal_events_before_release(app, monkeypatch, terminal, expected, steer_receipt):
     binding, root = prepare_agent(app)
-    install_native(app, monkeypatch, terminal=terminal, late=True)
+    install_native(app, monkeypatch, terminal=terminal, late=True, steer_receipt=steer_receipt)
     runner = runtime.Runner(app, "sea", "alice")
     folder = root / ".aw-local/inputs"
 
     def action(step):
         if step == 3:
-            runtime.queue_input(app, "sea", "alice", "stop explicitly", request_id="stop-input")
+            runtime.queue_input(app, "sea", "alice", "stop explicitly", request_id="stop-input",
+                                delivery="insert" if steer_receipt else "normal")
             # These inputs have no matching terminal evidence, or a different owner.
             for name, state, owner in [("pending", "queued", binding), ("unknown", "outcome_unknown", binding),
                                        ("unfinished", "submitted", binding), ("historical", "submitted", "old")]:

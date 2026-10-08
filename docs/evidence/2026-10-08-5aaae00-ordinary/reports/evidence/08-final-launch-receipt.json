@@ -1,0 +1,27 @@
+{
+  "id": "session-59f8b4bd-c11b-42d1-9a5a-016ac30d981e",
+  "spec": {
+    "directory": "<E2E_ROOT>\\product",
+    "profile": {
+      "kind": "codex",
+      "command": [
+        "<USER_HOME>\\AppData\\Local\\OpenAI\\Codex\\bin\\9691020b546a15b2\\codex.exe",
+        "-c",
+        "model=\"gpt-6-luna\"",
+        "-c",
+        "model_reasoning_effort=\"low\"",
+        "app-server"
+      ],
+      "sandbox": "workspace-write",
+      "model": "gpt-6-luna"
+    },
+    "prompt": "这是一次只读普通会话验收。请读取当前工作目录中的 test-note.txt，原样报告 verification_code 和 sample_name；再用一句话说明文件用途。不修改任何文件，不访问父目录或其他目录，完成回答后等待我的下一条消息。"
+  },
+  "state": "native_exited",
+  "created_at": "2026-10-08T03:15:37.511587+00:00",
+  "requested_at": "2026-10-08T03:15:37.521058+00:00",
+  "attempted_at": "2026-10-08T03:15:39.110469+00:00",
+  "pid": 48840,
+  "returncode": 0,
+  "exited_at": "2026-10-08T03:26:57.455335+00:00"
+}

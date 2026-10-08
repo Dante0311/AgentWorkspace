@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:54:09.412522+08:00",
+  "finished_at": "2026-10-08T12:54:09.943940+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "watch-local",
+    "call",
+    "asset.read",
+    "--arguments",
+    "{\"agent_id\": \"watch-beta\", \"path\": \"AGENTS.md\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"path\": \"AGENTS.md\",\r\n    \"content\": \"# watch-beta\\n\\n隔离正常Watch验收\\n\\n工作根为本目录。平台操作参见 `.agents/skills/`；不要将没有收到的任务当作默认任务。\\n\",\r\n    \"revision\": \"b1bc05cbc30191e86d9f04f48fad605fcdafc5b77cb71a795cce3fdce29fc7f6\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

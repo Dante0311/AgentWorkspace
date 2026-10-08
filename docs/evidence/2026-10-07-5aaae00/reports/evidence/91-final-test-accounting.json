@@ -1,0 +1,27 @@
+{
+  "time": "2026-10-07T20:52:17.466678+08:00",
+  "terminal_first_group": {
+    "passed": 120,
+    "failed": 1,
+    "reason": "isolated build-only env lacked installed wheel for child-process import"
+  },
+  "terminal_single_corrected_setup_recheck": {
+    "passed": 1,
+    "failed": 0,
+    "original_failure_retained": true
+  },
+  "sdk_first_group": {
+    "passed": 24,
+    "skipped": 5,
+    "reason": "Claude dependency missing"
+  },
+  "sdk_fixed_dependency_single_cases": {
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "sdk": "claude-agent-sdk==0.2.163"
+  },
+  "sdk_selector_error": "81 exit4 no cases ran; 85 only five corrected file selectors",
+  "full_groups_rerun": false,
+  "actual_sdk_original_workbuddy_startup": "WinError 193; no model query; not fixed by protocol fixtures"
+}

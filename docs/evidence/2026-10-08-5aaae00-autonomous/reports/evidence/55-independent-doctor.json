@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T13:00:44.281460+08:00",
+  "finished_at": "2026-10-08T13:00:45.338111+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "workspace.doctor",
+    "--arguments",
+    "{}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"state\": \"healthy\",\r\n    \"observed_at\": \"2026-10-08T05:00:44.521885+00:00\",\r\n    \"revision\": \"761ad662fb97db0b9030c12342a5ec7b55cbeebd\",\r\n    \"issues\": [],\r\n    \"unacknowledged_notifications\": {\r\n      \"steward\": 1\r\n    },\r\n    \"coverage\": {\r\n      \"local\": [\r\n        \"maintainer\",\r\n        \"sentinel\",\r\n        \"steward\"\r\n      ],\r\n      \"unobserved_remote\": []\r\n    }\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

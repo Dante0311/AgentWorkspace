@@ -1,0 +1,8 @@
+{
+  "id": "c87f350e943324a6ea70990b85b2f77c5",
+  "created_at": "2026-10-08T04:56:18.933567+00:00",
+  "summary": "隔离 normal Watch 验收完成：按顺序真实接收 aw-watch-001 与 aw-watch-002，均发布 ACK；notes/watch-order.md 已保存 A/B、message_id、aw-watch-002 对 aw-watch-001 的 message_refs，以及随机标识 f8e45861ceb449bc9b10f00cef198b90。文件 revision 994d1c8a59e8ec4645b52cc11a3f0e749a901feef32fcc2365ea5619c4509dbe。",
+  "content": "",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

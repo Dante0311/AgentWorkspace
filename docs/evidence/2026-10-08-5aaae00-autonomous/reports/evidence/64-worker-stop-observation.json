@@ -1,0 +1,6 @@
+{
+  "controller_action": "Ctrl+C to own official maintenance run terminal",
+  "native_agents_released": true,
+  "process_audit": "63-process-audit-after-maintenance.json",
+  "claim": "worker no longer observed; do not infer graceful finally solely from terminal exit"
+}

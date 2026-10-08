@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:32:41.603815+08:00",
+  "finished_at": "2026-10-08T14:32:42.765322+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "message.watch",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\", \"operation\": \"start\", \"interval\": 3}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"enabled\": true,\r\n    \"interval\": 3,\r\n    \"binding\": \"bfdecfd797423449ba36c659de7e3d63e\",\r\n    \"changed_at\": \"2026-10-08T06:32:42.733896+00:00\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,10 @@
+{
+  "id": "cebbf8b2475ac4785b2da555160b3a82f",
+  "agent": "sentinel",
+  "revision": "84ff0b986fcb7bb23c65a8f42c60bff4d0eafea1",
+  "path": ".aw/checkpoints/cebbf8b2475ac4785b2da555160b3a82f.json",
+  "created_at": "2026-10-08T04:57:48.887853+00:00",
+  "excluded": [
+    ".aw-local/"
+  ]
+}

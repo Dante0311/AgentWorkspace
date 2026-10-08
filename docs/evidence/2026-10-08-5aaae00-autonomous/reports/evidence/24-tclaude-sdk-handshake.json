@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:55:08.679814+08:00",
+  "finished_at": "2026-10-08T12:55:11.866282+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "watch-local",
+    "call",
+    "setup.inspect-sdk",
+    "--arguments",
+    "{\"kind\": \"claude\", \"executable\": \"<USER_HOME>\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@tencent\\\\tclaude\\\\node_modules\\\\@tencent\\\\tclaude-win32-x64\\\\tclaude.exe\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\n  \"ok\": true,\n  \"result\": {\n    \"state\": \"connected\",\n    \"authentication\": \"configured_unverified\",\n    \"model_invoked\": false,\n    \"catalog\": \"reported_by_claude\"\n  }\n}\n",
+  "stderr": ""
+}

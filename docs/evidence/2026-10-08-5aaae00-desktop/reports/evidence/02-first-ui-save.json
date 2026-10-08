@@ -1,0 +1,28 @@
+{
+  "observed_via": "Browser Agent card save, installed API readback",
+  "plan": {
+    "workspace": "desktop-local",
+    "agent_id": "desktop-probe",
+    "harness": "codex",
+    "primary_folder": "<E2E_ROOT>\\instances\\desktop-probe",
+    "project": {
+      "project_name": "AW · 桌面验收 · probe（初始）",
+      "section_name": "AW · 桌面验收",
+      "product_paths": [
+        "<E2E_ROOT>\\product"
+      ],
+      "updated_at": "2026-10-08T03:49:30.854701+00:00"
+    },
+    "revision": "d27223e94b94ea9fa7f1cc5a595b9293483c391d3a0610d7cefd02e3e0f48b4a",
+    "state": "manual_setup_required",
+    "native_project_verified": false,
+    "path_status": [
+      {
+        "path": "<E2E_ROOT>\\product",
+        "exists": true
+      }
+    ],
+    "instructions": "# 桌面项目与分区：持久 Agent 的手动准备\n\n一个 Agent 在实际使用的桌面端复用一个项目，不为每次会话新建项目。项目名默认 `AW · Workspace · Agent`；Codex 分区默认 `AW · Workspace`。只有首次实际使用时才准备；不批量建立三家项目，不复制产品仓，不写入应用私有数据库。\n\n1. 在所选原生桌面端，选择已有项目或手动新建。使用返回的项目名称和 `primary_folder`，把 **Agent 已有实例目录** 设为主目录，不是选择产品目录代替。\n2. 按需关联 `product_paths` 中的产品目录。Codex 支持多文件夹的版本可在项目菜单编辑文件夹并指定主文件夹；其他桌面端只使用实际提供的功能，附加目录与规则加载未验证时先说明限制，不假装已授予访问权。\n3. Codex 可使用返回的分区名手动建立/选择分区，把对应 Agent 项目放入其中。使用用户已有布局时，在本机保存其实际显示名。后续不会强行重命名、移动或重新归类。其他桌面端不假设存在相同分区接口。\n4. 项目设置中不再复制完整角色指令，职责以实例内 AGENTS.md、Skill 与资料为准。访问产品前按需要读取产品规范；主目录与附加目录分开不等于强制隔离，也不关闭项目/用户配置的原生继承。\n5. 原端完成 handoff 并确认交出后，在同一个 Agent 项目中新建会话，再按 relay 指引接手；不复用已交出的旧会话，不产生第二个有效执行者。只打开项目或新建窗口不等于 Binding 已建立。\n\n当前平台保存的是本机偏好与目录引用，**没有自动创建、核验或修改原生项目/分区**。`manual_setup_required` 不是临时故障，不要循环重试。项目整理失败不妨碍已支持的 CLI 使用，但不得暗中把 Desktop 请求改成 CLI。原生桌面支持范围以当前 capabilities.md 为准。\n\n普通会话直接选择已有产品目录；不建立专属 Agent 项目、管家或 Workspace。会话要求作为原生输入，不写入共享 AGENTS.md。普通会话不获得平台 Message/ACK、持久身份和自动交接保证。CLI 不需要桌面项目或分区。\n"
+  },
+  "shared_heads": "72c67602c434f28eeccf092440610dad9fde170b refs/heads/instance/desktop-probe\n05b2f66a950c33765dd0d29cb1361dc98f47e541 refs/heads/main\n"
+}

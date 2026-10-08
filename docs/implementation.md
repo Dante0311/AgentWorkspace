@@ -2,6 +2,14 @@
 
 本页描述当前功能分支的实现事实，不替代 [design.md](design.md)。版本仍为 `0.1.0a1`，不是已完成全部目标和实机验收的正式 V1。实际恢复位置与逐次测试见 [development-checkpoint.md](development-checkpoint.md)，操作见 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
 
+2026-10-07 修复后 Windows 定向实测已完成：E2E-004 与 E2E-001 普通停工路径取得限定通过；E2E-001 busy insert/steer 残余、E2E-002 原 WorkBuddy 无扩展名入口启动失败仍待修。完整范围见下文“修复后 Windows 实机结果”和[新批次证据](evidence/2026-10-07-5aaae00/README.md)，历史登记不覆盖。
+
+2026-10-08 用户配合补测：无 Workspace 普通会话在真实 Windows 终端完成两轮对话、原请求防重与退出核对，取得限定通过；启动兼容提示和未取得详情的瞬时警告保留。[本批完整证据](evidence/2026-10-08-5aaae00-ordinary/README.md)。
+
+同日桌面项目补测：工作台引用保存、改名、刷新和冲突保护通过；用户实际建立的 Codex 项目保留实例主目录与同一项目 ID，并手动归入匹配分区。该结论不包含原生 Desktop 会话、Binding 或自动交接。[本批完整证据](evidence/2026-10-08-5aaae00-desktop/README.md)。
+
+同日自主补测：无控制者纠偏的 normal Watch 与管家发布故障恢复取得限定实机通过，共 9 个 Codex 模型轮次；初始化工具约束、参数与笔记偏差保留。Desktop 真实控制连接和 busy 状态只读验证通过；该批 tclaude 为选型前的无模型 SDK 预检。[执行报告、独立复核与完整证据](evidence/2026-10-08-5aaae00-autonomous/README.md)。随后用户选择 DeepSeek，新增 3 个 Codex 轮次、2 次 tclaude query，公开完整配置路径的跨 Harness 交接、消息 ACK 与本人停工限定通过；便捷入口不接受模型 ID 方括号的问题及工具遵循偏差仍保留。[DeepSeek 增量报告与独立复核](evidence/2026-10-08-5aaae00-deepseek/README.md)。
+
 ## 模块
 
 | 文件 | 当前职责 |
@@ -48,6 +56,21 @@ Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试�
 | 单独授权事项 | 合并 PR/main、正式版本发布、许可证、生产环境变更。 |
 
 设计目标保留，当前未提供的 Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制交付，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。获得可靠接口后再按同一执行权合同增加支持。不静默改用后台 CLI、不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份、强制接管和通用迁移仍未实现。
+
+## 后续体验补充（待统一实现）
+
+2026-10-08 用户决定当前优先推进 Codex 桌面接入。WorkBuddy 桌面的接口可行性调查由另一个会话独立进行；[调查交接说明](workbuddy-desktop-investigation.md)列出已知事实、待确认能力及用户配合边界。该分工不代表 WorkBuddy 已支持，也不将其 CLI 启动缺陷与桌面调查混同。
+
+### Codex 项目与分区的轻量自动准备（2026-10-08）
+
+用户已确认记录此需求，后续统一补充；当前只登记，不代表已实现，不改变随包能力说明。它是首次使用的辅助准备，不替代持久 Agent 运行、通信、交接和恢复的核心验收。
+
+- 首次从工作台选择 Codex 使用实例时，发现已有原生项目与分区。优先按已保存项目 ID、实例主目录明确匹配并复用；重名不能作为唯一依据，多候选或目录冲突才请用户选择。
+- 没有对应项目时，预填建议项目名、实例主目录及所选产品目录，允许修改或选择已有项目；有可靠原生接口时提供一次“按建议创建并继续”。分区可复用或按建议新建，也可跳过，不应阻塞核心运行流程。
+- 后续使用复用原项目；保存可靠的关联信息，用户自行改名或移动后保留其布局，不强行搬回默认分区，不为每次会话或所有 Harness 批量创建项目。
+- 接口缺失时集中提供一次手动补齐说明，完成后统一核对实际结果；不逐按钮教学，不把填写本机引用写成原生创建成功。
+- 接入前确认独立工作台可用的原生控制通道及实际接口。当前聊天可用的项目/分区读取、分区创建和项目移动工具不等于工作台已接通；项目创建、编辑及文件夹设置入口仍需核实。不读写应用私有数据库，不另建项目管理系统。
+- 最小验收覆盖发现并复用、按建议创建或明确降级、重复操作不重复创建，以及实例主目录正确；原生会话与 Binding/交接仍分别验收。
 
 ## 已记录问题（待统一处理）
 
@@ -139,3 +162,53 @@ HY 失败后停止 Runner 但保留 Binding 执行资格，是当前合同下保
 ### 本批整合交付（2026-10-07）
 
 用户随后授权将两项修复推送并合入 `main`。整合以 `5ea4605` 为基线，保留已归档的原始 E2E 报告/日志以及 E2E-003 更正；产品代码没有在整合中扩展。[本次修复与验证记录](evidence/2026-10-07-e2e-fixes/README.md)附上三组重新执行的结果、修复前失败、来源和归档校验。上述“待修复”是原验收时的历史状态；目前为代码已修、官方账号/Windows/认证真实复测待完成，不能把开发回归通过追写成原基线验收通过。
+
+### 修复后 Windows 实机结果（2026-10-07）
+
+用户授权拉取修复后继续独立测试。本批固定产品提交 `5aaae00520374b022e0c38fa21f312f8e08629ba`，使用新隔离安装、数据与请求 ID，官方登录 `gpt-6-luna/low`；没有修改产品源码、旧账本、旧交接或旧 HY 资格。上节“复测待完成”是合入时的状态，当前以本节和[完整执行报告及独立复核](evidence/2026-10-07-5aaae00/README.md)为准。
+
+- **E2E-004：本轮同 Codex 范围通过。** 两笔自动交接均在首次公开状态查询前已持久保存 completed/session；后继自行停工后终态仍保留。相同旧 ID 仅读回原结果，没有额外输入/轮次；新合法入口与新交接成功，归档旧 ID 可读。未调用 advance/transfer-continue 推进结果。
+- **E2E-001：普通路径通过，busy insert/steer 残余仍待修。** 普通 boot/handoff/normal 的匹配完成事件、输入终态、显式检查点及释放一致，boot 自停复用显式快照。但一次忙碌时的公开 insert 返回顶层 `result.turnId`，`runtime.py` 的 `_complete_inputs` 仅读 `result.turn.id`；该原生轮次已 completed，输入仍 submitted。不是所有 insert 都失败，也没有证据表明 submitted 被自动重放。保留现场，不手改或重发已执行输入。[回执与完成事件对照](evidence/2026-10-07-5aaae00/reports/evidence/87-steer-terminal-ledger-mismatch.json)。
+- **E2E-002：实际入口启动失败，认证未到达。** 原选 WorkBuddy `resources/app.asar.unpacked/cli/bin/codebuddy` 是无扩展名 JS，未进入 `.js/.cjs/.mjs` 的 Node 适配。Node 已存在、固定 SDK 0.3.267 的真实 connect 仍 WinError 193；不能写成仅待登录或以 `.cjs` 协议夹具通过代替原入口启动。[真实控制连接](evidence/2026-10-07-5aaae00/reports/evidence/24-workbuddy-real-js-control.json)。
+- **Watch：限定副作用成立，存在一次管理端介入。** 两条本人 send/receive/ACK、同 session 顺序资产及双方本人 checkpoint/stop 已核对。第一通知轮在同轮等待第二通知，管理端一次 steer 澄清后才结束；无人介入自然流程未取得完整通过证据，不将该等待直接归因平台延迟。
+- **计数与收尾：** 13/13 原生轮次完成，12 个输入中 11 completed、1 submitted；两个测试实例 released、Runner 退出、最终进程审计无残留。121 项首跑 120 passed / 1 环境导入失败，安装同 wheel 后仅失败用例重查 1 passed；SDK 首跑 24 passed / 5 缺依赖 skipped，补固定依赖后仅原 5 项 5 passed。保留原失败、selector 零用例错误及模型参数/命名偏差，未重跑全部组制造首跑全绿。
+
+报告、检查点、独立复核、操作/事件 ID、定向测试日志、来源与归档 SHA256 及脱敏排除说明已按批次入仓。没有新增 Desktop、企微、自有服务、跨 Harness 真实业务、生产 UE/CI、远端 Git 业务、长期运行或完整 A–J 的证明；历史失败不被本次限定通过覆盖。
+
+### 无 Workspace 普通会话实机补测（2026-10-08）
+
+同一固定产品基线 `5aaae00`，沿用已验证隔离安装，但使用新空 ordinary-home 与虚构产品目录；本机 Codex CLI 已更新为 `0.162.0-alpha.2`，版本与可执行文件摘要另记。用户亲自点击工作台启动，并在真实 Windows Terminal 完成 `gpt-6-luna / low` 两轮对话：第一轮读取随机标记文件，第二轮在同一终端依上下文返回正确组合，未见第二轮工具调用。测试文件内容及列表均未变，未创建 Workspace registry、实例或 Binding。
+
+真实页面的只读刷新、继续原请求一次及整页刷新后，启动记录逐字节不变、请求总数1、原生PID保持。用户 `/quit` 后记录 `native_exited`、returncode=0，原生与包装进程均退出；随后工作台 Ctrl+C，进程和端口停止，但服务终端返回1，不混同原生会话的正常退出码。
+
+启动时 `TERM=dumb` 兼容提示需用户确认，控制者启动环境确有该值，目标进程环境未直接检查；另两条瞬时 warnings 后来不再显示，详情未知，不登记为已定位产品缺陷或宣称已修复。原生 session ID未另取，工作台仍如实返回 `not_observed`，真实对话依据来自用户截图和控制者核对。本批无第二执行者独立复核；[完整报告、复核记录及脱敏证据](evidence/2026-10-08-5aaae00-ordinary/README.md)保留过程与校验值。未验证双击竞态、丢失响应故障注入、其他Harness、自有服务或Desktop自动化；前批两个残余缺陷不因本组通过而关闭。
+
+### 桌面项目与分区手动补测（2026-10-08）
+
+固定产品基线仍为 `5aaae00`，新建独立数据及一个未运行测试实例。真实工作台完成本机引用保存、整页刷新、改名和再次读回；旧 revision 的 HTTP 覆盖请求返回 409/conflict，最终引用不变。
+
+用户手动建立 Codex 本地项目、关联文件夹并归入与引用名称一致的分区。原生只读接口确认最终项目 ID 与最初创建时一致、实例主目录保持、测试根下只有一个项目，目标分区包含该项目。用户截图显示实例目录为“主要”、产品目录作为另一文件夹；完整附加路径和 Desktop 应用版本号未独立取得。平台仍如实返回 `manual_setup_required` / `native_project_verified=false`，人工核对结论另列。
+
+产品文件未变，实例 `current=null` / `has_run=false`；没有启动模型、原生 Desktop 对话、Binding、handoff 或 relay，也不将本次项目整理复用写成多会话运行证明。服务 Ctrl+C 返回1，进程/端口已停止；本机测试项目、分区和数据保留。本批为用户操作及控制者复核，无第二执行者独立复核；[完整报告与证据](evidence/2026-10-08-5aaae00-desktop/README.md)记录来源/归档摘要及排除范围。
+
+### 自主通信、管家恢复与接入预检（2026-10-08）
+
+用户授权补齐当前可自主运行的实机用例。本批仍固定产品 `5aaae00` 与同一已校验 wheel，但新建隔离安装、AW_HOME、两个 Workspace 及测试实例，未修产品或旧现场。官方 Codex `gpt-6-luna/low` 共 9 个原生轮次，started/completed 均为 9；[完整报告及独立复核](evidence/2026-10-08-5aaae00-autonomous/README.md)按新批次保留。
+
+- **normal Watch：通信阶段无控制者纠偏，限定通过。** 4 轮完成两条 normal 消息、同一接收 session 的顺序资产、本人 ACK/checkpoint/stop。首次 boot 提前 receive 被拒绝、无效参数自行纠正、发送者笔记抄错第二条 from.agent 的偏差保留；真实消息/回执均为正确发送者，不以手抄笔记替代原始记录，也不称初始化严格遵循通过。
+- **管家 publication-reconcile：真实故障恢复闭环限定通过。** 控制者在可丢弃 bare Git authority 临时拒绝 main 推送，单次公开测试消息自然留下 pending；恢复底层写入条件后，正式 30 秒巡检通知 Sentinel，模型发送维修任务，Maintainer 经限定命令/目标授权补齐原消息，Sentinel 本人重新核对 operation 和 doctor。5 轮完成，实际 result=published，目标异常消失，已知 applied 的同维修 ID 回读未重复动作。控制者恢复 Git 条件不冒称维修员修复权限；不外推 unknown 结果重试或其他维修动作。
+- **工具遵循与清理：** Maintainer boot 的三次只读 Shell 尝试（两次失败、一次读取实例资料）及 Sentinel 初始化额外动作不符合严格测试指令，真正维修仍经受限平台工具完成。编排误判 pending 退出码的过程保留，接续未重发或重新注入。四个模型实例 released、Runner 退出，巡检关闭、授权撤销、临时 Git 配置恢复；给未启动 steward 的一条未读测试刺激保留，不代 ACK。共享原生服务归属未确认，不宣称全机服务清零。
+- **Desktop：真实只读控制部分通过。** 固定产品适配器连接本机已校验的 App Tools 安装组件，发现创建聊天/读状态/发消息等接口并读回当前调用聊天 busy，所建 RPC 进程已退出；退出方式未留证。未创建原生聊天或 Binding，也未投递/交接。产品 Desktop start 仍仅准备提示和深链，自动 transfer 仍拒绝 Desktop；上游接口存在不等于产品已完成接入。
+- **tclaude：无模型预检通过，真实交接未运行。** 用户指定已登录的内部包装器，使用其 Windows 原生入口，wrapper 0.1.8/upstream Claude Code 2.1.251、SDK 0.2.163 的 connect/get_server_info 成功，认证仍为 configured_unverified，query=0。等待用户模型选择后才增量执行 Codex → tclaude；该状态不是兼容性失败，更不证明 WorkBuddy 已修复。
+
+独立复核另列 `message.reconcile` 授权与受限维修入口可能不一致的静态疑点，尚未做实际越权测试或修复，不将指定路径通过扩成所有补齐入口授权闭合。E2E-001 busy insert/steer 与 E2E-002 原 WorkBuddy 入口缺陷仍保留。新包提供源/中间/最终归档 SHA256、必要日志、原生事件和排除说明；不含凭据、完整私人聊天、机器路径或可运行测试状态。
+
+### Codex → tclaude / DeepSeek 真实交接增量（2026-10-08）
+
+用户随后选择 DeepSeek，从 tclaude 实际目录选用 `claude-deepseek-v4.1-flash[1m]`、配置 `low`，沿用已登录的内部包装器及服务。固定产品仍为 `5aaae00`，复用已核验隔离安装、新建 Workspace 和实例；未修改产品源码或全局配置。选型前的 query=0 报告保持历史事实，[本增量报告、独立复核与证据](evidence/2026-10-08-5aaae00-deepseek/README.md)另行归档。
+
+公开 `agent.configure-sdk` 在模型调用前拒绝 ID 中的方括号，是已复现且未修复的便捷入口兼容问题。确认原操作未执行后，通过已有公开 `agent.configure(value)` / `agent.transfer(target_config)` 完整配置路径原样传入该 ID；这条成功路径不关闭便捷入口问题。原生 init 回报精确请求 ID，Assistant 回报 `deepseek/deepseek-flash`；只能证明包装器回报的路由，`low` 只确认配置传递，未取得服务端实际强度回报。
+
+真实增量为旧 Codex boot/handoff 两轮、发送方 Codex 一轮及 tclaude boot/Watch 两次 query，均完成。旧模型本人保存随机资产、检查点并交接，平台自动启动后继；同一实例身份和工作根保持，新 Binding/session 建立。后继读回原检查点和资产、本人收信并发布 ACK、保存结果及检查点后自行停工。旧 Binding 写入被拒绝且操作未记录；两端 released、Runner 退出、Watch 关闭，transfer 完成状态在后继停止后仍保持。独立复核确认关键平台副作用和原生记录一致。
+
+严格工具指令未通过：后继首轮有四次原生 Read；整组另有六次参数错误（Codex 四次、tclaude 两次），均在各自原轮自行纠正，无控制者追加提示或重放。部分中文工具输出乱码原因未定位。共享原生服务未证独占而保持不动，不宣称全机服务退出。本批没有修复或重测 WorkBuddy、busy insert/steer，也不扩展为 Desktop、反向交接、全矩阵或长期运行通过。

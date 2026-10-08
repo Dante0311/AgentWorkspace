@@ -1,0 +1,17 @@
+{
+  "id": "ack-aw-maint-task-001",
+  "type": "ack",
+  "workspace": "maintenance-local",
+  "payload": {
+    "message_id": "aw-maint-task-001"
+  },
+  "destinations": [
+    "<E2E_ROOT>\\data\\maintenance.git"
+  ],
+  "completed": [
+    "<E2E_ROOT>\\data\\maintenance.git"
+  ],
+  "receiver": "maintainer",
+  "binding": "b152041300c694178936355ffa9acc8a9",
+  "state": "published"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "boot-b1a328acff2754abcae00512d2036f112",
+  "binding": "b1a328acff2754abcae00512d2036f112",
+  "delivery": "normal",
+  "purpose": "initial",
+  "state": "completed",
+  "created_at": "2026-10-08T04:55:09.716795+00:00",
+  "sequence": 1,
+  "attempted_at": "2026-10-08T04:55:11.535041+00:00",
+  "result": {
+    "turn": {
+      "id": "01a119dd-8a60-7383-854d-afd82ee3d7e8",
+      "items": [],
+      "itemsView": "notLoaded",
+      "status": "inProgress",
+      "error": null,
+      "startedAt": null,
+      "completedAt": null,
+      "durationMs": null
+    }
+  },
+  "checkpoint_revision": "7afa39787f2778ae3cf58fbd2706de7f448e26e6"
+}

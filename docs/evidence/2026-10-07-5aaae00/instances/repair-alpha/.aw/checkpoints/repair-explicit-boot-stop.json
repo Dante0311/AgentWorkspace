@@ -1,0 +1,8 @@
+{
+  "id": "repair-explicit-boot-stop",
+  "created_at": "2026-10-07T12:38:49.543607+00:00",
+  "summary": "本次独立 boot 停工分支验收：已通过 asset.read 读取 notes/source.md（随机标识 54f487126a3bf311a789a4982d78da7e），并将完整原文写入 notes/verify-boot-stop.md。当前 binding 为 bd880ba2ec26541f189adcd456e6f7c67；未读取 .aw-local，未创建其他检查点或启动后继。",
+  "content": "",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

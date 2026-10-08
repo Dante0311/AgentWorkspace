@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:58:53.813864+08:00",
+  "finished_at": "2026-10-08T12:58:54.993831+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "workspace.doctor",
+    "--arguments",
+    "{}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"state\": \"degraded\",\r\n    \"observed_at\": \"2026-10-08T04:58:54.071401+00:00\",\r\n    \"revision\": \"a55d1eb4bb830567c99cba36d2dd430bdd603c0b\",\r\n    \"issues\": [\r\n      {\r\n        \"code\": \"publication_pending\",\r\n        \"agent\": \"sentinel\",\r\n        \"operation\": \"aw-maint-fault-001\",\r\n        \"state\": \"pending\"\r\n      }\r\n    ],\r\n    \"unacknowledged_notifications\": {},\r\n    \"coverage\": {\r\n      \"local\": [\r\n        \"maintainer\",\r\n        \"sentinel\",\r\n        \"steward\"\r\n      ],\r\n      \"unobserved_remote\": []\r\n    }\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

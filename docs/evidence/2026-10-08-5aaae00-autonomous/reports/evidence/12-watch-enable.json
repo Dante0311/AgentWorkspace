@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:54:54.844883+08:00",
+  "finished_at": "2026-10-08T12:54:56.343097+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "watch-local",
+    "call",
+    "message.watch",
+    "--arguments",
+    "{\"agent_id\": \"watch-beta\", \"operation\": \"start\", \"interval\": 3}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"enabled\": true,\r\n    \"interval\": 3,\r\n    \"binding\": \"b4912bc12d3554bf88cec14b919c5ad5f\",\r\n    \"changed_at\": \"2026-10-08T04:54:56.288484+00:00\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,12 @@
+{
+  "observed_at": "2026-10-08T03:57:10.519408+00:00",
+  "source": "User screenshot of native Edit project dialog",
+  "image": "private/05-native-project-edit.png",
+  "sha256": "ee02e4ed97ebb7e41ce234d91855a9ce1dc42562062a3731ae9954121d636c43",
+  "visible_folder": "desktop-probe",
+  "visible_name": "AW · 桌面验收 · prob",
+  "save_button_visible": true,
+  "product_folder_added": false,
+  "save_completion_from_image": "not established",
+  "model_turns": 0
+}

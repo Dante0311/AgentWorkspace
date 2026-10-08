@@ -1,0 +1,10 @@
+{
+  "id": "c2ada5d0f20974299976abba279304162",
+  "agent": "transfer-peer",
+  "revision": "2208d25a07cf17dad5d7df1da79801616e2c8d2f",
+  "path": ".aw/checkpoints/c2ada5d0f20974299976abba279304162.json",
+  "created_at": "2026-10-08T06:33:29.646131+00:00",
+  "excluded": [
+    ".aw-local/"
+  ]
+}

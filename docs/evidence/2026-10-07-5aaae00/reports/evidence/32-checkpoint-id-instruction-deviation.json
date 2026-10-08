@@ -1,0 +1,9 @@
+{
+  "requested_checkpoint_id": "repair-first-successor-stop",
+  "actual_checkpoint_id": "c6116971e054a4e9195cbd8baa5a006d2",
+  "model_omitted_checkpoint_id": true,
+  "stop_used_actual_saved_checkpoint": true,
+  "management_named_readback_failed": "Unknown saved checkpoint; original error retained",
+  "repair_goal_terminal_events_and_checkpoint_verified": true,
+  "no_model_replay": true
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "claude",
+  "executable": "<USER_HOME>\\AppData\\Roaming\\npm\\node_modules\\@tencent\\tclaude\\node_modules\\@tencent\\tclaude-win32-x64\\tclaude.exe",
+  "model": "claude-deepseek-v4.1-flash[1m]",
+  "effort": "low",
+  "provider": {
+    "base_url": "",
+    "env_key": ""
+  },
+  "allowed_tools": []
+}

@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T13:00:46.502753+08:00",
+  "finished_at": "2026-10-08T13:00:47.177745+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "message.show",
+    "--arguments",
+    "{\"message_id\": \"aw-maint-task-001\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"message\": {\r\n      \"id\": \"aw-maint-task-001\",\r\n      \"from\": {\r\n        \"workspace\": \"workspace:setupccb36af9281b49619fe9cbcbc00f4ac2\",\r\n        \"agent\": \"sentinel\"\r\n      },\r\n      \"to\": {\r\n        \"workspace\": \"workspace:setupccb36af9281b49619fe9cbcbc00f4ac2\",\r\n        \"agent\": \"maintainer\"\r\n      },\r\n      \"created_at\": \"2026-10-08T04:59:13.834077+00:00\",\r\n      \"message_refs\": [],\r\n      \"delivery\": \"normal\",\r\n      \"content\": \"请对发送者 sentinel 的原操作执行 maintenance.repair action=publication-reconcile，operation_id=aw-maint-fault-001、request_id=aw-maint-repair-001。只处理这一项；不要重发原消息，也不要修复 OS/Git 权限。\"\r\n    },\r\n    \"ack\": {\r\n      \"message_id\": \"aw-maint-task-001\"\r\n    }\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

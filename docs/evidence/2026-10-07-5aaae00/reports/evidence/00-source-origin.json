@@ -1,0 +1,11 @@
+{
+  "root": "<E2E_ROOT>",
+  "repository": "Dante0311/AgentWorkspace",
+  "commit": "5aaae00520374b022e0c38fa21f312f8e08629ba",
+  "source_tar_sha256": "6a7af9ab644aac5c7b8ca3edff99f8913fcde3cbcb1c44764f9325bcba1e91ba",
+  "snapshot_method": "git archive HEAD; tracked files only",
+  "untracked_not_copied": [
+    "docs/AgentWorkspace-local-E2E-prompt.md"
+  ],
+  "old_data_copied": false
+}

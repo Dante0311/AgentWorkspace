@@ -1,0 +1,12 @@
+{
+  "time": "2026-10-08T12:53:42.591710+08:00",
+  "commit": "5aaae00520374b022e0c38fa21f312f8e08629ba",
+  "root": "<E2E_ROOT>",
+  "home": "<E2E_ROOT>\\data\\home",
+  "aw": "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+  "wheel_sha256": "e9bcff1a015358643bafbc800d1beb7453dd36cbb8bd1c34a10e68d68ca309f7",
+  "codex_executable": "<USER_HOME>\\AppData\\Local\\OpenAI\\Codex\\bin\\9691020b546a15b2\\codex.exe",
+  "codex_sha256": "3553cd6e7df5a093d8cb8301cd8088a57e0971aba71ddbe0e67f7f44a15cdf68",
+  "model": "gpt-6-luna",
+  "effort": "low"
+}

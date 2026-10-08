@@ -1,0 +1,35 @@
+{
+  "generation": "schedule-7cd66927667244aaa091c5195b89adc5",
+  "last_attempt": "2026-10-08T04:59:29.732138+00:00",
+  "next_due": 1791435599.7321382,
+  "last_run": "2026-10-08T04:59:31.447943+00:00",
+  "report": {
+    "state": "degraded",
+    "observed_at": "2026-10-08T04:59:30.287115+00:00",
+    "revision": "7b79a81ff9876ea03286ecee6cb06c140600a696",
+    "issues": [
+      {
+        "code": "publication_pending",
+        "agent": "sentinel",
+        "operation": "aw-maint-fault-001",
+        "state": "pending"
+      }
+    ],
+    "unacknowledged_notifications": {},
+    "coverage": {
+      "local": [
+        "maintainer",
+        "sentinel",
+        "steward"
+      ],
+      "unobserved_remote": []
+    }
+  },
+  "state": "checked",
+  "notice": {
+    "id": "health-f5242c08aae54c66a6807bbd32b81e20",
+    "fingerprint": "384a90062962db0fa4caf39aeac56557efa7470e59d13806d38f0f2a54b555cb",
+    "binding": "b101bf7595cd04d4085f766211eb3933b",
+    "state": "queued"
+  }
+}

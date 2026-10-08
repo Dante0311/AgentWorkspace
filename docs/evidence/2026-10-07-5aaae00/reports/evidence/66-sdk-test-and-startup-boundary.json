@@ -1,0 +1,55 @@
+{
+  "time": "2026-10-07T20:42:31.791189+08:00",
+  "windows_sdk_fixture_tests": {
+    "passed": 24,
+    "skipped": 5,
+    "failed": 0,
+    "skips": [
+      {
+        "case": "test_native_session_and_two_turns_use_one_client[claude]",
+        "reason": {
+          "type": "pytest.skip",
+          "message": "could not import 'claude_agent_sdk': No module named 'claude_agent_sdk'"
+        }
+      },
+      {
+        "case": "test_sdk_does_not_pretend_insert_is_supported[claude]",
+        "reason": {
+          "type": "pytest.skip",
+          "message": "could not import 'claude_agent_sdk': No module named 'claude_agent_sdk'"
+        }
+      },
+      {
+        "case": "test_sdk_submit_failure_stays_unknown[claude]",
+        "reason": {
+          "type": "pytest.skip",
+          "message": "could not import 'claude_agent_sdk': No module named 'claude_agent_sdk'"
+        }
+      },
+      {
+        "case": "test_native_tool_guard_rejects_released_entry[claude]",
+        "reason": {
+          "type": "pytest.skip",
+          "message": "could not import 'claude_agent_sdk': No module named 'claude_agent_sdk'"
+        }
+      },
+      {
+        "case": "test_codex_runner_automatically_transfers_to_native_sdk[claude]",
+        "reason": {
+          "type": "pytest.skip",
+          "message": "could not import 'claude_agent_sdk': No module named 'claude_agent_sdk'"
+        }
+      }
+    ]
+  },
+  "actual_workbuddy_entry": "bin/codebuddy (extensionless JavaScript)",
+  "actual_startup": "WinError 193",
+  "sdk_control_handshake": "BLOCKED at process spawn",
+  "authentication": "NOT_REACHED; cannot infer WorkBuddy Desktop login state",
+  "real_hy_model_business": "NOT_RUN; zero queries",
+  "node_version": "v22.19.0",
+  "codebuddy_sdk": "0.3.267",
+  "separate_build_env_download": "redundant downloader stopped after actual sdk-app test execution; no product process or test interrupted",
+  "test_sdk_import_source": "sdk-app installed SDK; test runner pytest reused from build-app dependency path, no SDK mock injection for actual startup",
+  "product_or_entry_modified": false
+}

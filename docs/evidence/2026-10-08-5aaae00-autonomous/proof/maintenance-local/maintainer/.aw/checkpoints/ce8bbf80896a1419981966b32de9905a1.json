@@ -1,0 +1,8 @@
+{
+  "id": "ce8bbf80896a1419981966b32de9905a1",
+  "created_at": "2026-10-08T05:00:11.651628+00:00",
+  "summary": "已接收 aw-maint-task-001 并 ACK published。对 aw-maint-fault-001 执行 publication-reconcile（aw-maint-repair-001）：repair.state=applied，result.state=published；复核原 operation published，workspace.doctor healthy 且目标 publication_pending 消失。结果已保存 notes/maintenance-repair.md，并向 sentinel 发送 aw-maint-result-001。范围限制：不证明 steward 已接收或处理；其仍有一条未确认通知。",
+  "content": "",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

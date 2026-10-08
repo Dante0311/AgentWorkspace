@@ -1,0 +1,15 @@
+{
+  "started_at": "2026-10-08T12:58:07.239717+08:00",
+  "finished_at": "2026-10-08T12:58:07.288535+08:00",
+  "argv": [
+    "git",
+    "--git-dir",
+    "<E2E_ROOT>\\data\\maintenance.git",
+    "rev-parse",
+    "--is-bare-repository"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "true\n",
+  "stderr": ""
+}

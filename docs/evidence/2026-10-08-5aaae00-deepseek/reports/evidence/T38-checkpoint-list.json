@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:34:45.027754+08:00",
+  "finished_at": "2026-10-08T14:34:45.935954+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "checkpoint.list",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": [\r\n    {\r\n      \"id\": \"initial-b03737ac951374b90824d9f583824e2f5\",\r\n      \"agent\": \"transfer-agent\",\r\n      \"revision\": \"b3704f16506a1aaf3dd874719c315e25bb2a39cf\",\r\n      \"path\": \".aw/checkpoints/initial-b03737ac951374b90824d9f583824e2f5.json\",\r\n      \"created_at\": \"2026-10-08T06:30:40.487723+00:00\",\r\n      \"excluded\": [\r\n        \".aw-local/\"\r\n      ]\r\n    },\r\n    {\r\n      \"id\": \"c7caaca4521c94bdf9b1f0186bdae127d\",\r\n      \"agent\": \"transfer-agent\",\r\n      \"revision\": \"d5539c7be887d72fd1e960fad5514e196590e6c1\",\r\n      \"path\": \".aw/checkpoints/c7caaca4521c94bdf9b1f0186bdae127d.json\",\r\n      \"created_at\": \"2026-10-08T06:30:57.712538+00:00\",\r\n      \"excluded\": [\r\n        \".aw-local/\"\r\n      ]\r\n    },\r\n    {\r\n      \"id\": \"initial-bfdecfd797423449ba36c659de7e3d63e\",\r\n      \"agent\": \"transfer-agent\",\r\n      \"revision\": \"efceaf8f11b3b8d7479a94eb9947a506c945f898\",\r\n      \"path\": \".aw/checkpoints/initial-bfdecfd797423449ba36c659de7e3d63e.json\",\r\n      \"created_at\": \"2026-10-08T06:32:34.882518+00:00\",\r\n      \"excluded\": [\r\n        \".aw-local/\"\r\n      ]\r\n    },\r\n    {\r\n      \"id\": \"cd0940423d2f74518b059295fd0da29b4\",\r\n      \"agent\": \"transfer-agent\",\r\n      \"revision\": \"12acc1105c8b093ea4c10884fd4b8e16f92ef8a3\",\r\n      \"path\": \".aw/checkpoints/cd0940423d2f74518b059295fd0da29b4.json\",\r\n      \"created_at\": \"2026-10-08T06:34:16.933583+00:00\",\r\n      \"excluded\": [\r\n        \".aw-local/\"\r\n      ]\r\n    }\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

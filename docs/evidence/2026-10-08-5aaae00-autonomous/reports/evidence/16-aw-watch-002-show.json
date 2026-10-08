@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:56:36.866765+08:00",
+  "finished_at": "2026-10-08T12:56:37.638272+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "watch-local",
+    "call",
+    "message.show",
+    "--arguments",
+    "{\"message_id\": \"aw-watch-002\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"message\": {\r\n      \"id\": \"aw-watch-002\",\r\n      \"from\": {\r\n        \"workspace\": \"workspace:setup3518d9d3a00040f0bfc35a352ab28fa5\",\r\n        \"agent\": \"watch-alpha\"\r\n      },\r\n      \"to\": {\r\n        \"workspace\": \"workspace:setup3518d9d3a00040f0bfc35a352ab28fa5\",\r\n        \"agent\": \"watch-beta\"\r\n      },\r\n      \"created_at\": \"2026-10-08T04:55:32.260037+00:00\",\r\n      \"message_refs\": [\r\n        \"aw-watch-001\"\r\n      ],\r\n      \"delivery\": \"normal\",\r\n      \"content\": \"B — f8e45861ceb449bc9b10f00cef198b90\"\r\n    },\r\n    \"ack\": {\r\n      \"message_id\": \"aw-watch-002\"\r\n    }\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

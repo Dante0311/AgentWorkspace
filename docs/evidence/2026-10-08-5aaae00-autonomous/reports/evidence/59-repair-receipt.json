@@ -1,0 +1,59 @@
+{
+  "id": "aw-maint-repair-001",
+  "request": {
+    "agent_id": "sentinel",
+    "action": "publication-reconcile",
+    "operation_id": "aw-maint-fault-001",
+    "bridge": null,
+    "expected_binding": null,
+    "expected_generation": null
+  },
+  "state": "applied",
+  "created_at": "2026-10-08T04:59:39.639154+00:00",
+  "result": {
+    "id": "aw-maint-fault-001",
+    "type": "message",
+    "workspace": "maintenance-local",
+    "payload": {
+      "id": "aw-maint-fault-001",
+      "from": {
+        "workspace": "workspace:setupccb36af9281b49619fe9cbcbc00f4ac2",
+        "agent": "sentinel"
+      },
+      "to": {
+        "workspace": "workspace:setupccb36af9281b49619fe9cbcbc00f4ac2",
+        "agent": "steward"
+      },
+      "created_at": "2026-10-08T04:58:13.886362+00:00",
+      "message_refs": [],
+      "delivery": "normal",
+      "content": "Explicit isolated publication fault stimulus; no production task."
+    },
+    "destinations": [
+      "<E2E_ROOT>\\data\\maintenance.git"
+    ],
+    "completed": [
+      "<E2E_ROOT>\\data\\maintenance.git"
+    ],
+    "sender": "sentinel",
+    "binding": "b101bf7595cd04d4085f766211eb3933b",
+    "state": "published"
+  },
+  "verification": {
+    "state": "healthy",
+    "observed_at": "2026-10-08T04:59:41.491664+00:00",
+    "revision": "4052acad951415d9af02cd43c13330f997c84050",
+    "issues": [],
+    "unacknowledged_notifications": {
+      "steward": 1
+    },
+    "coverage": {
+      "local": [
+        "maintainer",
+        "sentinel",
+        "steward"
+      ],
+      "unobserved_remote": []
+    }
+  }
+}

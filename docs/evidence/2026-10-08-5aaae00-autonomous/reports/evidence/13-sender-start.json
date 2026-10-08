@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:54:56.344096+08:00",
+  "finished_at": "2026-10-08T12:55:01.440989+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "watch-local",
+    "call",
+    "agent.start",
+    "--arguments",
+    "{\"agent_id\": \"watch-alpha\", \"open_app\": false}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"agent\": \"watch-alpha\",\r\n    \"binding\": \"b1a328acff2754abcae00512d2036f112\",\r\n    \"phase\": \"starting\",\r\n    \"kind\": \"codex\",\r\n    \"pid\": 80436,\r\n    \"state\": \"starting_runner\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

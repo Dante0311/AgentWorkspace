@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:32:39.870745+08:00",
+  "finished_at": "2026-10-08T14:32:40.689333+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "agent.show",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"id\": \"transfer-agent\",\r\n    \"name\": \"transfer-agent\",\r\n    \"description\": \"明确授权的隔离同身份自动交接/真实消息测试\",\r\n    \"branch\": \"instance/transfer-agent\",\r\n    \"archived\": false,\r\n    \"current\": \"bfdecfd797423449ba36c659de7e3d63e\",\r\n    \"has_run\": true,\r\n    \"handoff\": null,\r\n    \"created_at\": \"2026-10-08T06:29:53.799866+00:00\",\r\n    \"creation\": {\r\n      \"request_id\": \"transfer-agent-create\",\r\n      \"fingerprint\": \"f4bc7167c1b6f829bc971d9d8157b334d2b777e219e6c0a8dab8bb23004239c2\"\r\n    },\r\n    \"revision\": \"b812fa592dd1e288677a5fa4ebbfa3c7d0b002b4\",\r\n    \"binding\": {\r\n      \"id\": \"bfdecfd797423449ba36c659de7e3d63e\",\r\n      \"agent\": \"transfer-agent\",\r\n      \"kind\": \"claude\",\r\n      \"phase\": \"active\",\r\n      \"session\": \"c08cf6ec-8245-4b10-a3d2-aaca6377effe\",\r\n      \"created_at\": \"2026-10-08T06:31:15.435638+00:00\",\r\n      \"handoff\": \"h03737ac951374b90824d9f583824e2f5\",\r\n      \"controller\": \"r2d61e1ef118e4375a56f911e0fce7d21\"\r\n    },\r\n    \"directories\": [\r\n      \"<E2E_ROOT>\\\\data\\\\home\\\\instances\\\\transfer-local\\\\transfer-agent\"\r\n    ],\r\n    \"runtime\": {\r\n      \"pid\": 67744,\r\n      \"binding\": \"bfdecfd797423449ba36c659de7e3d63e\",\r\n      \"observed_at\": \"2026-10-08T06:31:25.055611+00:00\",\r\n      \"state\": \"running\",\r\n      \"kind\": \"claude\",\r\n      \"session\": \"c08cf6ec-8245-4b10-a3d2-aaca6377effe\",\r\n      \"runner_alive\": true\r\n    },\r\n    \"watch\": {\r\n      \"enabled\": false,\r\n      \"reason\": \"handoff\"\r\n    },\r\n    \"configured_kind\": \"claude\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

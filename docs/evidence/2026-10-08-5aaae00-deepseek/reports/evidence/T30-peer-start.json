@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:32:42.765322+08:00",
+  "finished_at": "2026-10-08T14:32:47.184229+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "agent.start",
+    "--arguments",
+    "{\"agent_id\": \"transfer-peer\", \"open_app\": false}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"agent\": \"transfer-peer\",\r\n    \"binding\": \"b7d19e1bd46414a4e89dbe69e40c9724c\",\r\n    \"phase\": \"starting\",\r\n    \"kind\": \"codex\",\r\n    \"pid\": 67000,\r\n    \"state\": \"starting_runner\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

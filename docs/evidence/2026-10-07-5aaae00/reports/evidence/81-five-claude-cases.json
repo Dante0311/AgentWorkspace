@@ -1,0 +1,14 @@
+{
+  "started_at": "2026-10-07T20:46:56.922429+08:00",
+  "finished_at": "2026-10-07T20:47:00.597358+08:00",
+  "argv": [
+    "<E2E_ROOT>\\sdk-app\\Scripts\\python.exe",
+    "-u",
+    "-c",
+    "import sys;sys.path.append('<E2E_ROOT>\\\\build-app\\\\Lib\\\\site-packages');import pytest,claude_agent_sdk,importlib.metadata;print('Actual SDK:',claude_agent_sdk.__file__,importlib.metadata.version('claude-agent-sdk'));raise SystemExit(pytest.main(['tests/tests.test_native_sdk.py::test_native_session_and_two_turns_use_one_client[claude]', 'tests/tests.test_native_sdk.py::test_sdk_does_not_pretend_insert_is_supported[claude]', 'tests/tests.test_native_sdk.py::test_sdk_submit_failure_stays_unknown[claude]', 'tests/tests.test_native_sdk.py::test_native_tool_guard_rejects_released_entry[claude]', 'tests/tests.test_native_sdk.py::test_codex_runner_automatically_transfers_to_native_sdk[claude]', '-q', '--basetemp', '<E2E_ROOT>\\\\temp\\\\pytest-claude-skipped-only', '--junitxml', '<E2E_ROOT>\\\\reports\\\\evidence\\\\81-five-claude-cases.xml']))"
+  ],
+  "cwd": "<E2E_ROOT>\\source",
+  "exit_code": 4,
+  "stdout": "Actual SDK: <E2E_ROOT>\\sdk-app\\Lib\\site-packages\\claude_agent_sdk\\__init__.py 0.2.163\r\n\r\n============================== warnings summary ===============================\r\n..\\build-app\\Lib\\site-packages\\_pytest\\config\\__init__.py:1345\r\n  <E2E_ROOT>\\build-app\\Lib\\site-packages\\_pytest\\config\\__init__.py:1345: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; anyio\r\n    self._mark_plugins_for_rewrite(hook, disable_autoload)\r\n\r\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\r\n1 warning in 1.20s\r\n",
+  "stderr": "ERROR: file or directory not found: tests/tests.test_native_sdk.py::test_native_session_and_two_turns_use_one_client[claude]\r\n\r\n"
+}

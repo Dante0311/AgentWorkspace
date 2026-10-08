@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:32:40.690836+08:00",
+  "finished_at": "2026-10-08T14:32:41.336555+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "message.send",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\", \"binding\": \"b03737ac951374b90824d9f583824e2f5\", \"to\": \"transfer-peer\", \"content\": \"Must be rejected before recording any operation: old released binding.\", \"delivery\": \"normal\", \"request_id\": \"deepseek-old-binding-invalid-001\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 2,
+  "stdout": "",
+  "stderr": "{\"ok\": false, \"code\": \"conflict\", \"error\": \"This is not the agent's current execution entry. Do not resume an old session.\"}\r\n"
+}

@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:34:42.896685+08:00",
+  "finished_at": "2026-10-08T14:34:43.134342+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "message.operation",
+    "--arguments",
+    "{\"operation_id\": \"ack-aw-transfer-message-001\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"id\": \"ack-aw-transfer-message-001\",\r\n    \"state\": \"published\",\r\n    \"type\": \"ack\",\r\n    \"payload\": {\r\n      \"message_id\": \"aw-transfer-message-001\"\r\n    },\r\n    \"binding\": \"bfdecfd797423449ba36c659de7e3d63e\",\r\n    \"agent\": \"transfer-agent\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

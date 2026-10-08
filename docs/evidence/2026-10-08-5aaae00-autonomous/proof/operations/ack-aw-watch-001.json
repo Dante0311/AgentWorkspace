@@ -1,0 +1,17 @@
+{
+  "id": "ack-aw-watch-001",
+  "type": "ack",
+  "workspace": "watch-local",
+  "payload": {
+    "message_id": "aw-watch-001"
+  },
+  "destinations": [
+    "<E2E_ROOT>\\data\\watch.git"
+  ],
+  "completed": [
+    "<E2E_ROOT>\\data\\watch.git"
+  ],
+  "receiver": "watch-beta",
+  "binding": "b4912bc12d3554bf88cec14b919c5ad5f",
+  "state": "published"
+}

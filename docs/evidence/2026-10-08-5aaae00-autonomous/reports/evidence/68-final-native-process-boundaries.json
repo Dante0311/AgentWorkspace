@@ -1,0 +1,35 @@
+{
+  "observed_at": "2026-10-08T13:03:35.5887380+08:00",
+  "known_runner_pids": [
+    61028,
+    57372,
+    82976,
+    80320,
+    83000
+  ],
+  "known_runner_pids_alive": [],
+  "global_or_shared_daemons_stopped": false,
+  "command_lines_excluded": true,
+  "claim": "Known batch runners exited; no batch-root-associated native client observed. Other services are not proved exclusive and were not stopped; no claim all native/global services exited.",
+  "native_names_count": {
+    "claude.exe": 1,
+    "codex.exe": 3,
+    "node.exe": 48,
+    "python.exe": 60,
+    "tclaude.exe": 1
+  },
+  "tclaude_or_claude_ownership_observation": [
+    {
+      "pid": 58892,
+      "name": "claude.exe",
+      "command_mentions_batch": false,
+      "ownership": "not_proven_batch_exclusive"
+    },
+    {
+      "pid": 83476,
+      "name": "tclaude.exe",
+      "command_mentions_batch": false,
+      "ownership": "not_proven_batch_exclusive"
+    }
+  ]
+}

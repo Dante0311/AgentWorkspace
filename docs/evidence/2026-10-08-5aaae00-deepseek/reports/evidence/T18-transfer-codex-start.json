@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:30:08.035451+08:00",
+  "finished_at": "2026-10-08T14:30:12.181223+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "agent.start",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\", \"open_app\": false}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"agent\": \"transfer-agent\",\r\n    \"binding\": \"b03737ac951374b90824d9f583824e2f5\",\r\n    \"phase\": \"starting\",\r\n    \"kind\": \"codex\",\r\n    \"pid\": 66136,\r\n    \"state\": \"starting_runner\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

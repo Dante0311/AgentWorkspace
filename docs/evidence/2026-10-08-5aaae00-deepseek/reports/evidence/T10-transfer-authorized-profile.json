@@ -1,0 +1,10 @@
+{
+  "time": "2026-10-08T14:29:32.960481+08:00",
+  "model": "claude-deepseek-v4.1-flash[1m]",
+  "effort": "low",
+  "native_executable": "<USER_HOME>\\AppData\\Roaming\\npm\\node_modules\\@tencent\\tclaude\\node_modules\\@tencent\\tclaude-win32-x64\\tclaude.exe",
+  "route": "same tclaude native exe via platform ClaudeSDKClient",
+  "authorization": "Lead relays direct human model selection; not inferred from catalog",
+  "base_url_override": false,
+  "auth_copied": false
+}

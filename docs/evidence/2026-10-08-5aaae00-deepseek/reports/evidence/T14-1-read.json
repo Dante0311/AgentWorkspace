@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:30:06.525389+08:00",
+  "finished_at": "2026-10-08T14:30:06.810441+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "asset.read",
+    "--arguments",
+    "{\"agent_id\": \"transfer-peer\", \"path\": \"AGENTS.md\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"path\": \"AGENTS.md\",\r\n    \"content\": \"# transfer-peer\\n\\n明确授权的隔离同身份自动交接/真实消息测试\\n\\n工作根为本目录。平台操作参见 `.agents/skills/`；不要将没有收到的任务当作默认任务。\\n\",\r\n    \"revision\": \"17aba88aa7812759fe53779a4ac9b9bd9d8f6c67a0ac5917be42dbedc20a9c64\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

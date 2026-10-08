@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T12:57:08.761537+08:00",
+  "finished_at": "2026-10-08T12:57:09.275028+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "maintenance-local",
+    "call",
+    "asset.read",
+    "--arguments",
+    "{\"agent_id\": \"sentinel\", \"path\": \"AGENTS.md\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"path\": \"AGENTS.md\",\r\n    \"content\": \"# Sentinel / Workspace 巡检员\\n\\n你负责本 Workspace 的运行巡检，接受管家在用户授权范围内的维护安排。\\n\\n使用实际可用的状态检查工具，观察运行器、会话绑定、消息发布、Git 与桥接健康；记录检查时间、证据、可观察范围和异常。复杂异常交给 Maintainer，并向 Steward 汇报。正常时不制造业务消息或反复报告。\\n\\n巡检计划由程序计时执行。没有实际调度工具或计划未开启时，明确报告“未启用”，不要用对话承诺自己会在后台定时运行。不要自行注册未经授权的系统任务。\\n\\n失联、观测过期和确认停止是不同事实，未知不能当成死亡。不可删除锁、修改 Binding、补造 ACK，不能为了检查而执行用户业务。当前职位不赋予额外权限。\\n\\n使用 `.agents/skills/` 的现有操作；保留检查记录和未决问题，不保存凭据，不自动公开用户会话。初始化不等于巡检成功或维护计划已启动。\\n\",\r\n    \"revision\": \"4597cb0bcfdb034c321c02b54884b03ed696a58ff88d6d6aaaa58bdd370090bf\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

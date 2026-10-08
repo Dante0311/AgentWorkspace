@@ -1,0 +1,45 @@
+{
+  "time": "2026-10-08T03:18:45.341965+00:00",
+  "request_id": "session-59f8b4bd-c11b-42d1-9a5a-016ac30d981e",
+  "launch_state": "native_running",
+  "native_pid": 48840,
+  "proof": "User-supplied screenshot of the existing native terminal after TERM confirmation",
+  "observed_fields": {
+    "verification_code": "ordinary-babe4683ba4b",
+    "sample_name": "blue-lantern"
+  },
+  "fields_match_fixture": true,
+  "visible_native_tool": "Get-Content -Raw -Encoding UTF8 test-note.txt",
+  "visible_model": "GPT-6-Luna",
+  "visible_effort": "low",
+  "profile_keys": [
+    "kind",
+    "command",
+    "sandbox",
+    "model"
+  ],
+  "configured_model": "gpt-6-luna",
+  "configured_command": [
+    "<USER_HOME>\\AppData\\Local\\OpenAI\\Codex\\bin\\9691020b546a15b2\\codex.exe",
+    "-c",
+    "model=\"gpt-6-luna\"",
+    "-c",
+    "model_reasoning_effort=\"low\"",
+    "app-server"
+  ],
+  "product_files_unchanged": true,
+  "current_product_sha256": {
+    "AGENTS.md": "e383debdddbaeaa6db7cd702dfe8d6b9ddaf3ca75ace81dbdea0facc2ff40cf8",
+    "README.md": "707e217d822942d90ebc2b7137b987efe6307da8e804fba13f54d78e5ad1424d",
+    "test-note.txt": "836a9bcca2ded863a5b0132bc3d33328f468790e1c2759df03bb9ea6bd105c5b"
+  },
+  "workspace_registry_exists": false,
+  "agent_instances_dir_exists": false,
+  "native_ui_warnings_visible": 2,
+  "warnings_details": "not yet inspected; not assumed to be product defects",
+  "screenshot_sha256": "76756e9f2b1080acd8df2dffd7e6a6da01cf3d1a4aeb302be692c404caef63a9",
+  "private_screenshot": "private/03-first-native-response.png",
+  "native_session_id": "not_observed",
+  "completed_model_turns_observed": 1,
+  "next_action": "Second user input in same existing native terminal; no new launch request"
+}

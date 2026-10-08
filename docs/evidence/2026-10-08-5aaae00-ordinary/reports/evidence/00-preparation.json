@@ -1,0 +1,76 @@
+{
+  "created_at": "2026-10-08T03:10:00.871793+00:00",
+  "source_commit": "5aaae00520374b022e0c38fa21f312f8e08629ba",
+  "installation": "<FIXED_INSTALL>",
+  "data_home": "<E2E_ROOT>\\data\\ordinary-home",
+  "product": "<E2E_ROOT>\\product",
+  "native_executable": "<USER_HOME>\\AppData\\Local\\OpenAI\\Codex\\bin\\9691020b546a15b2\\codex.exe",
+  "native_version": "codex-cli 0.162.0-alpha.2",
+  "native_sha256": "3553cd6e7df5a093d8cb8301cd8088a57e0971aba71ddbe0e67f7f44a15cdf68",
+  "login_status": "Logged in using ChatGPT",
+  "model": "gpt-6-luna",
+  "effort": "low",
+  "base_url_override": false,
+  "account_files_read": false,
+  "file_checks": [
+    {
+      "file": "sessions.py",
+      "installed_sha256": "6e31379a8a75458beb96daf47e8034fbc52154a03a6a99e435664a227fa64f14",
+      "git_blob_sha256": "02e75957459a3dd1cb07c76d79f9627e6d3cfb025c5390013817b52a6042b753",
+      "matches_worktree_bytes": true,
+      "matches_fixed_commit_normalized_line_endings": true
+    },
+    {
+      "file": "server.py",
+      "installed_sha256": "3d0cc8dd1234f4f13efecbbf399f475be9251a0e2f1fc5348c24122b3eb20e56",
+      "git_blob_sha256": "94a50d9db909a1833fab47d38e2649b9bebee126421af1bbf69f323d878e01d4",
+      "matches_worktree_bytes": true,
+      "matches_fixed_commit_normalized_line_endings": true
+    },
+    {
+      "file": "app.py",
+      "installed_sha256": "255313d870cb89a9c70af4d3c3ef14dcadd7b5f1eaffd0617dd9e366cb6619f5",
+      "git_blob_sha256": "e6cb17f0105bb9093aebaaa4034d8a5589ead3cdff52a0540466d2322705797a",
+      "matches_worktree_bytes": true,
+      "matches_fixed_commit_normalized_line_endings": true
+    },
+    {
+      "file": "harness_config.py",
+      "installed_sha256": "4a4676093572a121540ab06982f8912094e18ee2e31698749ceeb4d309a257cc",
+      "git_blob_sha256": "dce638a1d52741067e2d218b47207bc80b6dd89ca3539c37602d93d3fe6b4e87",
+      "matches_worktree_bytes": true,
+      "matches_fixed_commit_normalized_line_endings": true
+    },
+    {
+      "file": "native_sdk.py",
+      "installed_sha256": "c9bb50a64ca1c73debb6e166e028d195686839471e4c82ce75cddbe4284237d1",
+      "git_blob_sha256": "647a3073c3f2e47fd0af84f68232966516b42f8f69ecae5f433709442de96e57",
+      "matches_worktree_bytes": true,
+      "matches_fixed_commit_normalized_line_endings": true
+    },
+    {
+      "file": "resources/sessions.html",
+      "installed_sha256": "211d97408a279698528669f2224c7fa438f869f71c2d63604b3588303a5c739e",
+      "git_blob_sha256": "05281b1238a3d8a8baeebcd5df26e1f3d373bff7469437a8f5b5535a1694986e",
+      "matches_worktree_bytes": true,
+      "matches_fixed_commit_normalized_line_endings": true
+    },
+    {
+      "file": "resources/index.html",
+      "installed_sha256": "010248dffd94cd5e0652648317a80bc18e10c0e966af94ef9e61dda8ca3ee255",
+      "git_blob_sha256": "0949ea82f0800496a92dec49e9c4d3aa1dec6fc05e72c5c6bccc43caca471271",
+      "matches_worktree_bytes": true,
+      "matches_fixed_commit_normalized_line_endings": true
+    }
+  ],
+  "initial_product_sha256": {
+    "AGENTS.md": "e383debdddbaeaa6db7cd702dfe8d6b9ddaf3ca75ace81dbdea0facc2ff40cf8",
+    "README.md": "707e217d822942d90ebc2b7137b987efe6307da8e804fba13f54d78e5ad1424d",
+    "test-note.txt": "836a9bcca2ded863a5b0132bc3d33328f468790e1c2759df03bb9ea6bd105c5b"
+  },
+  "initial_home_files": [],
+  "authorized_test": "ordinary interactive CLI two short turns; official login; readonly fictional directory",
+  "native_program_changed_since_previous_batch": true,
+  "models_started": 0,
+  "preparation_note": "Initial exact Git-blob comparison failed only on CRLF versus LF; installed bytes match worktree, normalized bytes match fixed Git commit. No product file changed."
+}

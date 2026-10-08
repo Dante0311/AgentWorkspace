@@ -1,0 +1,33 @@
+{
+  "version": "0.2.163",
+  "package_file_hashes": {
+    "__init__.py": "0d18689948f2d14523898369c5283daaf1c2ce9a5cb492960717083ce3e742ee",
+    "_cli_version.py": "875e365823ddbfa10f375caef32b1f08271e3b9798895bae265fc17afc3e800e",
+    "_errors.py": "3ea0d39326f9cd3b4789e4fcebb2573a55ee2c403d0dac9bfe1a4d06c9bd7a4b",
+    "_internal/__init__.py": "cc37608eaa7c488f664e7c196cfd817bec382d696fe1ade403e4d2da2ef98ec3",
+    "_internal/_mcp_compat.py": "c71f94d2dd18cd37682424619ac93c79f730e83ff0c403fd2500566a9f2ab2b0",
+    "_internal/_task_compat.py": "665abfabdc9ea1a10489f64da0f8b5a5a5e4e514b3b0990812074765ece1dcd3",
+    "_internal/client.py": "cbc59cdb774a28781245a0cb676543d1914e061657a1e99ec7574143f309948a",
+    "_internal/message_parser.py": "febb1aee19e47e03433d89cd4b1f8c5636950e206df77e4f4ca2738b0c900393",
+    "_internal/query.py": "0562517de949f4431177f204fe84cda3265f495d0eb0a949b9ced96cc5bd8276",
+    "_internal/sdk_mcp_bridge.py": "5520af384b0d67f93a36450ccd8f752459ee50d88afb1754e5638577e4b230d7",
+    "_internal/session_import.py": "d5a79833f11116ce4c53c636fa96d526ea57eaac7f13cdc3ca01c0145bbaef87",
+    "_internal/session_mutations.py": "16653fb5dbb6e9963e05ef1522e43ba4b8e28fd0b037e4749dde865ca9e4e675",
+    "_internal/session_resume.py": "0dd9ab8d14b7641a46d166423844cf11adbfa7b8e1f1bf63c696f581f91e8726",
+    "_internal/session_store.py": "7c65f885209a5abc5c9d07d0a2fb5be3189fdd0c9207782f7b5ed46ddd1931a1",
+    "_internal/session_store_validation.py": "191b169b65e9116b6ffdcc215dfc2644db2ab9c3854b88b23206ee4f27580ba4",
+    "_internal/session_summary.py": "358027a03882b497c48c331332aff5a119ce113005dd0a3abfae93259aba18a9",
+    "_internal/sessions.py": "d5323963daf711c8bcc684057fd48d0cb786ee04d8329be6dec82444ec505662",
+    "_internal/transcript_mirror_batcher.py": "41692fcd5a90ed6f0ab5dae4646149543d6ddd743bf9ee3dc8cd912304905ba8",
+    "_internal/transport/__init__.py": "dcc9c77651ad925b80f1392aeaec7ca4998f48a239e45477fb17a9af86fa32a8",
+    "_internal/transport/subprocess_cli.py": "23c0b35acfcff5426255f1f17433e66fc7f8f6d5b8f339e93e085233c569e11c",
+    "_version.py": "194c05aa3b8a527368b0462a2f70f8232ee57aba2d766a46d80b4395f6d3cf25",
+    "client.py": "980f956d963338b39f4fd5224e69594eb513bfda37e5b215cf94bb0499ea047c",
+    "query.py": "5528bc5bc57992f833f7a1056d1e2847eb71b070766764c84365c2e49a05162e",
+    "testing/__init__.py": "b84e3f7817f12d18d6c2686c65e4ba79b187fc6f2e2e8ef834a8dc6250096dcd",
+    "testing/session_store_conformance.py": "61466bedc3835e7aa528fe38fb355293b5597b48060dfd677a49172e771a004b",
+    "types.py": "b1054473280782ab57b2b0690a49a820a2f97dbd2eb6b2ff1bbd3e6205b71bdb"
+  },
+  "aggregate_sha256": "fe0ce0d46379447d76f9ec661f907f0754e436a4ae4965d8974465d19529cf3b",
+  "scope": "installed Python source, not bundled upstream CLI or authentication files"
+}

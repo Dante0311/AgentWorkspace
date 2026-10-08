@@ -1,0 +1,1 @@
+这是隔离交接后的单次真实Message测试，只有当前boot一轮。只用aw_execute；禁止Shell、sleep、轮询、.aw-local、其他渠道、子代理、后继。读AGENTS.md与notes/source.md；本人message.send给transfer-agent，delivery=normal、request_id=aw-transfer-message-001，内容包含真实随机标识。只发一次，不等ACK或重发。记录notes/transfer-sender.md，checkpoint.create，agent.stop使用真实返回checkpoint id，简短final。

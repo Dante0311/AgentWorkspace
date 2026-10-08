@@ -1,0 +1,17 @@
+{
+  "started_at": "2026-10-07T20:43:01.681536+08:00",
+  "finished_at": "2026-10-07T20:43:03.370649+08:00",
+  "argv": [
+    "<E2E_ROOT>\\build-app\\Scripts\\python.exe",
+    "-m",
+    "pip",
+    "install",
+    "--no-index",
+    "--no-deps",
+    "<E2E_ROOT>\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "Processing <E2E_ROOT>\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl\r\nInstalling collected packages: git-native-agent-workspace\r\nSuccessfully installed git-native-agent-workspace-0.1.0a1\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-08T14:29:01.867936+08:00",
+  "finished_at": "2026-10-08T14:29:02.214494+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "transfer-local",
+    "call",
+    "agent.configure-sdk",
+    "--arguments",
+    "{\"agent_id\": \"transfer-agent\", \"kind\": \"claude\", \"model\": \"claude-deepseek-v4.1-flash[1m]\", \"effort\": \"low\", \"executable\": \"<USER_HOME>\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@tencent\\\\tclaude\\\\node_modules\\\\@tencent\\\\tclaude-win32-x64\\\\tclaude.exe\"}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 2,
+  "stdout": "",
+  "stderr": "{\"ok\": false, \"code\": \"operation_failed\", \"error\": \"Invalid native model identifier.\"}\r\n"
+}

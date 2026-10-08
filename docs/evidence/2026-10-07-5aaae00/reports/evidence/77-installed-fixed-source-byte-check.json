@@ -1,0 +1,116 @@
+{
+  "time": "2026-10-07T20:45:45.580193+08:00",
+  "commit": "5aaae00520374b022e0c38fa21f312f8e08629ba",
+  "checks": [
+    {
+      "file": "src/agent_workspace/runtime.py",
+      "installed_environment": "app",
+      "source_sha256": "700e2c7733a4e18d202b8050f54a6956b00fe49a81cd4bd5c949735b6f92b592",
+      "installed_sha256": "700e2c7733a4e18d202b8050f54a6956b00fe49a81cd4bd5c949735b6f92b592"
+    },
+    {
+      "file": "src/agent_workspace/runtime.py",
+      "installed_environment": "sdk-app",
+      "source_sha256": "700e2c7733a4e18d202b8050f54a6956b00fe49a81cd4bd5c949735b6f92b592",
+      "installed_sha256": "700e2c7733a4e18d202b8050f54a6956b00fe49a81cd4bd5c949735b6f92b592"
+    },
+    {
+      "file": "src/agent_workspace/runtime.py",
+      "installed_environment": "build-app",
+      "source_sha256": "700e2c7733a4e18d202b8050f54a6956b00fe49a81cd4bd5c949735b6f92b592",
+      "installed_sha256": "700e2c7733a4e18d202b8050f54a6956b00fe49a81cd4bd5c949735b6f92b592"
+    },
+    {
+      "file": "src/agent_workspace/transfer.py",
+      "installed_environment": "app",
+      "source_sha256": "1776fa2d4de763f44486dab9012eab3dfe21af62176d3f97a0cb382da0d281a4",
+      "installed_sha256": "1776fa2d4de763f44486dab9012eab3dfe21af62176d3f97a0cb382da0d281a4"
+    },
+    {
+      "file": "src/agent_workspace/transfer.py",
+      "installed_environment": "sdk-app",
+      "source_sha256": "1776fa2d4de763f44486dab9012eab3dfe21af62176d3f97a0cb382da0d281a4",
+      "installed_sha256": "1776fa2d4de763f44486dab9012eab3dfe21af62176d3f97a0cb382da0d281a4"
+    },
+    {
+      "file": "src/agent_workspace/transfer.py",
+      "installed_environment": "build-app",
+      "source_sha256": "1776fa2d4de763f44486dab9012eab3dfe21af62176d3f97a0cb382da0d281a4",
+      "installed_sha256": "1776fa2d4de763f44486dab9012eab3dfe21af62176d3f97a0cb382da0d281a4"
+    },
+    {
+      "file": "src/agent_workspace/native_sdk.py",
+      "installed_environment": "app",
+      "source_sha256": "c9bb50a64ca1c73debb6e166e028d195686839471e4c82ce75cddbe4284237d1",
+      "installed_sha256": "c9bb50a64ca1c73debb6e166e028d195686839471e4c82ce75cddbe4284237d1"
+    },
+    {
+      "file": "src/agent_workspace/native_sdk.py",
+      "installed_environment": "sdk-app",
+      "source_sha256": "c9bb50a64ca1c73debb6e166e028d195686839471e4c82ce75cddbe4284237d1",
+      "installed_sha256": "c9bb50a64ca1c73debb6e166e028d195686839471e4c82ce75cddbe4284237d1"
+    },
+    {
+      "file": "src/agent_workspace/native_sdk.py",
+      "installed_environment": "build-app",
+      "source_sha256": "c9bb50a64ca1c73debb6e166e028d195686839471e4c82ce75cddbe4284237d1",
+      "installed_sha256": "c9bb50a64ca1c73debb6e166e028d195686839471e4c82ce75cddbe4284237d1"
+    },
+    {
+      "file": "src/agent_workspace/harness_config.py",
+      "installed_environment": "app",
+      "source_sha256": "4a4676093572a121540ab06982f8912094e18ee2e31698749ceeb4d309a257cc",
+      "installed_sha256": "4a4676093572a121540ab06982f8912094e18ee2e31698749ceeb4d309a257cc"
+    },
+    {
+      "file": "src/agent_workspace/harness_config.py",
+      "installed_environment": "sdk-app",
+      "source_sha256": "4a4676093572a121540ab06982f8912094e18ee2e31698749ceeb4d309a257cc",
+      "installed_sha256": "4a4676093572a121540ab06982f8912094e18ee2e31698749ceeb4d309a257cc"
+    },
+    {
+      "file": "src/agent_workspace/harness_config.py",
+      "installed_environment": "build-app",
+      "source_sha256": "4a4676093572a121540ab06982f8912094e18ee2e31698749ceeb4d309a257cc",
+      "installed_sha256": "4a4676093572a121540ab06982f8912094e18ee2e31698749ceeb4d309a257cc"
+    },
+    {
+      "file": "src/agent_workspace/commands.py",
+      "installed_environment": "app",
+      "source_sha256": "5461ccf3564338661107f36881fdbcd54a4dd2216d9416faa09662a89b1317ff",
+      "installed_sha256": "5461ccf3564338661107f36881fdbcd54a4dd2216d9416faa09662a89b1317ff"
+    },
+    {
+      "file": "src/agent_workspace/commands.py",
+      "installed_environment": "sdk-app",
+      "source_sha256": "5461ccf3564338661107f36881fdbcd54a4dd2216d9416faa09662a89b1317ff",
+      "installed_sha256": "5461ccf3564338661107f36881fdbcd54a4dd2216d9416faa09662a89b1317ff"
+    },
+    {
+      "file": "src/agent_workspace/commands.py",
+      "installed_environment": "build-app",
+      "source_sha256": "5461ccf3564338661107f36881fdbcd54a4dd2216d9416faa09662a89b1317ff",
+      "installed_sha256": "5461ccf3564338661107f36881fdbcd54a4dd2216d9416faa09662a89b1317ff"
+    },
+    {
+      "file": "src/agent_workspace/util.py",
+      "installed_environment": "app",
+      "source_sha256": "8658d713d6c050a3efceb1a0c2899c18f11f8c2954a85dbdf7297d612a1612de",
+      "installed_sha256": "8658d713d6c050a3efceb1a0c2899c18f11f8c2954a85dbdf7297d612a1612de"
+    },
+    {
+      "file": "src/agent_workspace/util.py",
+      "installed_environment": "sdk-app",
+      "source_sha256": "8658d713d6c050a3efceb1a0c2899c18f11f8c2954a85dbdf7297d612a1612de",
+      "installed_sha256": "8658d713d6c050a3efceb1a0c2899c18f11f8c2954a85dbdf7297d612a1612de"
+    },
+    {
+      "file": "src/agent_workspace/util.py",
+      "installed_environment": "build-app",
+      "source_sha256": "8658d713d6c050a3efceb1a0c2899c18f11f8c2954a85dbdf7297d612a1612de",
+      "installed_sha256": "8658d713d6c050a3efceb1a0c2899c18f11f8c2954a85dbdf7297d612a1612de"
+    }
+  ],
+  "all_equal": true,
+  "untracked_development_files_not_installed": true
+}

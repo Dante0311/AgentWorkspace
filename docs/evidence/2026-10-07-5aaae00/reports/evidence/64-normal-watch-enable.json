@@ -1,0 +1,19 @@
+{
+  "started_at": "2026-10-07T20:41:32.981093+08:00",
+  "finished_at": "2026-10-07T20:41:34.495661+08:00",
+  "argv": [
+    "<E2E_ROOT>\\app\\Scripts\\aw.exe",
+    "--home",
+    "<E2E_ROOT>\\data\\home",
+    "-w",
+    "repair-local",
+    "call",
+    "message.watch",
+    "--arguments",
+    "{\"agent_id\": \"repair-beta\", \"operation\": \"start\", \"interval\": 3}"
+  ],
+  "cwd": "<E2E_ROOT>",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"ok\": true,\r\n  \"result\": {\r\n    \"enabled\": true,\r\n    \"interval\": 3,\r\n    \"binding\": \"b90eb318a30e84c78a80a1ba2d03ccd18\",\r\n    \"changed_at\": \"2026-10-07T12:41:34.454768+00:00\"\r\n  }\r\n}\r\n",
+  "stderr": ""
+}

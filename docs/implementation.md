@@ -43,11 +43,21 @@ Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试�
 | 类别 | 内容 |
 | --- | --- |
 | 已有实现，需实机验收 | 受管三种 CLI 的真实模型/账号、自己的 API、模型和强度生效；生产 Git/凭据；企业微信 Bot；隔离安装和持续运行体验。 |
-| 接口仍需核实，不能伪装成只待验收 | Claude/WorkBuddy 原生 Desktop 自动创建、持续投递、停工观测；Codex Desktop 从准备深链到完全自动建会话/跨端接手。 |
+| 接口仍需核实，不能伪装成只待验收 | Claude/WorkBuddy 原生 Desktop 自动创建、持续投递、停工观测。Codex Desktop 已接入真实控制接口，首次项目和连接仍需准备。 |
 | 当前接入未实现的能力 | Claude/CodeBuddy SDK 的已验证 insert/steer；CodeBuddy 模型目录探测目前不提供，字段手工配置并注明 unchecked。不能用中断并重开轮次冒充 insert。 |
 | 单独授权事项 | 合并 PR/main、正式版本发布、许可证、生产环境变更。 |
 
-设计目标保留，当前未提供的 Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制交付，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。获得可靠接口后再按同一执行权合同增加支持。不静默改用后台 CLI、不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份、强制接管和通用迁移仍未实现。
+设计目标保留，当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制交付，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。获得可靠接口后再按同一执行权合同增加支持。不静默改用后台 CLI、不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份、强制接管和通用迁移仍未实现。
+
+## Codex Desktop 自动接入（2026-10-08）
+
+在用户实际桌面附带的 MCP 接口上接入已有本地项目的自动创建、主目录核验、真实 ID 绑定、投递和同实例交接。项目/分区首次准备继续手动完成；运行器复用项目，不创建替代 CLI，也不访问私有应用数据库。
+
+桌面发送回执只含聊天 ID，输入通过 `runtime.receive-input` 绑定执行时的真实轮次，再根据该轮的原生结束状态保存完成和初始检查点。桌面 CLI 调用校验实际 `CODEX_THREAD_ID` 与当前 Binding，旧会话不能取得后继身份。创建结果不明保留原回执，不重复开聊天；停工仍要求原端 checkpoint、stop 和实际 idle。
+
+Windows / App Tools 0.1.5 / gpt-6-luna（配置 low）的隔离实测已验证自动创建、目录和身份绑定、normal Message/ACK、同实例 renew/transfer、新聊天读取旧资产、旧聊天写入被拒以及最终四个 Binding 释放、Runner 退出。实测发现并修复读取轮次上限和内部 purpose 字段干扰 relay 的问题；模型抄错 ID、忽略已返回正文及一次控制者纠偏均保留，不宣称全过程无干预通过。最后资产、消息与原生输出一致，产品文件摘要未变。
+
+定向回归分组为 48 passed，之后新入口说明 10 passed、最终三个修正 3 passed；分组重叠不累加。最终 wheel 的产品代码与实测 round5 一致，仅随包能力说明更新。完整测试、逐轮结果、失败及脱敏校验见 [本批报告](evidence/2026-10-08-codex-desktop-integration/README.md)。首次项目/分区和连接捕获仍需手动完成；其他 Desktop、跨 Harness、busy insert、桌面重启与长期运行未在本批验收。
 
 ## 已记录问题（待统一处理）
 

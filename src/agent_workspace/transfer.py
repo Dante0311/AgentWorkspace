@@ -25,8 +25,15 @@ def preflight(app, workspace, agent_id, config, root):
         if not config.get("executable") or not Path(config["executable"]).is_file():
             raise Error("Target native CLI is unavailable; install it before handoff.")
         sdk_options(config, app, workspace, agent_id, "", root)
+    elif kind == "desktop":
+        from .runtime import Desktop
+        adapter = Desktop(root, config, None)
+        try:
+            adapter.project()
+        finally:
+            adapter.close()
     else:
-        raise Error("Automatic transfer needs a verified managed entry (codex, claude or codebuddy); no Desktop/CLI substitution.")
+        raise Error("Automatic transfer needs a managed native entry; no Desktop/CLI substitution.")
 
 
 def request(app, workspace, agent_id, target_config, request_id=None, directory=None):

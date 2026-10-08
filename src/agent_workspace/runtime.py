@@ -30,9 +30,10 @@ def entry_prompt(app, workspace, agent_id, binding, root):
     item = app.agent(workspace, agent_id, snap)
     # Read installed guidance, not a potentially stale copy from an older checkpoint.
     capabilities = (files("agent_workspace") / "resources" / "prompts" / "capabilities.md").read_text(encoding="utf-8")
-    lines = [(root / ".aw/prompts/entry.md").read_text(encoding="utf-8"), capabilities,
-             json.dumps({"workspace": workspace, "agent": agent_id, "binding": binding,
-                         "runtime_kind": entry["kind"], "instance_root": str(root)}, ensure_ascii=False),
+    entry_mode = "relay" if entry["handoff"] else "fork" if item.get("forked_from") else "initial"
+    lines = [json.dumps({"workspace": workspace, "agent": agent_id, "binding": binding,
+                        "entry_mode": entry_mode, "runtime_kind": entry["kind"], "instance_root": str(root)}, ensure_ascii=False),
+             (files("agent_workspace") / "resources/prompts/entry.md").read_text(encoding="utf-8"), capabilities,
              "平台命令使用 aw_execute 动态工具，或运行 aw。调用参数中的 workspace、agent_id、binding 必须使用上述值。"]
     if entry["handoff"]:
         handoff = snap.json(f"handoffs/{entry['handoff']}.json")
@@ -43,7 +44,61 @@ def entry_prompt(app, workspace, agent_id, binding, root):
     else:
         lines.append((root / ".aw/prompts/initialization.md").read_text(encoding="utf-8"))
         lines.append("用户原始描述：\n" + item["description"])
+    if entry["kind"] == "desktop":
+        lines.append("本桌面会话的所有平台操作使用以下命令前缀，再加命令名及 --arguments JSON。"
+                     "入口根据真实 CODEX_THREAD_ID 校验；不要设置或替换该变量。\n" +
+                     json.dumps(desktop_cli(app, workspace, agent_id), ensure_ascii=False))
     return "\n\n".join(lines)
+
+
+def desktop_cli(app, workspace, agent_id):
+    return [sys.executable, "-m", "agent_workspace", "--home", str(app.home),
+            "--workspace", workspace, "call", "--desktop-agent", agent_id]
+
+
+def desktop_actor(app, workspace, agent_id):
+    session = os.environ.get("CODEX_THREAD_ID")
+    agent = app.agent(workspace, agent_id)
+    binding = agent["current"]
+    if not session or not binding:
+        raise Conflict("This Desktop session has no current execution entry.")
+    _, entry = app.require_binding(workspace, agent_id, binding, allow_stopping=True)
+    if entry["kind"] != "desktop" or entry["session"] != session:
+        raise Conflict("The real Desktop session does not own this execution entry.")
+    return workspace, agent_id, binding
+
+
+def desktop_directory_actor(app, operation=None):
+    """Keep ordinary CLI calls inside a managed Desktop directory caller-bound."""
+    session = os.environ.get("CODEX_THREAD_ID")
+    if not session:
+        return None
+    cwd = Path.cwd().resolve()
+    for workspace, settings in app.local()["workspaces"].items():
+        for agent_id, locations in settings.get("instances", {}).items():
+            for location in locations:
+                root = Path(location).resolve()
+                if not cwd.is_relative_to(root):
+                    continue
+                snapshot = app.store(workspace).snapshot()
+                agent = app.agent(workspace, agent_id, snapshot)
+                entry = snapshot.json(f"bindings/{agent['current']}.json") if agent["current"] else None
+                if entry and entry["kind"] == "desktop":
+                    if (entry["phase"] == "starting" and entry["session"] is None
+                            and operation in ("agent.bind", "agent.capture-desktop")
+                            and not entry.get("controller")
+                            and not read_json(root / ".aw-local/launch.json", {}).get("attempted")):
+                        return None  # User-started manual bootstrap, before an execution identity exists.
+                    return desktop_actor(app, workspace, agent_id)
+                for path in snapshot.entries:
+                    if not path.startswith("bindings/"):
+                        continue
+                    old = snapshot.json(path)
+                    if old["agent"] == agent_id and old["kind"] == "desktop" and old["session"] == session:
+                        raise Conflict("This Desktop chat has handed off; it cannot become a user-management caller.")
+                if not entry and agent["has_run"] and read_json(root / ".aw-local/runtime.json", {}).get("kind") == "desktop":
+                    raise Conflict("This Desktop instance has handed off; the old chat cannot become a user-management caller.")
+    return None
 
 
 def configure_desktop(app, workspace, agent_id, command=None, directory=None):
@@ -59,6 +114,24 @@ def configure_desktop(app, workspace, agent_id, command=None, directory=None):
         raise Error("Supply the actual desktop MCP server command as a JSON array; do not start codex app-server here.")
     write_json(root / ".aw-local/runtime.json", value)
     return {"captured": True, "kind": "desktop", "credentials_printed": False}
+
+
+def desktop_profile(app, workspace, agent_id, model="", effort="", project_id="", directory=None):
+    root = app.root(workspace, agent_id, directory)
+    if app.agent(workspace, agent_id)["current"]:
+        raise Conflict("Handoff before changing the Desktop profile of an active instance.")
+    config = read_json(root / ".aw-local/runtime.json", {})
+    if config.get("kind") != "desktop":
+        raise Unavailable("Capture this instance's real Desktop connection first.")
+    config.update(model=model, effort=effort, project_id=project_id)
+    adapter = Desktop(root, config, None)
+    try:
+        project = adapter.project()
+    finally:
+        adapter.close()
+    app.configure(workspace, agent_id, config, str(root))
+    return {"configured": True, "kind": "desktop", "project_id": project["projectId"],
+            "project_name": project["label"], "primary_folder": project["path"], "model": model, "effort": effort}
 
 
 class Codex:
@@ -161,6 +234,10 @@ class Desktop:
     """Attach to the desktop-owned MCP control endpoint; never spawn a competing writer."""
     def __init__(self, root, config, session):
         self.root, self.session = root, session
+        self.config = config
+        for name in ("model", "effort", "project_id"):
+            if name in config and not isinstance(config[name], str):
+                raise Error(f"Desktop {name} must be a string.")
         command = config.get("command")
         if not command or not config.get("pipe_path") or not config.get("caller_thread"):
             raise Unavailable("Desktop connection is not captured. Configure the real MCP command and capture it in Desktop.")
@@ -173,6 +250,7 @@ class Desktop:
             self.rpc.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
             tools = self.rpc.request("tools/list")["tools"]
             names = {t["name"] for t in tools}
+            self.tools = names
             if not {"read_thread", "send_message_to_thread"}.issubset(names):
                 self.close()
                 raise Unavailable("Installed Desktop does not expose the expected control tools; no CLI fallback was used.")
@@ -188,7 +266,7 @@ class Desktop:
         return json.loads(result["content"][0]["text"])
 
     def status(self):
-        result = self.call("read_thread", {"threadId": self.session, "turnLimit": 1, "maxOutputCharsPerItem": 100})
+        result = self.read()
         state = result["thread"]["status"]["type"]
         if state == "active":
             return "busy"
@@ -199,6 +277,60 @@ class Desktop:
             if turns and turns[0].get("status") in ("completed", "interrupted"):
                 return "idle"
         return "unknown"
+
+    def read(self, **options):
+        return self.call("read_thread", {"threadId": self.session, "turnLimit": 1,
+                                        "maxOutputCharsPerItem": 100, **options})
+
+    def project(self):
+        if not {"create_thread", "list_projects"}.issubset(self.tools):
+            raise Unavailable("This Desktop connection cannot create real project chats.")
+        projects = self.call("list_projects", {})["projects"]
+        matches = [p for p in projects if p.get("projectKind") == "local"
+                   and p.get("hostId") == "local" and p.get("path")
+                   and Path(p["path"]).resolve() == self.root.resolve()]
+        selected = self.config.get("project_id")
+        if selected:
+            matches = [p for p in matches if p["projectId"] == selected]
+        if len(matches) != 1:
+            raise Unavailable("Select one saved local Codex project whose primary folder is this instance. "
+                              "Create it manually if missing; set project_id when more than one matches.")
+        return matches[0]
+
+    def create(self, binding):
+        project = self.project()
+        path = self.root / ".aw-local/launch.json"
+        previous = read_json(path, {})
+        if previous.get("binding") == binding and previous.get("attempted"):
+            raise Conflict("Desktop creation was already attempted; inspect the original result before recovery.")
+        prompt = (files("agent_workspace") / "resources/prompts/desktop-connect.md").read_text(encoding="utf-8")
+        arguments = {"target": {"type": "project", "projectId": project["projectId"],
+                                "environment": {"type": "local"}}, "prompt": prompt}
+        for source, target in (("model", "model"), ("effort", "thinking")):
+            if self.config.get(source):
+                arguments[target] = self.config[source]
+        write_json(path, {"binding": binding, "attempted": True, "project_id": project["projectId"]})
+        result = self.call("create_thread", arguments)
+        write_json(path, {"binding": binding, "attempted": True, "result": result})
+        if not result.get("threadId") or result.get("hostId") != "local":
+            raise Unavailable("Desktop did not return a ready local chat; preserve the launch receipt, do not repeat creation.")
+        self.session = result["threadId"]
+        thread = self.read()["thread"]
+        if thread.get("id") != self.session or not thread.get("cwd") or Path(thread["cwd"]).resolve() != self.root.resolve():
+            raise Unavailable("The created Desktop chat has not verified this instance directory; it was not bound.")
+
+    def completed_turns(self, identifiers):
+        found, cursor = {}, None
+        while identifiers - found.keys():
+            result = self.read(turnLimit=10, **({"cursor": cursor} if cursor else {}))
+            for turn in result.get("turns", []):
+                if turn["id"] in identifiers:
+                    found[turn["id"]] = turn
+            cursor = result.get("page", {}).get("nextCursor")
+            if not cursor:
+                break
+        return {key: value for key, value in found.items()
+                if value.get("status") in ("completed", "interrupted", "failed")}
 
     def notify(self, prompt, delivery):
         state = self.status()
@@ -218,7 +350,7 @@ def spawn_runner(app, workspace, agent_id, directory=None):
                 "runtime", "run", agent_id, "--directory", str(root)]
         kwargs = {"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}
         env = {key: value for key, value in os.environ.items()
-               if key not in ("AW_HOME", "AW_WORKSPACE", "AW_AGENT", "AW_BINDING")}
+               if key not in ("AW_HOME", "AW_WORKSPACE", "AW_AGENT", "AW_BINDING", "CODEX_THREAD_ID")}
         proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output, stderr=output, env=env, **kwargs)
     return {"pid": proc.pid, "state": "starting_runner"}
 
@@ -226,6 +358,13 @@ def spawn_runner(app, workspace, agent_id, directory=None):
 def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None):
     root = app.root(workspace, agent_id, directory)
     config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
+    desktop_ready = config.get("kind") == "desktop" and all(config.get(k) for k in ("command", "pipe_path", "caller_thread"))
+    if desktop_ready:
+        adapter = Desktop(root, config, None)
+        try:
+            adapter.project()
+        finally:
+            adapter.close()
     if config.get("credential_env") and not os.environ.get(config["credential_env"]):
         raise Unavailable("Configured credential environment variable is missing; no execution entry was reserved.")
     if config.get("kind") == "codex":
@@ -256,7 +395,7 @@ def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=N
     prompt = entry_prompt(app, workspace, agent_id, binding, root)
     bind_args = ["aw", "--home", str(app.home), "--workspace", workspace, "agent", "bind", agent_id,
                  "--binding", binding, "--session", "<THIS_NEW_NATIVE_SESSION_ID>", "--directory", str(root)]
-    if result["kind"] in ("desktop", "manual"):
+    if result["kind"] == "manual" or (result["kind"] == "desktop" and not desktop_ready):
         prefix = ("这是新会话接入。先登记这个新会话的真实 ID，成功前不要执行其他工作。不要使用历史 ID。\n"
                   "参数数组：" + json.dumps(bind_args, ensure_ascii=False) + "\nCodex 中真实 ID 可从 CODEX_THREAD_ID 读取。\n\n")
         prompt = prefix + prompt
@@ -301,6 +440,33 @@ def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="u
                   "purpose": purpose, "state": "queued", "created_at": now(), "sequence": sequence}
         write_json(path, record)
     return record
+
+
+def receive_input(app, workspace, agent_id, binding, request_id, directory=None):
+    """Associate a delivered Desktop input with its actual executing native turn."""
+    if desktop_actor(app, workspace, agent_id) != (workspace, agent_id, binding):
+        raise Conflict("Input belongs to another execution entry.")
+    root = app.root(workspace, agent_id, directory)
+    path = root / ".aw-local/inputs" / (slug(request_id) + ".json")
+    with locked(path.with_suffix(".lock")):
+        item = read_json(path)
+        if not item or item["binding"] != binding or item["state"] not in ("dispatching", "submitted"):
+            raise Conflict("This input is not awaiting this Desktop session.")
+        if item.get("result", {}).get("turn", {}).get("id"):
+            return {"request_id": request_id, "already_received": True,
+                    "instruction": "Do not repeat execution; the original receipt is retained."}
+        adapter = Desktop(root, read_json(root / ".aw-local/runtime.json"), os.environ["CODEX_THREAD_ID"])
+        try:
+            result = adapter.read()
+        finally:
+            adapter.close()
+        turns = result.get("turns", [])
+        if result["thread"]["status"]["type"] != "active" or not turns or turns[0].get("status") != "inProgress":
+            raise Unavailable("Desktop cannot identify the active native turn; no input receipt was recorded.")
+        app.require_binding(workspace, agent_id, binding)
+        item.update(state="submitted", result={**item.get("result", {}), "turn": {"id": turns[0]["id"]}})
+        write_json(path, item)
+        return {"request_id": request_id, "text": item["text"]}
 
 
 def handoff_request(app, workspace, agent_id, *, renew=False, directory=None):
@@ -421,9 +587,13 @@ class Runner:
                 if entry["session"] is None:
                     self.adapter.bootstrap(entry_prompt(app, workspace, aid, self.binding, self.root))
             else:
-                if entry["session"] is None:
-                    raise Unavailable("Open the new Desktop session and bind its actual ID first.")
                 self.adapter = Desktop(self.root, config, entry["session"])
+                if entry["session"] is None:
+                    self.adapter.create(self.binding)
+                    app.bind(workspace, aid, self.binding, self.adapter.session, str(self.root))
+                    queue_input(app, workspace, aid, entry_prompt(app, workspace, aid, self.binding, self.root),
+                                purpose="initial", directory=str(self.root), request_id="boot-" + self.binding)
+                entry = app.store(workspace).snapshot().json(f"bindings/{self.binding}.json")
             from .bridges import BridgeManager
             from .transfer import persist_completion
             bridges = BridgeManager(app, workspace, aid, self.binding, self.root)
@@ -440,10 +610,14 @@ class Runner:
                     bridges.stop_all()
                     self.status(state="handoff_waiting_idle", session=self.adapter.session)
                     if self.adapter.status() == "idle":
-                        # Release ownership only after the managed writer is confirmed closed.
+                        if isinstance(self.adapter, Desktop):
+                            self._complete_inputs(stopping_checkpoint=current["checkpoint"])
+                        # Desktop retains its idle chat; its platform authority is released below.
+                        # Other adapters close the managed writer before releasing ownership.
                         self._close_adapter()
                         # Closing drains native events; idle alone is not input success.
-                        self._complete_inputs(stopping_checkpoint=current["checkpoint"])
+                        if not isinstance(self.adapter, Desktop):
+                            self._complete_inputs(stopping_checkpoint=current["checkpoint"])
                         persist_completion(self.root, current)
                         result = app.finish_stop(workspace, aid, self.binding, observed_idle=True)
                         self.status(state="released", handoff=result["id"])
@@ -548,13 +722,25 @@ class Runner:
         return records
 
     def _complete_inputs(self, records=None, *, stopping_checkpoint=None):
-        if not isinstance(self.adapter, (Codex, NativeSDK)):
+        if not isinstance(self.adapter, (Codex, NativeSDK, Desktop)):
             return
         records = self._read_inputs() if records is None else records
         completed = {}
-        while not self.adapter.completed.empty():
-            turn = self.adapter.completed.get_nowait()
-            completed[turn["id"]] = turn
+        if isinstance(self.adapter, Desktop):
+            identifiers = {item["result"]["turn"]["id"] for _, item in records
+                           if item["state"] == "submitted" and item.get("result", {}).get("turn", {}).get("id")}
+            if identifiers:
+                completed = self.adapter.completed_turns(identifiers)
+                for turn_id, turn in completed.items():
+                    metadata = {key: turn[key] for key in ("id", "status", "error", "startedAt", "completedAt", "durationMs") if key in turn}
+                    write_json(self.root / "records" / self.binding / "desktop-turns" / (slug(turn_id) + ".json"),
+                               {"source": "Codex Desktop read_thread", "thread_id": self.adapter.session,
+                                "observed_at": now(), "turn": metadata,
+                                "scope": "Native turn metadata only; message and tool bodies remain in Desktop."})
+        else:
+            while not self.adapter.completed.empty():
+                turn = self.adapter.completed.get_nowait()
+                completed[turn["id"]] = turn
         for path, item in records:
             turn_id = item.get("result", {}).get("turn", {}).get("id")
             if item["state"] == "submitted" and turn_id in completed:
@@ -570,8 +756,10 @@ class Runner:
                 point = self.app.checkpoint_show(self.workspace, self.agent_id, stopping_checkpoint)
             else:
                 point = self.app.checkpoint(self.workspace, self.agent_id,
-                    "首次进入已结束。实际职责与资料以此快照中的文件为准。",
-                    content="原生事件按记录段保存；此记录不宣称执行了任何未安排的产品任务。",
+                    "本会话进入轮次已结束。实际职责与资料以此快照中的文件为准。",
+                    content=("Desktop 轮次元数据按记录段保存，正文仍在原聊天；不宣称执行了未安排的产品任务。"
+                             if isinstance(self.adapter, Desktop) else
+                             "原生事件按记录段保存；此记录不宣称执行了任何未安排的产品任务。"),
                     binding=self.binding, directory=str(self.root), checkpoint_id="initial-" + self.binding)
             item["checkpoint_revision"] = point["revision"]
             write_json(path, item)
@@ -591,11 +779,22 @@ class Runner:
             item.update(state="dispatching", attempted_at=now())
             write_json(path, item)
             try:
-                response = self.adapter.notify(item["text"], item["delivery"])
+                if isinstance(self.adapter, Desktop):
+                    args = desktop_cli(self.app, self.workspace, self.agent_id) + ["runtime.receive-input", "--arguments",
+                           json.dumps({"request_id": item["id"]}, ensure_ascii=False)]
+                    prompt = "平台有一条待处理输入。先执行以下参数数组对应的命令，读取返回 text 后按其内容工作；already_received 时不要重复执行。\n" + json.dumps(args, ensure_ascii=False)
+                else:
+                    prompt = item["text"]
+                response = self.adapter.notify(prompt, item["delivery"])
             except Exception as exc:
-                item.update(state="outcome_unknown", error=str(exc))
-                write_json(path, item)
+                with locked(path.with_suffix(".lock")):
+                    latest = read_json(path)
+                    received = latest.get("result", {}).get("turn", {}).get("id")
+                    latest.update(state="submitted" if received else "outcome_unknown", error=str(exc))
+                    write_json(path, latest)
                 raise
-            item.update(state="submitted", result=response)
-            write_json(path, item)
+            with locked(path.with_suffix(".lock")):
+                latest = read_json(path)
+                latest.update(state="submitted", result={**response, **latest.get("result", {})})
+                write_json(path, latest)
             return

@@ -1,5 +1,6 @@
 """The user and the native session receive the same installed support limits."""
 from importlib.resources import files
+import json
 import threading
 from unittest.mock import Mock
 import urllib.error
@@ -48,6 +49,7 @@ def test_entry_uses_installed_guidance_even_when_local_copy_is_stale(app, handof
     assert guide() in prompt and prompt.count(guide()) == 1
     assert 'obsolete capability claims' not in prompt
     assert '"runtime_kind": "claude"' in prompt
+    assert json.loads(prompt.splitlines()[0])['entry_mode'] == ('relay' if handoff else 'initial')
     assert ('交接点与检查点' in prompt) == handoff
     assert local.read_text(encoding='utf-8') == 'obsolete capability claims'
     local.unlink()

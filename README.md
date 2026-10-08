@@ -4,7 +4,9 @@
 
 AgentWorkspace 为持久 Agent 管理独立工作根、职责、Skill、资料和历史，通过 Git Workspace 通信，并按需使用 Work / Delivery。它操作已有 Harness 的真实会话，不重写模型推理或工具循环，也不要求用户改用新的聊天客户端。
 
-> **`0.1.0a1` 开发预览。** 当前功能分支已有首次配置、三名管家、受管 Codex/Claude/CodeBuddy、自动交接与维护工具。真实账号、自有模型服务、生产 Git、企业微信和 Desktop 未完成实机验收；部分 Desktop 控制能力尚缺接口接入，不能当成只待验收。尚未发布正式 Release 或 PyPI 包。
+> **`0.1.0a1` 开发预览。** 当前功能分支已有首次配置、三名管家、受管 Codex/Claude/CodeBuddy、自动交接与维护工具。本批已接入并实测 Windows Codex Desktop 的指定路径，具体结果及限制见下方记录；不代表其他 Desktop、自有模型服务、生产 Git、企业微信或长期运行已经验收。尚未发布正式 Release 或 PyPI 包。
+
+Codex Desktop 已增加在已有本地项目中的自动创建、真实会话绑定、持续投递和同实例交接；需要先准备实例项目并从真实桌面聊天捕获控制连接。操作和限制见 [Codex Desktop](docs/usage.md#42-codex-desktop)，验证范围见 [实现进展](docs/implementation.md#codex-desktop-自动接入2026-10-08)。Claude/WorkBuddy Desktop 本批未接入。
 
 ## 普通会话与桌面项目
 

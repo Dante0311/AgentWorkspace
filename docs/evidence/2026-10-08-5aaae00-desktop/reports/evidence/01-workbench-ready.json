@@ -1,0 +1,49 @@
+{
+  "url": "http://127.0.0.1:32430/",
+  "state": {
+    "ok": true,
+    "result": {
+      "installation_id": "host-250626d2d5c749a2a4216ef282aa2a3f",
+      "workspaces": [
+        {
+          "alias": "desktop-local",
+          "address": "<E2E_ROOT>\\data\\workspace.git",
+          "locator": "local:desktop-local",
+          "instances": {
+            "desktop-probe": [
+              "<E2E_ROOT>\\instances\\desktop-probe"
+            ]
+          }
+        }
+      ],
+      "agents": [
+        {
+          "workspace": "desktop-local",
+          "id": "desktop-probe",
+          "name": "desktop-probe",
+          "description": "Isolated desktop project and sidebar acceptance only. No business task, model run, or automatic entry is authorized.",
+          "branch": "instance/desktop-probe",
+          "archived": false,
+          "current": null,
+          "has_run": false,
+          "handoff": null,
+          "created_at": "2026-10-08T03:47:51.369007+00:00",
+          "revision": "78145139e23b693a5fccddae3533ecd9f2b953cd",
+          "binding": null,
+          "directories": [
+            "<E2E_ROOT>\\instances\\desktop-probe"
+          ],
+          "runtime": {
+            "state": "not_running",
+            "runner_alive": false
+          },
+          "watch": {
+            "enabled": false
+          },
+          "configured_kind": "manual"
+        }
+      ],
+      "errors": []
+    }
+  }
+}

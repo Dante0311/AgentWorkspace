@@ -105,3 +105,69 @@ def test_save_does_not_start_or_replace_active_session(executable, tmp_path):
     result = hc.configure_codex(app, "sea", "worker", executable=executable)
     assert not result["sessions_started"] and not result["global_configuration_changed"]
     assert result["model_access"] == "unchecked"
+
+
+@pytest.mark.parametrize('kind', ['codex', 'claude', 'codebuddy'])
+def test_model_context_suffix_is_preserved_for_profiles_and_ordinary_sessions(app, executable, tmp_path, kind):
+    from agent_workspace import commands, sessions
+    from agent_workspace.util import read_json
+    model = 'claude-deepseek-v4.1-flash[1m]'
+    app.create('sea', 'model-test')
+    args = {'workspace': 'sea', 'agent_id': 'model-test', 'model': model, 'effort': 'low', 'executable': executable}
+    command = 'agent.configure-codex' if kind == 'codex' else 'agent.configure-sdk'
+    if kind != 'codex':
+        args['kind'] = kind
+    result = commands.execute(app, command, args)
+    assert result['sessions_started'] is False and result['model_access'] == 'unchecked'
+    profile = read_json(app.root('sea', 'model-test') / '.aw-local/runtime.json')
+    assert profile['model'] == model
+    if kind == 'codex':
+        assert overrides(profile)['model'] == model
+    project = tmp_path / 'ordinary'
+    project.mkdir()
+    prepared = sessions.prepare(app, kind, str(project), model=model, effort='low',
+                                executable=executable, request_id='same-model')
+    argv = sessions._invocation(prepared['spec']['profile'], 'literal task')
+    if kind == 'codex':
+        assert 'model=' + json.dumps(model) in argv
+    else:
+        assert argv[argv.index('--model') + 1] == model
+    assert prepared['state'] == 'prepared'
+    assert app.agent('sea', 'model-test')['current'] is None
+
+
+@pytest.mark.parametrize('kind', ['codex', 'claude', 'codebuddy'])
+def test_model_context_suffix_reaches_transfer_profile_unchanged(app, executable, monkeypatch, kind):
+    from agent_workspace import transfer
+    from agent_workspace.util import read_json
+    app.create('sea', 'alice')
+    binding = app.reserve('sea', 'alice')['binding']
+    app.bind('sea', 'alice', binding, 'source-session')
+    preflight = Mock()  # Only test argument/configuration routing; do not open a native client.
+    monkeypatch.setattr(transfer, 'preflight', preflight)
+    model = 'claude-deepseek-v4.1-flash[1m]'
+    result = transfer.request_profile(app, 'sea', 'alice', kind, model=model, effort='low',
+                                      executable=executable, request_id='model-transfer')
+    saved = read_json(app.root('sea', 'alice') / '.aw-local/transfer.json')
+    assert saved['target_config']['model'] == model
+    assert preflight.call_args.args[3]['model'] == model
+    assert result['old_binding'] == binding and app.agent('sea', 'alice')['current'] == binding
+
+
+@pytest.mark.parametrize('kind', ['codex', 'claude', 'codebuddy'])
+@pytest.mark.parametrize('model', ['m\n--flag', 'm\0x', 'm;cmd', 'm&cmd', 'm|cmd', 'm"quote', 'm%PATH%', 'm!x'])
+def test_model_validation_still_rejects_controls_and_shell_syntax(executable, kind, model):
+    with pytest.raises(Error):
+        if kind == 'codex':
+            hc.codex_config(model=model, executable=executable)
+        else:
+            hc.sdk_config(kind, model=model, executable=executable)
+
+
+@pytest.mark.parametrize('kind', ['codex', 'claude', 'codebuddy'])
+def test_model_suffix_support_does_not_change_effort_or_credential_validation(executable, kind):
+    factory = hc.codex_config if kind == 'codex' else lambda **kw: hc.sdk_config(kind, **kw)
+    with pytest.raises(Error):
+        factory(effort='low[1m]', executable=executable)
+    with pytest.raises(Error):
+        factory(env_key='KEY[1m]', base_url='https://fixture.invalid', executable=executable)

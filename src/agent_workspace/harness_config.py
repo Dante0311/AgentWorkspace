@@ -44,7 +44,8 @@ def _check_http_consent(base_url, allow_http):
 def codex_config(model="", effort="", base_url="", env_key="", executable=None, *, allow_http=False):
     _check_http_consent(base_url, allow_http)
     for name, value in (("model", model), ("effort", effort), ("env_key", env_key)):
-        if not isinstance(value, str) or (value and not re.fullmatch(r"[A-Za-z0-9_./:@+-]+", value)):
+        pattern = r"[A-Za-z0-9_./:@+\[\]-]+" if name == "model" else r"[A-Za-z0-9_./:@+-]+"
+        if not isinstance(value, str) or (value and not re.fullmatch(pattern, value)):
             raise Error(f"Invalid {name}; use a native identifier, not a command or credential.")
     if env_key and (not base_url or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", env_key)):
         raise Error("An environment variable name requires a custom service URL.")
@@ -147,7 +148,8 @@ def sdk_config(kind, model="", effort="", base_url="", env_key="", executable=No
     if kind not in ("claude", "codebuddy"):
         raise Error("Choose claude or codebuddy for a native SDK profile.")
     for field, value in (("model", model), ("effort", effort)):
-        if not isinstance(value, str) or (value and not re.fullmatch(r"[A-Za-z0-9_./:@+-]+", value)):
+        pattern = r"[A-Za-z0-9_./:@+\[\]-]+" if field == "model" else r"[A-Za-z0-9_./:@+-]+"
+        if not isinstance(value, str) or (value and not re.fullmatch(pattern, value)):
             raise Error(f"Invalid native {field} identifier.")
     if env_key and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", env_key):
         raise Error("Provide a credential environment variable name, not a key.")

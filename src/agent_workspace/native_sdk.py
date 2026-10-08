@@ -50,7 +50,16 @@ def _codebuddy_client(sdk, executable):
     """0.3.267 has no interpreter option; reuse its transport through the public hook."""
     client_type = sdk.CodeBuddySDKClient
     script = Path(executable)
-    if os.name != "nt" or script.suffix.lower() not in (".js", ".cjs", ".mjs"):
+    if os.name != "nt":
+        return client_type
+    is_script = script.suffix.lower() in (".js", ".cjs", ".mjs")
+    if not script.suffix:
+        # Native CLI packages can ship an extensionless bin/codebuddy. Only
+        # recognize an explicit Node interpreter, not arbitrary text or binaries.
+        with script.open("rb") as stream:
+            is_script = stream.readline(256).rstrip(b"\r\n") in (
+                b"#!/usr/bin/env node", b"#!/usr/bin/node", b"#!/usr/local/bin/node")
+    if not is_script:
         return client_type
     node = shutil.which("node")
     if not node or Path(node).suffix.lower() in (".cmd", ".bat"):

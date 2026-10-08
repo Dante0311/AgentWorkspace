@@ -13,8 +13,8 @@ from agent_workspace.harness_config import sdk_config
 from agent_workspace.util import Unavailable, read_json
 
 
-@pytest.fixture
-def windows_js(app, tmp_path, monkeypatch):
+@pytest.fixture(params=["cli.cjs", "codebuddy"])
+def windows_js(app, tmp_path, monkeypatch, request):
     pytest.importorskip("codebuddy_agent_sdk")
     node = shutil.which("node")
     if not node:
@@ -23,9 +23,10 @@ def windows_js(app, tmp_path, monkeypatch):
     monkeypatch.setattr(native_sdk, "os", SimpleNamespace(**{**vars(os), "name": "nt"}))
     folder = tmp_path / "WorkBuddy fixture 空格 & name"
     folder.mkdir()
-    script = folder / "cli.cjs"
+    script = folder / request.param
     capture = folder / "capture.json"
-    script.write_text('''const fs = require('node:fs');
+    script.write_text('''#!/usr/bin/env node
+const fs = require('node:fs');
 const rl = require('node:readline').createInterface({input: process.stdin});
 const capture = {argv: process.argv.slice(2), cwd: process.cwd(), users: [],
   key: process.env.CODEBUDDY_API_KEY, endpoint: process.env.CODEBUDDY_BASE_URL,
@@ -120,3 +121,33 @@ def test_native_executable_keeps_original_sdk_client(app, monkeypatch):
     _, client_type, _, options = native_sdk.sdk_options(config, app, "sea", "alice", "b", app.home)
     assert client_type is sdk.CodeBuddySDKClient
     assert options["codebuddy_code_path"] == str(Path(sys.executable).resolve())
+
+
+@pytest.mark.parametrize("header", [b"#!/bin/sh\n", b"#!/usr/bin/env python\n", b"#!/usr/bin/env node --inspect\n", b"MZ\0binary\xff"])
+def test_extensionless_non_node_entry_is_not_reinterpreted(app, tmp_path, monkeypatch, header):
+    sdk = pytest.importorskip("codebuddy_agent_sdk")
+    monkeypatch.setattr(native_sdk, "os", SimpleNamespace(**{**vars(os), "name": "nt"}))
+    executable = tmp_path / "codebuddy"
+    executable.write_bytes(header)
+    node = Mock(side_effect=AssertionError("No Node discovery for a different interpreter"))
+    monkeypatch.setattr(shutil, "which", node)
+    assert native_sdk._codebuddy_client(sdk, str(executable)) is sdk.CodeBuddySDKClient
+    node.assert_not_called()
+
+
+@pytest.mark.parametrize("header", [b"#!/usr/bin/env node\r\n", b"#!/usr/bin/node\n", b"#!/usr/local/bin/node\n"])
+def test_known_node_hashbangs_select_the_existing_sdk_transport(app, tmp_path, monkeypatch, header):
+    sdk = pytest.importorskip("codebuddy_agent_sdk")
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Installed Node required")
+    executable = tmp_path / "codebuddy"
+    executable.write_bytes(header)
+    monkeypatch.setattr(native_sdk, "os", SimpleNamespace(**{**vars(os), "name": "nt"}))
+    config = sdk_config("codebuddy", executable=str(executable))
+    _, factory, options_type, options = native_sdk.sdk_options(config, app, "sea", "alice", "b", tmp_path)
+    client = factory(options=options_type(**options))
+    # The custom transport is configured before connect; _transport is set on connect.
+    assert client._custom_transport is not None
+    assert client._custom_transport._get_cli_path() == str(Path(node).resolve())
+    assert client._custom_transport._build_args()[0] == str(executable.resolve())

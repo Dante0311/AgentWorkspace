@@ -1,0 +1,17 @@
+{
+  "id": "handoff-b8fd5550a9562494db897b731f25fd407",
+  "binding": "b8fd5550a9562494db897b731f25fd407",
+  "text": "请执行本实例的 handoff Skill：先如实保存累计摘要、阶段事实及所需材料，创建检查点，再使用本入口 binding 调用 agent.stop。不要筛选或重新解释用户资产，不决定未决业务是否应该重做。stop 返回等待 idle 后，结束本轮，不继续业务；运行器会确认停妥并释放资格。不要自行启动下一会话。\n",
+  "delivery": "insert",
+  "purpose": "handoff",
+  "state": "completed",
+  "created_at": "2026-10-08T07:49:18.709989+00:00",
+  "sequence": 3,
+  "attempted_at": "2026-10-08T07:49:21.931800+00:00",
+  "result": {
+    "threadId": "01a11a6e-2e37-7860-a43a-5fa7fe6230df",
+    "turn": {
+      "id": "01a11a7d-0082-79e2-a5e8-8d2eb97e3fdb"
+    }
+  }
+}

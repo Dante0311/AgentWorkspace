@@ -1,0 +1,20 @@
+{
+  "profile": {
+    "configured": true,
+    "kind": "desktop",
+    "project_id": "881c3150-ad07-43f9-b472-a550af6dc2bc",
+    "project_name": "AW · 桌面验收 · probe",
+    "primary_folder": "<FIXTURE_ROOT>\\instances\\desktop-probe",
+    "model": "gpt-6-luna",
+    "effort": "low"
+  },
+  "start": {
+    "agent": "desktop-probe",
+    "binding": "b8fd5550a9562494db897b731f25fd407",
+    "phase": "starting",
+    "kind": "desktop",
+    "pid": 58028,
+    "state": "starting_runner"
+  },
+  "connection_captured_by_real_probe_chat": true
+}

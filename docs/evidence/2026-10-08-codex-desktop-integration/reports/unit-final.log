@@ -1,0 +1,21 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.4, pytest-8.4.2, pluggy-1.6.0 -- <TEST_ROOT>\dev\Scripts\python.exe
+cachedir: .pytest_cache
+PySide6 6.10.1 -- Qt runtime 6.10.1 -- Qt compiled 6.10.1
+rootdir: <SOURCE_ROOT>
+configfile: pyproject.toml
+plugins: anyio-4.12.0, langsmith-0.5.1, qt-4.5.0, typeguard-4.4.4
+collecting ... collected 10 items
+
+tests/test_desktop_runtime.py::test_desktop_create_verifies_saved_project_and_never_repeats_unknown PASSED [ 10%]
+tests/test_desktop_runtime.py::test_desktop_creation_preserves_wrong_directory_receipt PASSED [ 20%]
+tests/test_desktop_runtime.py::test_desktop_project_must_be_unique_and_match_explicit_selection PASSED [ 30%]
+tests/test_desktop_runtime.py::test_desktop_input_receipt_uses_native_identity_and_turn PASSED [ 40%]
+tests/test_desktop_runtime.py::test_desktop_completion_requires_received_turn_not_idle_or_another_turn PASSED [ 50%]
+tests/test_desktop_runtime.py::test_desktop_dispatch_error_preserves_a_concurrent_native_receipt PASSED [ 60%]
+tests/test_desktop_runtime.py::test_released_desktop_identity_cannot_follow_successor[desktop] PASSED [ 70%]
+tests/test_desktop_runtime.py::test_released_desktop_identity_cannot_follow_successor[codex] PASSED [ 80%]
+tests/test_support_guidance.py::test_entry_uses_installed_guidance_even_when_local_copy_is_stale[False] PASSED [ 90%]
+tests/test_support_guidance.py::test_entry_uses_installed_guidance_even_when_local_copy_is_stale[True] PASSED [100%]
+
+======================= 10 passed in 185.74s (0:03:05) ========================

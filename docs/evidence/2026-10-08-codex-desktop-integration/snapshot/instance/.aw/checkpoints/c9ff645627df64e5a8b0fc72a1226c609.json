@@ -1,0 +1,8 @@
+{
+  "id": "c9ff645627df64e5a8b0fc72a1226c609",
+  "created_at": "2026-10-08T07:51:38.747038+00:00",
+  "summary": "Codex Desktop 首次正式进入核验完成，初始化标记已存在并与预期一致。",
+  "content": "当前正式入口：workspace=desktop-local，agent=desktop-probe，runtime_kind=desktop，binding=b458da103a9044b13b530c97f987664cc。按首次进入说明读取 notes/desktop-bootstrap.txt，确认其内容为 DESKTOP_BOOTSTRAP_9f84a3c1，revision=cc204fd6157fdfa6bf5d84f0789cad8c59cafd28089bd903936ff000afe8d8a9。首次写入返回资产冲突；读取后确认目标内容已经存在，因此未重复写入。当前会话 ID/桌面连接之外的效果未声称。",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "c6f6e7bf0d2f04907a5e31a79f5cb303c",
+  "created_at": "2026-10-08T07:33:53.530936+00:00",
+  "summary": "首次进入：已按授权保存 Codex Desktop 启动标记。",
+  "content": "平台登记的本次 binding 为 b8fd5550a9562494db897b731f25fd407（runtime_kind=desktop）。已通过平台 asset.write 保存 notes/desktop-bootstrap.txt，内容为 DESKTOP_BOOTSTRAP_9f84a3c1；平台返回 saved=local，revision=cc204fd6157fdfa6bf5d84f0789cad8c59cafd28089bd903936ff000afe8d8a9。本轮无其他业务操作。",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

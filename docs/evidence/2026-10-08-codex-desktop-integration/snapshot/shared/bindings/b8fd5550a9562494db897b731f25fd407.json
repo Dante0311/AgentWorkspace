@@ -1,0 +1,12 @@
+{
+  "id": "b8fd5550a9562494db897b731f25fd407",
+  "agent": "desktop-probe",
+  "kind": "desktop",
+  "phase": "released",
+  "session": "01a11a6e-2e37-7860-a43a-5fa7fe6230df",
+  "created_at": "2026-10-08T07:33:06.886049+00:00",
+  "handoff": null,
+  "checkpoint": "c666c3bcdbd1d4f53a8e8c4520250c5a8",
+  "stop_requested_at": "2026-10-08T07:50:14.552673+00:00",
+  "stopped_at": "2026-10-08T07:50:20.463095+00:00"
+}

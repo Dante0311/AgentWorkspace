@@ -1,0 +1,15 @@
+* Getting build dependencies for sdist...
+<TEST_ROOT>\dev\Lib\site-packages\setuptools\config\pyprojecttoml.py:108: _BetaConfiguration: Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+  warnings.warn(msg, _BetaConfiguration)
+running egg_info
+writing src\git_native_agent_workspace.egg-info\PKG-INFO
+writing dependency_links to src\git_native_agent_workspace.egg-info\dependency_links.txt
+writing entry points to src\git_native_agent_workspace.egg-info\entry_points.txt
+writing requirements to src\git_native_agent_workspace.egg-info\requires.txt
+writing top-level names to src\git_native_agent_workspace.egg-info\top_level.txt
+reading manifest file 'src\git_native_agent_workspace.egg-info\SOURCES.txt'
+reading manifest template 'MANIFEST.in'
+writing manifest file 'src\git_native_agent_workspace.egg-info\SOURCES.txt'
+
+ERROR Missing dependencies:
+	setuptools>=68

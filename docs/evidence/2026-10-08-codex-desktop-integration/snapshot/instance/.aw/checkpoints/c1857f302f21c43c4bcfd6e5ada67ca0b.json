@@ -1,0 +1,8 @@
+{
+  "id": "c1857f302f21c43c4bcfd6e5ada67ca0b",
+  "created_at": "2026-10-08T08:16:43.764544+00:00",
+  "summary": "Codex Desktop relay 资产已按平台核验的会话 ID 更正。",
+  "content": "本次入口 binding=b63d746feae9c427c9decb04104cf57a3，entry_mode=relay，runtime_kind=desktop。重新读取并确认 notes/desktop-bootstrap.txt 内容为 DESKTOP_BOOTSTRAP_9f84a3c1。基于重新读取的 relay 资产 revision，以当前 CODEX_THREAD_ID 环境变量重写 notes/desktop-relay.txt；新 revision=8029d32f92f1a6743ebab9b79988722df4c98907fdacd1c071437973cbc4b3df，saved=local。纠正后的聊天 ID 取自执行环境变量，本检查点未手工转录该值。保留旧检查点；本轮随后按要求发送一条 normal 测试通知，不接收、不等待投递，不操作产品目录。",
+  "record_refs": [],
+  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "desktop-watch-9f84a3c1",
+  "from": {
+    "workspace": "local:desktop-local",
+    "agent": "desktop-probe"
+  },
+  "to": {
+    "workspace": "local:desktop-local",
+    "agent": "desktop-probe"
+  },
+  "created_at": "2026-10-08T07:37:40.036448+00:00",
+  "message_refs": [],
+  "delivery": "normal",
+  "content": "收到本条测试通知后，先按平台正常流程 message.receive 取得正文并生成 ACK，再用 asset.write 保存 notes/desktop-message.txt，内容为 DESKTOP_MESSAGE_9f84a3c1 加本轮实际 CODEX_THREAD_ID；保存 checkpoint，立即结束本轮。"
+}

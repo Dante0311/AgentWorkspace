@@ -1,0 +1,14 @@
+{
+  "source": "Codex Desktop read_thread",
+  "thread_id": "01a11a7e-1ce6-7d42-ae31-680f622f587d",
+  "observed_at": "2026-10-08T07:51:48.561868+00:00",
+  "turn": {
+    "id": "01a11a7e-4614-7d52-ba61-c805e5db629d",
+    "status": "completed",
+    "error": null,
+    "startedAt": 1791445845,
+    "completedAt": 1791445907,
+    "durationMs": 61784
+  },
+  "scope": "Native turn metadata only; message and tool bodies remain in Desktop."
+}

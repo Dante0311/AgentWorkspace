@@ -1,0 +1,59 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.4, pytest-8.4.2, pluggy-1.6.0 -- <USER_HOME>\AppData\Local\Programs\Python\Python311\python.exe
+cachedir: .pytest_cache
+PySide6 6.10.1 -- Qt runtime 6.10.1 -- Qt compiled 6.10.1
+rootdir: <SOURCE_ROOT>
+configfile: pyproject.toml
+plugins: anyio-4.12.0, langsmith-0.5.1, qt-4.5.0, typeguard-4.4.4
+collecting ... collected 48 items
+
+tests/test_desktop_runtime.py::test_desktop_create_verifies_saved_project_and_never_repeats_unknown PASSED [  2%]
+tests/test_desktop_runtime.py::test_desktop_creation_preserves_wrong_directory_receipt PASSED [  4%]
+tests/test_desktop_runtime.py::test_desktop_project_must_be_unique_and_match_explicit_selection PASSED [  6%]
+tests/test_desktop_runtime.py::test_desktop_input_receipt_uses_native_identity_and_turn PASSED [  8%]
+tests/test_desktop_runtime.py::test_desktop_completion_requires_received_turn_not_idle_or_another_turn PASSED [ 10%]
+tests/test_desktop_runtime.py::test_desktop_dispatch_error_preserves_a_concurrent_native_receipt PASSED [ 12%]
+tests/test_desktop_runtime.py::test_released_desktop_identity_cannot_follow_successor[desktop] PASSED [ 14%]
+tests/test_desktop_runtime.py::test_released_desktop_identity_cannot_follow_successor[codex] PASSED [ 16%]
+tests/test_runtime.py::test_desktop_uses_owner_mcp_only PASSED           [ 18%]
+tests/test_runtime.py::test_desktop_missing_config_is_not_cli_fallback PASSED [ 20%]
+tests/test_runtime.py::test_codex_protocol_records_actual_fixture_events PASSED [ 22%]
+tests/test_runtime.py::test_runner_bootstrap_and_initial_checkpoint PASSED [ 25%]
+tests/test_runtime.py::test_watch_stop_does_not_release_entry PASSED     [ 27%]
+tests/test_runtime.py::test_platform_stop_requires_observed_idle_for_desktop PASSED [ 29%]
+tests/test_runtime.py::test_os_lock_prevents_another_process PASSED      [ 31%]
+tests/test_runtime.py::test_bridge_explicit_send_and_disable PASSED      [ 33%]
+tests/test_runtime.py::test_bridge_crash_backoff_and_handoff_no_restart PASSED [ 35%]
+tests/test_runtime.py::test_handoff_request_disables_automatic_restarts_immediately PASSED [ 37%]
+tests/test_runtime.py::test_shared_controller_prevents_duplicate_runner PASSED [ 39%]
+tests/test_runtime.py::test_repeated_manual_start_reuses_pending_binding PASSED [ 41%]
+tests/test_transfer_safety.py::test_unknown_launch_is_not_retried_when_no_successor_was_observed PASSED [ 43%]
+tests/test_transfer_safety.py::test_preflight_failure_does_not_touch_the_old_entry PASSED [ 45%]
+tests/test_transfer_safety.py::test_unconfirmed_native_close_does_not_release_binding PASSED [ 47%]
+tests/test_transfer_safety.py::test_unsupported_insert_does_not_consume_an_attempt_or_relabel_the_input PASSED [ 50%]
+tests/test_transfer_safety.py::test_bridge_retry_cannot_overwrite_a_new_disable PASSED [ 52%]
+tests/test_setup_interfaces.py::test_first_use_page_and_scan_without_git PASSED [ 54%]
+tests/test_setup_interfaces.py::test_setup_cli_does_not_require_workspace_selection PASSED [ 56%]
+tests/test_setup_interfaces.py::test_public_workspace_init_creates_group_via_same_dispatcher PASSED [ 58%]
+tests/test_setup_interfaces.py::test_model_identity_does_not_gain_new_management_permissions[workspace.init] PASSED [ 60%]
+tests/test_setup_interfaces.py::test_model_identity_does_not_gain_new_management_permissions[setup.scan] PASSED [ 62%]
+tests/test_setup_interfaces.py::test_model_identity_does_not_gain_new_management_permissions[setup.create] PASSED [ 64%]
+tests/test_setup_interfaces.py::test_model_identity_does_not_gain_new_management_permissions[setup.check-git] PASSED [ 66%]
+tests/test_setup_interfaces.py::test_model_identity_does_not_gain_new_management_permissions[setup.inspect-codex] PASSED [ 68%]
+tests/test_setup_interfaces.py::test_model_identity_does_not_gain_new_management_permissions[setup.prepare-instance] PASSED [ 70%]
+tests/test_setup_interfaces.py::test_model_identity_does_not_gain_new_management_permissions[agent.configure-codex] PASSED [ 72%]
+tests/test_desktop_projects.py::test_plan_is_read_only_and_names_are_reused_per_agent PASSED [ 75%]
+tests/test_desktop_projects.py::test_custom_names_and_product_references_stay_local_without_copying PASSED [ 77%]
+tests/test_desktop_projects.py::test_preference_update_requires_observed_revision PASSED [ 79%]
+tests/test_desktop_projects.py::test_other_desktops_do_not_claim_codex_sections_or_native_control PASSED [ 81%]
+tests/test_desktop_projects.py::test_bound_agent_can_read_guide_but_cannot_edit_desktop_preferences PASSED [ 83%]
+tests/test_support_guidance.py::test_new_instance_contains_versioned_guidance PASSED [ 85%]
+tests/test_support_guidance.py::test_entry_uses_installed_guidance_even_when_local_copy_is_stale[False] PASSED [ 87%]
+tests/test_support_guidance.py::test_entry_uses_installed_guidance_even_when_local_copy_is_stale[True] PASSED [ 89%]
+tests/test_support_guidance.py::test_explicit_upgrade_adds_guidance_without_overwriting_user_assets PASSED [ 91%]
+tests/test_support_guidance.py::test_public_guidance_does_not_read_accounts_or_workspace_state PASSED [ 93%]
+tests/test_support_guidance.py::test_user_pages_link_to_the_installed_guidance[index.html] PASSED [ 95%]
+tests/test_support_guidance.py::test_user_pages_link_to_the_installed_guidance[setup.html] PASSED [ 97%]
+tests/test_support_guidance.py::test_unsupported_delivery_explains_next_step_without_changing_fifo_or_ack PASSED [100%]
+
+======================= 48 passed in 771.87s (0:12:51) ========================

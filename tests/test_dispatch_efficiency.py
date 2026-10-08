@@ -22,7 +22,7 @@ def local_app(tmp_path):
     app.home = tmp_path
     app.root.return_value = tmp_path
     app.agent.return_value = {"current": ACTOR[2]}
-    app.require_binding.return_value = ({}, {})
+    app.require_binding.return_value = ({}, {"kind": "codex"})
     app.checkpoint.return_value = {"revision": "saved"}
     return app
 

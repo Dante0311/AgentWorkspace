@@ -54,6 +54,16 @@ Windows，实际 Codex App Tools `0.1.5`，请求模型 `gpt-6-luna`、强度 `l
 
 ## 未测与使用条件
 
+### PR 首次 CI 后的修正
+
+首个 PR head `073ba84b96f6ff7001eed2ce83cddd8d3dec8dd5` 的远端构建安装与 Chromium 检查通过；Linux 完整回归暴露两处回归，Native SDK 用例暴露一处异步断言竞态。[Linux 原始日志](reports/ci-first-113221448214.log)及[Native SDK 原始日志](reports/ci-first-113221448253.log)保留，不改写为通过。
+
+- 桌面输入回执可能在发送期间由模型并发登记，因此发送后必须重读。普通 CLI 没有这个并发写入者，已限制只有 Desktop 重读，恢复每轮扫描普通输入一次的既有行为。
+- 旧效率测试的 Binding 替身是空字典，补齐实际 Binding 必有的 kind；不在生产代码中为无效内部状态加默认类型。
+- `message.receive` 先发布共享 ACK、随后保存本地消息记录。原生测试只等 ACK 就立即断言本地文件，存在竞态；现在用原有有界等待同时等待二者，不改产品发布顺序、不加固定 sleep 或重放消息。
+
+相应效率及桌面回归 [67 passed，136.74 秒](reports/unit-ci-fixes.log)。源码差异与编译检查通过。此增量没有重跑付费桌面模型；Desktop 分支行为保留，改动范围和源文件摘要见 manifest 的 ci_followup。后续完整 CI 以 [PR #13](https://github.com/Dante0311/AgentWorkspace/pull/13) 当前提交为准；本报告前文的 round5 / 最终本机 wheel 比较仍只指原实测构建。
+
 首次仍需用户准备主目录匹配的本地 Codex 项目，并在真实桌面聊天捕获当前控制连接；复用已有项目，不自动创建项目/分区。连接随桌面环境有效，桌面重启后可能需重新捕获。只验证上述 Windows、App Tools 版本和模型选择，不外推跨 Harness、busy insert/steer、桌面重启恢复、多主机、原生审批、长期在线、自有模型服务或其他 Desktop。详细操作见 [使用说明](../../usage.md#42-codex-desktop)。
 
 ## 归档和复核

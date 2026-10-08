@@ -202,7 +202,9 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
         messages = Messages(app)
         messages.send('sea', 'sender', sender, 'native-transfer', 'Explicit post-transfer notification.', request_id='after-transfer')
         runtime.watch(app, 'sea', 'native-transfer', 'start', interval=.5)
-        wait_until(lambda: messages.show('sea', 'after-transfer')['ack'])
+        # The shared ACK is published before receive saves its local record.
+        wait_until(lambda: messages.show('sea', 'after-transfer')['ack']
+                   and (root / 'messages/after-transfer.json').is_file())
         assert messages.show('sea', 'after-transfer')['ack'] == {'message_id': 'after-transfer'}
         assert (root / 'messages/after-transfer.json').is_file()
         assert app.show('sea', 'native-transfer')['binding']['session'] == current['session']

@@ -1006,6 +1006,42 @@
       "archive_file": "stop_final.py",
       "archive_bytes": 1360,
       "archive_sha256": "0ffbb8716f17c915e29fb22e2c74d9d93640be2da37f2f3018e8577a1af125c1"
+    },
+    {
+      "source_file": "<TEST_ROOT>/reports/ci-first-113221448214.log",
+      "source_bytes": 29010,
+      "source_sha256": "d2235892b8c0facfe525f638708289f17991f248423dfb8ba87dcc308bd771f5",
+      "archive_file": "reports/ci-first-113221448214.log",
+      "archive_bytes": 28880,
+      "archive_sha256": "c7a38f21361bb23f107853811ff5e1ed127b1ce1e18bf2e97c05c84fd04910e2"
+    },
+    {
+      "source_file": "<TEST_ROOT>/reports/ci-first-113221448253.log",
+      "source_bytes": 78133,
+      "source_sha256": "244755fd2b7b4d3b6f1f5630aba2a261cbbb734577358fe8a18081b41a024c89",
+      "archive_file": "reports/ci-first-113221448253.log",
+      "archive_bytes": 77791,
+      "archive_sha256": "f1dd9d9aca14ce2a175c74358003067fae9209407329c8f10d752bae28408bd6"
+    },
+    {
+      "source_file": "<TEST_ROOT>/reports/unit-ci-fixes.log",
+      "source_bytes": 113,
+      "source_sha256": "710f363abb1d28791479578538c611a90742d6b6b22f414c85253e0d4c41ab12",
+      "archive_file": "reports/unit-ci-fixes.log",
+      "archive_bytes": 111,
+      "archive_sha256": "a9ead257be962f2271269bf1be6851990efef43dae52a2d9302042057f3b12ce"
     }
-  ]
+  ],
+  "ci_followup": {
+    "failed_head": "073ba84b96f6ff7001eed2ce83cddd8d3dec8dd5",
+    "ci_run": 37750252452,
+    "native_run": 37750252488,
+    "local_tests": "67 passed in 136.74s",
+    "changed_source_sha256": {
+      "src/agent_workspace/runtime.py": "b7ed73be2aade6e34514a02e9e8ede282b734ebcc6e158c313deefcad7d0218b",
+      "tests/test_dispatch_efficiency.py": "5a9bf21343060dfd3f103fe9a922ef25f691faedad40f5758719f636b9eb3f85",
+      "tests/test_native_transfer.py": "d8f9cf503c83176d1688a27ce634629aa2fefe29c269bed975c1178cd488808f"
+    },
+    "scope": "Desktop reread behavior unchanged; normal native inputs no longer reread. Test binding fixture includes kind; native test waits for local receive record after shared ACK."
+  }
 }

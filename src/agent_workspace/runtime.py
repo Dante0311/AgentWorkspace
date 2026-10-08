@@ -788,13 +788,13 @@ class Runner:
                 response = self.adapter.notify(prompt, item["delivery"])
             except Exception as exc:
                 with locked(path.with_suffix(".lock")):
-                    latest = read_json(path)
+                    latest = read_json(path) if isinstance(self.adapter, Desktop) else item
                     received = latest.get("result", {}).get("turn", {}).get("id")
                     latest.update(state="submitted" if received else "outcome_unknown", error=str(exc))
                     write_json(path, latest)
                 raise
             with locked(path.with_suffix(".lock")):
-                latest = read_json(path)
+                latest = read_json(path) if isinstance(self.adapter, Desktop) else item
                 latest.update(state="submitted", result={**response, **latest.get("result", {})})
                 write_json(path, latest)
             return

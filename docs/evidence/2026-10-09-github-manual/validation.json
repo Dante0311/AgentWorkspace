@@ -1,0 +1,39 @@
+{
+  "result": "passed",
+  "scope": "Isolated local Git protocol compatibility with installed AW 0.1.0a1; no daily workspace or GitHub writes.",
+  "checks": {
+    "manual_active_record_without_native_session_readable": true,
+    "stale_competing_claim_rejected": true,
+    "checkpoint_pointer_and_exact_assets_readable": true,
+    "AW_receives_protocol_message_and_publishes_ACK": true,
+    "AW_reply_read_and_ACKed_through_protocol": true,
+    "handoff_consumed_by_new_manual_binding": true,
+    "old_binding_rejected": true
+  },
+  "unchanged_limitations": {
+    "agent_bind_without_native_session_id_supported": false,
+    "real_GitHub_tool_execution_verified": false,
+    "real_model_protocol_following_verified": false,
+    "native_session_identity_or_idle_observed": false,
+    "real_chat_handoff_verified": false
+  },
+  "source": {
+    "installed_version": "0.1.0a1",
+    "installed_commit": "00fb6bdb61f4accf47067b7acff48b9e5fc6284b",
+    "documentation_base_commit": "a8b45354743bf865534396e66c9885f16feb2199"
+  },
+  "test_harness_history": [
+    {
+      "result": "failed",
+      "stage": "temporary Git fixture cleanup",
+      "error": "Windows WinError 145",
+      "assertion_failure_reported": false
+    },
+    {
+      "result": "passed",
+      "change": "Retain the isolated temporary Git fixture to avoid Windows cleanup locking.",
+      "check_count": 7,
+      "production_code_changed": false
+    }
+  ]
+}

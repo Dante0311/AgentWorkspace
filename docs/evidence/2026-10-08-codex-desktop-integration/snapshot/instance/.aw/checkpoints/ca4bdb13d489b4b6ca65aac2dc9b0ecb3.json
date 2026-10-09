@@ -1,8 +1,0 @@
-{
-  "id": "ca4bdb13d489b4b6ca65aac2dc9b0ecb3",
-  "created_at": "2026-10-08T08:20:19.535895+00:00",
-  "summary": "Codex Desktop 隔离验收消息与 ACK 完成，按 handoff 请求保存状态并交出入口。",
-  "content": "当前入口 binding=b63d746feae9c427c9decb04104cf57a3，runtime_kind=desktop。此前启动资产 notes/desktop-bootstrap.txt 经 asset.read 确认为 DESKTOP_BOOTSTRAP_9f84a3c1，revision=cc204fd6157fdfa6bf5d84f0789cad8c59cafd28089bd903936ff000afe8d8a9。relay 资产 notes/desktop-relay.txt 已按当前 CODEX_THREAD_ID 环境变量纠正，revision=8029d32f92f1a6743ebab9b79988722df4c98907fdacd1c071437973cbc4b3df；更正检查点 c1857f302f21c43c4bcfd6e5ada67ca0b 保留。按验收要求发送 normal 消息 desktop-watch-post-relay-9f84a3c1，平台返回 published；之后 message.receive 读取该消息，并由 message.show 确认 ACK 已记录。重新读取启动资产后，使用环境变量构造 JSON 写入 notes/desktop-message-post-relay.txt，revision=1a9d105e84f5bf631a3e9c712dd976c1ed8385f369190051fa88bb94894e9b1d，saved=local；消息处理检查点 cab3bfad96e2e4f36a50a2746b573eab1。未查询或修改产品目录，未启动后继。当前 runtime.receive-input 返回 handoff 请求；本检查点保存上述累计事实，接下来调用 agent.stop。",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

@@ -4,7 +4,7 @@
 
 目标仓库：[Dante0311/AgentWorkspace](https://github.com/Dante0311/AgentWorkspace)。本仓由用户创建，迁入时已为公开仓库；此次操作不改变可见性，不选择许可证，不创建正式 Release。
 
-设计、源码、七个 Skill、使用文档与验证记录在本仓维护。Playbook 在核对目标提交后收口为仓库入口和简短来源关系，不保留另一份活动实现。
+产品设计、源码、七个 Skill、使用文档、正式测试和构建文件在本仓维护。开发过程与详细验证记录现统一维护于 [AW-Workspace 开发仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md)，原始迁仓验证保留在该仓的历史归档。Playbook 在核对目标提交后收口为仓库入口和简短来源关系，不保留另一份活动实现。
 
 ## 来源快照
 
@@ -28,7 +28,7 @@ README 说明定位、预览状态、安装、三种空间、接入限制及开�
 
 增加开发指南、CI、本地 wheel 安装检查及源码分发清单。CI 仅执行隔离测试和构建，不自动发布；GitHub Actions 能否运行及结果需要实际核对。
 
-V3 记录同一持久身份下的多事务会话方向。它没有放开 V1 唯一入口，也没有在代码中建立第二套身份或会话模型。原始 alpha 测试记录保留，迁仓重验另见 [validation-migration.md](validation-migration.md)。
+V3 记录同一持久身份下的多事务会话方向。它没有放开 V1 唯一入口，也没有在代码中建立第二套身份或会话模型。原始 alpha 测试记录保留，迁仓重验另见 [validation-migration.md](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/validation-migration.md)。
 
 ## 更早来源
 

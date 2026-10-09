@@ -1,1 +1,0 @@
-PASS: installer recovery, real HTTP restart, durable maintenance, CLI, Git and resources

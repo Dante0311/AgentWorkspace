@@ -1,2 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="0.187" timestamp="2026-10-07T20:43:05.114996+08:00" hostname="[TEST_HOST]"><testcase classname="tests.test_runtime" name="test_os_lock_prevents_another_process" time="0.134" /></testsuite></testsuites>

@@ -1,9 +1,0 @@
-{
-  "owner": "host-f41ac1839e5b4021b038d94757a78fe7",
-  "owner_workspace": "maintenance-local",
-  "enabled": false,
-  "interval": 30,
-  "notify": false,
-  "generation": "schedule-475a47d7e8404b71bbb40f1006065b34",
-  "updated_at": "2026-10-08T04:59:43.542806+00:00"
-}

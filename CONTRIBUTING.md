@@ -2,6 +2,8 @@
 
 先阅读 [AGENTS.md](AGENTS.md) 和 [当前实现状态](docs/implementation.md)。产品行为以 [docs/design.md](docs/design.md) 为准，命令用法以 [docs/usage.md](docs/usage.md) 为准；发现不一致应修正或明确记录，不让文档和代码各自定义一套合同。
 
+团队的问题、调查、交接和详细验收材料见 [AW-Workspace 开发入口](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md)。本机开发工作树放在该仓的 `.local/worktrees/`；产品功能、正式测试与构建变更仍提交本产品仓。
+
 ## 本地环境
 
 需要 Python 3.11+ 与 Git。在仓库根创建虚拟环境，激活后安装开发依赖：

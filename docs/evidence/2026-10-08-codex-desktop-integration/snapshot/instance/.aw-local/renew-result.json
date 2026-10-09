@@ -1,8 +1,0 @@
-{
-  "agent": "desktop-probe",
-  "binding": "b458da103a9044b13b530c97f987664cc",
-  "phase": "starting",
-  "kind": "desktop",
-  "pid": 72680,
-  "state": "starting_runner"
-}

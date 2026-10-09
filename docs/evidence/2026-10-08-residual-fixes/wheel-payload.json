@@ -1,9 +1,0 @@
-{
-  "changed_since_successful_smoke": [
-    "agent_workspace/resources/skills/message/SKILL.md",
-    "git_native_agent_workspace-0.1.0a1.dist-info/RECORD"
-  ],
-  "all_packaged_python_and_resources_match_working_source": true,
-  "final_wheel_sha256": "d648ab8c6864eb5cfa72908215697db6547b056e963de8d1e1141a42a8fa278d",
-  "official_model_invoked": false
-}

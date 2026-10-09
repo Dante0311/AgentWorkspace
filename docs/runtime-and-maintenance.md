@@ -59,7 +59,7 @@ SDK 事件流断开或收到独立的终止错误时，运行器保存失败状�
 
 Claude/CodeBuddy 托管入口默认只放行指定的平台 MCP；其他原生工具按用户明确提供的 `--allowed-tool` 开启。默认不加载用户/产品目录中的任意 SDK 配置、MCP 或钩子。实例材料通过进入提示和平台资料工具加载，不宣称原生 SDK 自动识别全部 Skill 目录。平台授权检查不是 OS 沙箱；不要给不受信任实例宽泛的文件/进程权限。
 
-Windows 使用 CodeBuddy SDK 时，用户明确选择的 `.js/.cjs/.mjs` CLI 入口通过已安装的 Node 启动，沿用 SDK 原有参数、权限和通信。Node 需在实际运行器的 PATH 中；缺失或只有 `.cmd/.bat` 包装会在预留新入口或 handoff 前报错。选定的原生 `.exe` 继续直接启动，不自动切换为 SDK 自带程序。此改动只补启动方式，不复制桌面凭据、不切换模型服务或自动登录；返回 `/login` 只说明当前入口需要认证，真实 Windows/WorkBuddy 接手需单独验证。见 [定向复测说明](e2e-repair-acceptance.md#e2e-002-单独验证)。
+Windows 使用 CodeBuddy SDK 时，用户明确选择的 `.js/.cjs/.mjs` CLI 入口通过已安装的 Node 启动，沿用 SDK 原有参数、权限和通信。Node 需在实际运行器的 PATH 中；缺失或只有 `.cmd/.bat` 包装会在预留新入口或 handoff 前报错。选定的原生 `.exe` 继续直接启动，不自动切换为 SDK 自带程序。此改动只补启动方式，不复制桌面凭据、不切换模型服务或自动登录；返回 `/login` 只说明当前入口需要认证，真实 Windows/WorkBuddy 接手需单独验证。见 [定向复测说明](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/e2e-repair-acceptance.md#e2e-002-单独验证)。
 
 ### 2.1 工作台发送与响应丢失
 
@@ -141,7 +141,7 @@ aw -w demo maintenance repair helper --repair-action sync-idle --request-id repa
 
 新建实例带有 `.aw/prompts/capabilities.md`，message/relay Skill 引导读取。自动或手动 `agent start` 生成的首次进入与接手提示总是附带当前安装包的说明和实际 Binding 类型，不信任旧 checkpoint 中的能力副本。已有实例可显式使用 `agent upgrade-tools` 更新受管说明，保留本地修改冲突检查，不覆盖 AGENTS.md 或用户资料。已经运行的模型不会因软件更新自动读到新规则，需用户明确让它读取更新材料，或在下次接手时加载。
 
-开发测试中的原生客户端回环用例使用协议夹具，不能证明真实模型、账号或 Desktop。本批另做了 Windows Codex Desktop / App Tools 0.1.5 / gpt-6-luna 的限定实测，保留修复前失败和模型偏差，见 [桌面接入报告](evidence/2026-10-08-codex-desktop-integration/README.md)。未测的跨 Harness、busy insert、桌面重启恢复和长期运行不由该结果代验收。源码测试与当前提交的 CI 仍分别记录。
+开发测试中的原生客户端回环用例使用协议夹具，不能证明真实模型、账号或 Desktop。本批另做了 Windows Codex Desktop / App Tools 0.1.5 / gpt-6-luna 的限定实测，保留修复前失败和模型偏差，见 [桌面接入报告](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/evidence/2026-10-08-codex-desktop-integration/README.md)。未测的跨 Harness、busy insert、桌面重启恢复和长期运行不由该结果代验收。源码测试与当前提交的 CI 仍分别记录。
 
 截至 2026-10-04 核对的外部入口说明：[Codex App Server](https://developers.openai.com/codex/app-server)、[Claude Desktop](https://code.claude.com/docs/en/desktop)、[CodeBuddy SDK](https://www.codebuddy.ai/docs/cli/sdk)。这些不是我们已经实现对应全部能力的证明，使用特定版本前须重新核对。
 

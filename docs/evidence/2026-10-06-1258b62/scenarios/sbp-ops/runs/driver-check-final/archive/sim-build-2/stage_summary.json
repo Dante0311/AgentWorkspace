@@ -1,9 +1,0 @@
-{
-  "simulation": true,
-  "build_id": "sim-build-2",
-  "stage_name": "navigation_export",
-  "job_id": "fictional-tile-export",
-  "error": null,
-  "log_path": "archive\\sim-build-2\\job.log",
-  "stage_status": "success"
-}

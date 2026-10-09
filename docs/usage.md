@@ -2,7 +2,7 @@
 
 首次安装见 [新机器配置](first-use.md)；当前受管 Codex/Claude/CodeBuddy、跨 Harness 自动交接、管家授权、巡检与维修见 [运行与维护说明](runtime-and-maintenance.md)。本页保留基础命令与旧入口说明，支持边界以上述当前能力矩阵为准。
 
-本文件描述实际代码，不替代 [产品合同](design.md)。这是开发预览版本，先使用隔离 Workspace；真实外部 Runtime 和渠道的验收范围见 [验证记录](validation.md)。
+本文件描述实际代码，不替代 [产品合同](design.md)。这是开发预览版本，先使用隔离 Workspace；真实外部 Runtime 和渠道的验收范围见 [验证记录](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/validation.md)。
 
 ## 1. 安装、路径与本机工作台
 

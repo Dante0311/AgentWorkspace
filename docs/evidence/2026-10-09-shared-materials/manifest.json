@@ -1,0 +1,312 @@
+{
+  "date": "2026-10-09T08:21:37.788766+00:00",
+  "main_baseline": "a8b45354743bf865534396e66c9885f16feb2199",
+  "remote_checkpoint": "8d86b60c7e515e634096cd97a27e9e7f4eed8f35",
+  "feature_commit": "dd2decc30dc3f63a18b26a77dd9c9081315f7b41",
+  "files": [
+    {
+      "archive": "before-grants-build.txt",
+      "source": "development-logs/before-grants-build.txt",
+      "source_sha256": "4bc0720c7cd941415d5a97c28e798b74391aeadae2bee3d33624f8d5808c426b",
+      "archive_sha256": "ef40bc52d5d73391168f4ba255c078e4612ebe9f0df31494647c3fb1c0efb094",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "before-grants-smoke-linux.txt",
+      "source": "development-logs/before-grants-smoke-linux.txt",
+      "source_sha256": "788802dd55a85e5dba15de30ba863070a90b95dacc88745475a8b3b231ac774f",
+      "archive_sha256": "788802dd55a85e5dba15de30ba863070a90b95dacc88745475a8b3b231ac774f",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "before-grants-static.json",
+      "source": "development-logs/before-grants-static.json",
+      "source_sha256": "e9b38ad9817e33d2d3d7310820d4156f43048fb8bf74e99dbb6e408c7a9d598e",
+      "archive_sha256": "e9b38ad9817e33d2d3d7310820d4156f43048fb8bf74e99dbb6e408c7a9d598e",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "browser.txt",
+      "source": "development-logs/browser.txt",
+      "source_sha256": "d8191ae19368d9663c135f038a2fb37262a09a696e727f04bfd6bdd5620f4dda",
+      "archive_sha256": "f17662be33cd4bebcc2f4c5ca8b1eba9e879f6d1196452c71ccfce52cdb87073",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "browser.xml",
+      "source": "development-logs/browser.xml",
+      "source_sha256": "15f04bc418ada5d2c657b78e01b39a3dca7ba1c40b041102b97cf25b061bd24e",
+      "archive_sha256": "a312f396b3bf4e511c460106c2bb4a29730c5a50cf3ab7dc7130610f6406049d",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "build.txt",
+      "source": "development-logs/build.txt",
+      "source_sha256": "9ea90ad411b45353a0ef53dd987ed88145ea6cd37ff577359a5b734b125a534c",
+      "archive_sha256": "e134cc047d639be50cf53000769995fe011a82911523edd18b3fdf30c67e5fb6",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "desktop-final.exit",
+      "source": "development-logs/desktop-final.exit",
+      "source_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "archive_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "desktop-final.txt",
+      "source": "development-logs/desktop-final.txt",
+      "source_sha256": "1c9d34b2eec997b5721793d048c0042a8518923b75ed07af65bfd3ae9f500b94",
+      "archive_sha256": "1c9d34b2eec997b5721793d048c0042a8518923b75ed07af65bfd3ae9f500b94",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "desktop-final.xml",
+      "source": "development-logs/desktop-final.xml",
+      "source_sha256": "5070760ed4236a436cc42c62e59829dff1173bdfcd3ed91b60ef2936aeb60229",
+      "archive_sha256": "e29634b065ecfc060887251af245886d3e77a5ad336a89e940c463bc97f7a281",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "features.txt",
+      "source": "development-logs/features.txt",
+      "source_sha256": "bec6cf0ab307ed67f0fb71fcbbfe36c3c8ad031030e511b9f856fa585ad6cef5",
+      "archive_sha256": "bec6cf0ab307ed67f0fb71fcbbfe36c3c8ad031030e511b9f856fa585ad6cef5",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "features.xml",
+      "source": "development-logs/features.xml",
+      "source_sha256": "d019451f6bb4f2151b59f38c209f16efffeefb1c5fbe29d399a6b153a14b9933",
+      "archive_sha256": "6fc816c3e7b93cfc40026b7d1568dd36425cbd4ebd4dc0a6facff81b32dc3d41",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-adjacent.exit",
+      "source": "development-logs/final-adjacent.exit",
+      "source_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "archive_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-adjacent.txt",
+      "source": "development-logs/final-adjacent.txt",
+      "source_sha256": "d0c0db1b170e3039e52b31d87f7f9f981a3f628c0694938af84ae47f90b81ef6",
+      "archive_sha256": "d0c0db1b170e3039e52b31d87f7f9f981a3f628c0694938af84ae47f90b81ef6",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-adjacent.xml",
+      "source": "development-logs/final-adjacent.xml",
+      "source_sha256": "b6d82bac0e6278a40c7aa8ddca304855f13b31ff2e07c3df0bb51f4e7b53cf81",
+      "archive_sha256": "a79766b565c8f9b32cc05e45080363fdc0b4a5d7e31a7950da9b01c247ca3741",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-build.exit",
+      "source": "development-logs/final-build.exit",
+      "source_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "archive_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-build.txt",
+      "source": "development-logs/final-build.txt",
+      "source_sha256": "bd320bd7f8ff2cfe4874024c41f41a5730a5d1d08ccd372ad0be7e8e57f4f155",
+      "archive_sha256": "49de70150af903c2ac435ae042ef6cf961a65c3dce8f0ac0118a0b4adaee76dd",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-features.exit",
+      "source": "development-logs/final-features.exit",
+      "source_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "archive_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-features.txt",
+      "source": "development-logs/final-features.txt",
+      "source_sha256": "cc202241db9130daa73868994ac4f250836110831f4f243f3ceb2496249e2d71",
+      "archive_sha256": "cc202241db9130daa73868994ac4f250836110831f4f243f3ceb2496249e2d71",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-features.xml",
+      "source": "development-logs/final-features.xml",
+      "source_sha256": "940fa8664e2dd2ca3120dfb9ee610f62512cacbcd6b74600959954a17b81147f",
+      "archive_sha256": "41cd57ddbe598203d50bffaebc4a2eb5077e20301c85dbcb74da87b313d8202e",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-smoke-linux.exit",
+      "source": "development-logs/final-smoke-linux.exit",
+      "source_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "archive_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-smoke-linux.txt",
+      "source": "development-logs/final-smoke-linux.txt",
+      "source_sha256": "788802dd55a85e5dba15de30ba863070a90b95dacc88745475a8b3b231ac774f",
+      "archive_sha256": "788802dd55a85e5dba15de30ba863070a90b95dacc88745475a8b3b231ac774f",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "final-static.json",
+      "source": "development-logs/final-static.json",
+      "source_sha256": "bc04e972b6efb41a2e4fdbad438e9bdd9b86610ac4f4db8c96314d1877aad043",
+      "archive_sha256": "bc04e972b6efb41a2e4fdbad438e9bdd9b86610ac4f4db8c96314d1877aad043",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "native-shared.txt",
+      "source": "development-logs/native-shared.txt",
+      "source_sha256": "6bc6f215a60594c045f6702a6d96b29fbfd5bb09afdf551ec22a05dcfd63add7",
+      "archive_sha256": "6bc6f215a60594c045f6702a6d96b29fbfd5bb09afdf551ec22a05dcfd63add7",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "native-shared.xml",
+      "source": "development-logs/native-shared.xml",
+      "source_sha256": "6868ba8b4edf85a9ef463f3bbbc5d2a2fb342dd38fe4b36bb18fab4c2c4ec21e",
+      "archive_sha256": "4859810ee0021f87f9b46e33aba287560ef1b568adcae7aa46d43299564a9afc",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "skill-grants-environment-fixed.exit",
+      "source": "development-logs/skill-grants-environment-fixed.exit",
+      "source_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "archive_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "skill-grants-environment-fixed.txt",
+      "source": "development-logs/skill-grants-environment-fixed.txt",
+      "source_sha256": "fb9551c84d9492ccb613d2c3f6f7083c943565185325a0797862ec0f57e3dcd9",
+      "archive_sha256": "fb9551c84d9492ccb613d2c3f6f7083c943565185325a0797862ec0f57e3dcd9",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "skill-grants-environment-fixed.xml",
+      "source": "development-logs/skill-grants-environment-fixed.xml",
+      "source_sha256": "16464d3a95e0ea017914541ea56be71d4abb1599ca3c7d664e275f9c0865e89d",
+      "archive_sha256": "ff747be43006efd5f731ae0f2543a9422cfe00d7a4fe73b13965c35a0b4d17e3",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "skill-grants.exit",
+      "source": "development-logs/skill-grants.exit",
+      "source_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "archive_sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "skill-grants.txt",
+      "source": "development-logs/skill-grants.txt",
+      "source_sha256": "e658988dffe77d62232e2a19b8c1ba5fc2d74c059c7e81532ac6366c0977378c",
+      "archive_sha256": "c2bb634e6797b5cb783302aa873d1bde70c29d5d0426abb485cd4734d3ad18f4",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "skill-grants.xml",
+      "source": "development-logs/skill-grants.xml",
+      "source_sha256": "65bcf1ac98ef95edfee832b08961c2e0e1995b46aaaa53c917ad3124b33c4270",
+      "archive_sha256": "32ac04174e966a43ccda5b134f0a958fd44495b6e6944838925b671ae6d29c52",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "smoke-linux.txt",
+      "source": "development-logs/smoke-linux.txt",
+      "source_sha256": "788802dd55a85e5dba15de30ba863070a90b95dacc88745475a8b3b231ac774f",
+      "archive_sha256": "788802dd55a85e5dba15de30ba863070a90b95dacc88745475a8b3b231ac774f",
+      "processing": "Machine path/host labels only; outcomes, test names and failure text retained."
+    },
+    {
+      "archive": "windows-installation-initial.txt",
+      "source": "GitHub artifact 11601546415 / smoke-windows.log",
+      "source_sha256": "3eb4e442e7fe305edd1e22be6da455148062017d55a6f198379697fd7259a73d",
+      "archive_sha256": "b9a6b1d24af77a164b72fa75fbee5e6c40f885c27e59728aff437db0a679ca96",
+      "processing": "UTF-8 BOM removed; only owned CI machine paths replaced."
+    }
+  ],
+  "paid_model_called": false,
+  "production_data_changed": false,
+  "old_evidence_modified": false,
+  "verification_scope": "New isolated Git/files/HTTP/MCP; real native client plus loopback fixture; schema fixtures for Desktop. Final Windows and browser acceptance not complete.",
+  "initial_remote_checks": {
+    "commit": "8d86b60c7e515e634096cd97a27e9e7f4eed8f35",
+    "ci_run": 37898110675,
+    "ci_conclusion": "failure",
+    "native_sdk_run": 37898110691,
+    "native_sdk_conclusion": "success",
+    "windows_test_shards": {
+      "python_3_11": [
+        "1/4 success",
+        "2/4 success",
+        "3/4 success",
+        "4/4 success"
+      ],
+      "python_3_13": [
+        "1/4 success",
+        "2/4 success",
+        "3/4 success",
+        "4/4 success"
+      ]
+    },
+    "linux_python_3_11": "success",
+    "linux_python_3_13": "success",
+    "package_linux": "success",
+    "browser": "success",
+    "windows_installation_job": 113714052163,
+    "windows_installation_result": "failure; PermissionError WinError5 deleting a Git object; no file attribute dump in the initial log",
+    "source": "GitHub Actions jobs read for this precise head, not final feature commit results"
+  },
+  "package": {
+    "name": "git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
+    "sha256": "621ff7a8d545f6a1f538ebc3d7fb1b3d67b1eb887c02c9c3a52cd7cb1eaffe0b"
+  },
+  "product_files": {
+    "src/agent_workspace/__init__.py": "a0f22490cef67809628cecd97e2b6777a1d03c17111f89e368755f045e499d26",
+    "src/agent_workspace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+    "src/agent_workspace/app.py": "f0936d8972359c0ffc0ff6e094ee304db6a6d840f577cfa080616ca3c45e5913",
+    "src/agent_workspace/bridges.py": "3806dc4b7ee1b1969179f07eeeda3ce1ec26963af25cd0e4fa95cb7f5c4d18de",
+    "src/agent_workspace/cli.py": "0be4648bf4721cab426e6209bd765e6a36d8c30ec6a0867fe42e543b40a23d58",
+    "src/agent_workspace/commands.py": "03694696e3dcaa6815c86016b3686d318040d49a28483c3542cc4c3363355b14",
+    "src/agent_workspace/desktop_projects.py": "c8d4802c27298c7ca3b9d68aabbd882ce494ce29022e3ba3d2e84b1fe0fbd282",
+    "src/agent_workspace/gitstore.py": "53d2fc61a4df1b9c226d1cb135e457f7102444a39198542de597bf4d2407e9cc",
+    "src/agent_workspace/harness_config.py": "3dc5fb161c871a94b1720568f92bd4713b1eb6d1e3e39f0fb6bc0463ef576f46",
+    "src/agent_workspace/maintenance.py": "34d7edac4990dc21a919b29f199ceda24d57da2332bcdbfc409b1c52654f1190",
+    "src/agent_workspace/messages.py": "ddbf1496d2be3195c39e80d85c3f44265981333feb342b8941c09d69de8f1b38",
+    "src/agent_workspace/native_sdk.py": "aa05cbbd916fa71e0344f5d994a02cee1479ebdf2d26841e357fde01601df3e5",
+    "src/agent_workspace/onboarding.py": "0fa19580d168ace8c32d76a041d538f91fac51c65e18750bddaa30b17dc95dbf",
+    "src/agent_workspace/resources/definitions/maintainer.md": "2efd0536685bf9a8089175973bcc0baf9314c848686d716cf717abdab7b585f5",
+    "src/agent_workspace/resources/definitions/sentinel.md": "4597cb0bcfdb034c321c02b54884b03ed696a58ff88d6d6aaaa58bdd370090bf",
+    "src/agent_workspace/resources/definitions/steward.md": "96f1a88a7a5b39a3795b511a6f98b9c53aa0a154f8a8baaf28945f82686319fb",
+    "src/agent_workspace/resources/index.html": "dfdaddbb3aec65ad8678e31f515e22892015e685abacb8d7b1c37805c52903e4",
+    "src/agent_workspace/resources/prompts/capabilities.md": "ec5a64620644ec3e1b3b48fb5340f8880769b6ff3bfe78dce6df3ca479305fad",
+    "src/agent_workspace/resources/prompts/checkpoints.md": "a9e38982c19c733021e970f07dc73af724b2db9141e303aa1348f74b88cfcfd8",
+    "src/agent_workspace/resources/prompts/desktop-connect.md": "16500f75ee4d9115da7c54e4c89950d9c1b702593838bcc66dfe100a913e2f82",
+    "src/agent_workspace/resources/prompts/desktop-projects.md": "415388ba714857cdcde3c40065a71c105d31efa48667ba86d9246005915f01ee",
+    "src/agent_workspace/resources/prompts/entry.md": "4842444cf351d881a07a6240506f486343b3db5578dfc68f125b62074e1a8bb6",
+    "src/agent_workspace/resources/prompts/handoff.md": "0d3d8d69c3537367f5ac02a41fec6d70317ca84b7e415ada6459dced6ed185f2",
+    "src/agent_workspace/resources/prompts/initialization.md": "161c5e85199047be264b79b1e3f2630eaeb9b46469ba80fc6bcf31d5d142b73a",
+    "src/agent_workspace/resources/sessions.html": "05281b1238a3d8a8baeebcd5df26e1f3d373bff7469437a8f5b5535a1694986e",
+    "src/agent_workspace/resources/setup.html": "16cc963971b682079017730d626fc760b4a84dff73062d7bf88a5a648ed38d3c",
+    "src/agent_workspace/resources/skills/agent/SKILL.md": "2b75038b5fdb89e964080a6fcb1e7e558e8d5e74622d8ebc0932c95ec9e347c1",
+    "src/agent_workspace/resources/skills/fork/SKILL.md": "ae5b392600641398de54e06be27aa857eb3f400864eb3c9de7fc64cf9a7f8e1b",
+    "src/agent_workspace/resources/skills/handoff/SKILL.md": "d679336ec2fdb377827477fb3e90cc6384a7c1cb743b37de8955c8e1a247ae59",
+    "src/agent_workspace/resources/skills/message/SKILL.md": "1d7213af73306573c5e6b07d6e90a22f955dcc2ed8b6ff6f4f25caeb8a2b96a2",
+    "src/agent_workspace/resources/skills/relay/SKILL.md": "5ac3bb32ecc01a3392b90a74aeb64c88590cbb8b09f8a41b6fc72461b0ec2398",
+    "src/agent_workspace/resources/skills/work/SKILL.md": "9f9f1ff28479b1f429f1560ffaa3873f63c8e73e224feed98dcbc53b0a8aeae7",
+    "src/agent_workspace/resources/skills/workspace/SKILL.md": "c41814a19e9a68e0f51a57079a608f56aab9eeae4dded2f22f407f13e5a8253c",
+    "src/agent_workspace/rpc.py": "bb77f54add576a749a3c07b01d746e11c882376f93f32783e70cb025aa81f6b9",
+    "src/agent_workspace/runtime.py": "c80deb1f4b32f2780fa429bf8594d8ed1e41259f8ea443581e6fe962fb52f333",
+    "src/agent_workspace/server.py": "d90e1045f7a9fd760d201027d10dcb9b8b7f37212ded7112f9a94e698ff892bf",
+    "src/agent_workspace/sessions.py": "02e75957459a3dd1cb07c76d79f9627e6d3cfb025c5390013817b52a6042b753",
+    "src/agent_workspace/shared.py": "02dddf01c767b509edbab36d5e4fadd70fd2e9c8b12b25dfad3e999c4e4b3774",
+    "src/agent_workspace/skills.py": "40a1ee7d826de40e6c797e01f979e4ca994eba6825fec92eeffd8183436c4890",
+    "src/agent_workspace/transfer.py": "f213b855c192c0a4433661eb4c6c93343d612e49eb81b57bd826e144e30efca0",
+    "src/agent_workspace/util.py": "074daf1b92a34ae53227913e35ab8ed70593f2a95397e038fe707858468daf80",
+    "src/agent_workspace/wecom.py": "62520c3409214412548160c2f687391afc859e846f2ed1c36f8bb9b26f3c4b84"
+  }
+}

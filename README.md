@@ -4,13 +4,17 @@
 
 AgentWorkspace 为持久 Agent 管理独立工作根、职责、Skill、资料和历史，通过 Git Workspace 通信，并按需使用 Work / Delivery。它操作已有 Harness 的真实会话，不重写模型推理或工具循环，也不要求用户改用新的聊天客户端。
 
-> **`0.1.0a1` 开发预览。** 当前功能分支已有首次配置、三名管家、受管 Codex/Claude/CodeBuddy、自动交接与维护工具。本批已接入并实测 Windows Codex Desktop 的指定路径，具体结果及限制见下方记录；不代表其他 Desktop、自有模型服务、生产 Git、企业微信或长期运行已经验收。尚未发布正式 Release 或 PyPI 包。
+> **`0.1.0a1` 开发预览。** 当前代码已有首次配置、三名管家、受管 Codex/Claude/CodeBuddy、自动交接与维护工具。本批已接入并实测 Windows Codex Desktop 的指定路径，具体结果及限制见下方记录；不代表其他 Desktop、自有模型服务、生产 Git、企业微信或长期运行已经验收。尚未发布正式 Release 或 PyPI 包。
 
 Codex Desktop 已增加在已有本地项目中的自动创建、真实会话绑定、持续投递和同实例交接；需要先准备实例项目并从真实桌面聊天捕获控制连接。操作和限制见 [Codex Desktop](docs/usage.md#42-codex-desktop)，验证范围见 [实现进展](docs/implementation.md#codex-desktop-自动接入2026-10-08)。Claude/WorkBuddy Desktop 本批未接入。
 
+## 本批新增：共同职责与共享 Skill
+
+共同职责可通过 AGENTS.md 的 `@workspace-read` 指引，从所属 Workspace 同一 Git 提交读取；共享 `skills/` 可在创建时选择、后续安装更新，Definition 自带 Skill 保留并保护私人修改。Codex 准备入口发现/复用真实项目，分区仅在实际接口 schema 相符时执行，项目创建及文件夹编辑仍明确手动降级。[使用说明](docs/shared-materials.md)和[统一验收](docs/shared-materials-acceptance.md)区分开发回归、原生协议与待执行实机验证。
+
 ## 普通会话与桌面项目
 
-工作台和首次配置页可进入“新建普通会话”，在已有目录启动 Codex/Claude Code/CodeBuddy 交互 CLI，无需 Workspace 或 Git。对明确的内网 HTTP 模型地址提供逐配置确认，不保存密钥。持久 Agent 的桌面项目默认按 Agent 复用，Codex 分区按 Workspace 组织；当前提供本机引用与手动步骤，不宣称已自动控制桌面项目。操作及终端限制见 [普通会话与桌面项目](docs/session-projects.md)。
+工作台和首次配置页可进入“新建普通会话”，在已有目录启动 Codex/Claude Code/CodeBuddy 交互 CLI，无需 Workspace 或 Git。对明确的内网 HTTP 模型地址提供逐配置确认，不保存密钥。持久 Agent 的桌面项目默认按 Agent 复用，Codex 分区按 Workspace 组织；当前提供本机引用、真实项目发现/复用与按实际接口提供的分区准备，不宣称已自动创建原生项目或编辑文件夹。操作及终端限制见 [普通会话与桌面项目](docs/session-projects.md)。
 
 ## 使用流程
 

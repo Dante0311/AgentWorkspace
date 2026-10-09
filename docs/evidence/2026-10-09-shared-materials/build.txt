@@ -1,0 +1,10 @@
+WARNING: The directory '<TEST_CACHE>/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Processing <SOURCE_ROOT>
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: git-native-agent-workspace
+  Building wheel for git-native-agent-workspace (pyproject.toml): started
+  Building wheel for git-native-agent-workspace (pyproject.toml): finished with status 'done'
+  Created wheel for git-native-agent-workspace: filename=git_native_agent_workspace-0.1.0a1-py3-none-any.whl size=136558 sha256=8de4384731ad89d9b554abfc0138aac30fa630a76f75df8abe591d1b61a8b02b
+  Stored in directory: <TEST_TEMP>/pip-ephem-wheel-cache-wms64agq/wheels/d2/7d/72/0a944cbacbc61864a49798dd630486606204062961b1c17aea
+Successfully built git-native-agent-workspace

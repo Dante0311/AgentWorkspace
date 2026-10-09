@@ -1,0 +1,18 @@
+{
+  "source_commit": "ee2fc6070de1dfbf1679e650ab1197d39a382b53",
+  "compileall": "passed",
+  "javascript_syntax": "passed",
+  "git_diff_check": "passed",
+  "wheel_name": "git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
+  "wheel_sha256": "d78c0d50a5e7e6165397da0949d340298cf6cfed61ceb0648fcfe60113382d6c",
+  "package_files_byte_matched": 42,
+  "platform_skills": [
+    "agent",
+    "fork",
+    "handoff",
+    "message",
+    "relay",
+    "work",
+    "workspace"
+  ]
+}

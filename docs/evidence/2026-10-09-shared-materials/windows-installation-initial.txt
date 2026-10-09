@@ -1,0 +1,23 @@
+FAIL: cleanup incomplete; preserve and inspect C:\Users\RUNNER~1\AppData\Local\Temp\aw-wheel-8wq9gboo
+Traceback (most recent call last):
+  File "<SOURCE_ROOT>\scripts\smoke_wheel.py", line 257, in <module>
+    main()
+    ~~~~^^
+  File "<SOURCE_ROOT>\scripts\smoke_wheel.py", line 112, in main
+    with smoke_directory() as temporary:
+         ~~~~~~~~~~~~~~~^^
+  File "<PYTHON_ROOT>\Lib\contextlib.py", line 148, in __exit__
+    next(self.gen)
+    ~~~~^^^^^^^^^^
+  File "<SOURCE_ROOT>\scripts\smoke_wheel.py", line 98, in smoke_directory
+    shutil.rmtree(root)
+    ~~~~~~~~~~~~~^^^^^^
+  File "<PYTHON_ROOT>\Lib\shutil.py", line 790, in rmtree
+    return _rmtree_unsafe(path, onexc)
+  File "<PYTHON_ROOT>\Lib\shutil.py", line 629, in _rmtree_unsafe
+    onexc(os.unlink, fullname, err)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<PYTHON_ROOT>\Lib\shutil.py", line 625, in _rmtree_unsafe
+    os.unlink(fullname)
+    ~~~~~~~~~^^^^^^^^^^
+PermissionError: [WinError 5] Access is denied: 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aw-wheel-8wq9gboo\\home\\git\\f20688faacd35537f89093ab\\objects\\06\\fb181150f4b8a09b64e965ee1b3d5a51d34638'

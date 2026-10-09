@@ -1,0 +1,28 @@
+...................................F                                     [100%]
+=================================== FAILURES ===================================
+____________________ test_cli_commands_and_identity_origin _____________________
+
+team = (<agent_workspace.app.App object at 0x7f7d738f6c80>, ('sea', 'steward', 'b763b8fa38774450f96ab1fe562ea9a3a'))
+
+    def test_cli_commands_and_identity_origin(team):
+        app, actor = team
+        env = dict(os.environ)
+        for key in ("AW_WORKSPACE", "AW_AGENT", "AW_BINDING"):
+            env.pop(key, None)
+        base = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "-w", "sea"]
+        def call(*args, env=env):
+            return subprocess.run([*base, *args], env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        result = call("workspace", "doctor")
+>       assert result.returncode == 0, result.stderr
+E       AssertionError: <PYTHON_ROOT>/bin/python: No module named agent_workspace
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['<PYTHON_ROOT>/bin/python', '-m', 'agent_workspace', '--home', '/tmp/pytest-of-root/pytest-9/test...', 'workspace', 'doctor'], returncode=1, stdout='', stderr='<PYTHON_ROOT>/bin/python: No module named agent_workspace\n').returncode
+
+tests/test_maintenance.py:216: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_maintenance.py::test_cli_commands_and_identity_origin - AssertionError: <PYTHON_ROOT>/bin/python: No module named agent_workspace
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['<PYTHON_ROOT>/bin/python', '-m', 'agent_workspace', '--home', '/tmp/pytest-of-root/pytest-9/test...', 'workspace', 'doctor'], returncode=1, stdout='', stderr='<PYTHON_ROOT>/bin/python: No module named agent_workspace\n').returncode
+1 failed, 35 passed in 18.26s

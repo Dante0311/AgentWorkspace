@@ -1,0 +1,45 @@
+{
+  "status": "passed",
+  "verified_at": "2026-10-09T09:23:42.285125+00:00",
+  "product_base": "62760fae3df05b84766a35b24d3f4d31b1aeb63b",
+  "compatibility_package_source": "00fb6bdb61f4accf47067b7acff48b9e5fc6284b",
+  "definition_source": "32fb3d000bb265452e04c3918862d0025b67d1ef",
+  "resource_source": "6fcad5f267f2d40e17cab7ca66ef378abed1a524",
+  "checks": [
+    {
+      "agent": "core",
+      "files": 18,
+      "platform_blobs_match_installed_package": true,
+      "definition_and_creation_hashes_match": true,
+      "installed_aw_reads_registration": true,
+      "installed_aw_accepts_active_manual_record": true
+    },
+    {
+      "agent": "runtime-adapter",
+      "files": 18,
+      "platform_blobs_match_installed_package": true,
+      "definition_and_creation_hashes_match": true,
+      "installed_aw_reads_registration": true,
+      "installed_aw_accepts_active_manual_record": true
+    },
+    {
+      "agent": "communication-maintenance",
+      "files": 18,
+      "platform_blobs_match_installed_package": true,
+      "definition_and_creation_hashes_match": true,
+      "installed_aw_reads_registration": true,
+      "installed_aw_accepts_active_manual_record": true
+    }
+  ],
+  "json_examples_parsed": 4,
+  "relative_links_checked": 8,
+  "workbench_prompt_added": false,
+  "scope": "Static material checks and isolated local Git fixtures read by the installed AW package.",
+  "limitations": [
+    "No live aw-team identity, Binding, message, checkpoint, Watch, or maintenance plan was changed.",
+    "No cloud conversation was created; the startup prompts have not been executed by the three intended cloud owners.",
+    "This does not verify live GitHub concurrency, automatic delivery, native session identity, Desktop recovery, or either bug fix.",
+    "Manual session=null remains an explicitly chosen protocol extension; the ordinary agent.bind command was not changed.",
+    "The isolated fixtures use a separate temporary workspace locator and are retained to avoid Windows cleanup races."
+  ]
+}

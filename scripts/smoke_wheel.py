@@ -7,6 +7,7 @@ import json
 import os
 import queue
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -85,6 +86,27 @@ def running_workbench(aw, home, cwd, env):
         assert not reader.is_alive()
 
 
+def remove_smoke_tree(root):
+    """Remove only owned smoke data; Git's read-only objects need a writable bit on Windows."""
+    root = Path(root).resolve()
+
+    def readonly_file(function, name, error):
+        exc = error[1]
+        path = Path(name)
+        info = path.lstat()
+        if (not isinstance(exc, PermissionError) or function is not os.unlink
+                or not path.resolve().is_relative_to(root)
+                or not stat.S_ISREG(info.st_mode)
+                or path.is_symlink()
+                or getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400)
+                or not getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_READONLY', 1)):
+            raise exc
+        path.chmod(info.st_mode | stat.S_IWRITE)
+        function(name)  # Retry this known read-only file once, never retry a directory or unknown error.
+
+    shutil.rmtree(root, onerror=readonly_file)
+
+
 @contextmanager
 def smoke_directory():
     root = Path(tempfile.mkdtemp(prefix="aw-wheel-"))
@@ -95,7 +117,7 @@ def smoke_directory():
         raise
     else:
         try:
-            shutil.rmtree(root)
+            remove_smoke_tree(root)
         except OSError:
             # Do not retry deletion or traverse reparse points to manufacture a pass.
             print(f"FAIL: cleanup incomplete; preserve and inspect {root}", flush=True)

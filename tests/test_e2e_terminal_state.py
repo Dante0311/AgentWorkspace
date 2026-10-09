@@ -10,7 +10,7 @@ from agent_workspace.util import Conflict, Error, Unavailable, read_json, write_
 
 
 def profile():
-    return {"kind": "codex", "command": [sys.executable]}
+    return {"kind": "codex", "command": [sys.executable], "model": "fixture-model", "effort": "low"}
 
 
 def prepare_agent(app):
@@ -40,6 +40,9 @@ def install_native(app, monkeypatch, *, terminal="completed", stop_on_boot=False
         def __init__(self, app, workspace, aid, binding, root, config, session=None):
             self.session = session or "session-" + binding
             self.binding, self.root = binding, root
+            from agent_workspace import model_profiles
+            self.profile = model_profiles.adopted(root, binding)
+            self.profile_validation = {"catalog": "fixture_unconfirmed"}
             self.completed = queue.Queue()
             self.turns = 0
             self.pending = None

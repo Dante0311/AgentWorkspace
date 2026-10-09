@@ -16,6 +16,7 @@ BRIDGE=Path(__file__).with_name('fake_bridge.py')
 def test_desktop_uses_owner_mcp_only(app):
     app.create('sea','alice'); root=app.root('sea','alice')
     config={'kind':'desktop','command':[sys.executable,str(NATIVE),'desktop'],'pipe_path':'fixture','caller_thread':'caller'}
+    app.configure('sea','alice',{**config,'model':'fixture-model','effort':'low'})
     desktop=runtime.Desktop(root,config,'existing-desktop-thread')
     try:
         assert desktop.status()=='idle'
@@ -27,7 +28,7 @@ def test_desktop_uses_owner_mcp_only(app):
 def test_desktop_missing_config_is_not_cli_fallback(app):
     app.create('sea','alice')
     with pytest.raises(Error): runtime.Desktop(app.root('sea','alice'),{},'thread')
-    app.configure('sea','alice',{'kind':'desktop'})
+    app.configure('sea','alice',{'kind':'desktop','model':'fixture-model','effort':'low'})
     result=runtime.start(app,'sea','alice')
     assert result['state']=='awaiting_new_session_bind'
     assert result['open_url'].startswith('codex://new?')
@@ -37,7 +38,7 @@ def test_desktop_missing_config_is_not_cli_fallback(app):
 
 def test_codex_protocol_records_actual_fixture_events(app):
     app.create('sea','alice'); root=app.root('sea','alice')
-    app.configure('sea','alice',{'kind':'codex','command':[sys.executable,str(NATIVE),'codex']})
+    app.configure('sea','alice',{'kind':'codex','command':[sys.executable,str(NATIVE),'codex'],'model':'fixture-model','effort':'low'})
     b=app.reserve('sea','alice')['binding']
     adapter=runtime.Codex(app,'sea','alice',b,root,{'command':[sys.executable,str(NATIVE),'codex']})
     try:
@@ -52,7 +53,7 @@ def test_codex_protocol_records_actual_fixture_events(app):
 
 def test_runner_bootstrap_and_initial_checkpoint(app):
     app.create('sea','alice'); root=app.root('sea','alice')
-    app.configure('sea','alice',{'kind':'codex','command':[sys.executable,str(NATIVE),'codex']})
+    app.configure('sea','alice',{'kind':'codex','command':[sys.executable,str(NATIVE),'codex'],'model':'fixture-model','effort':'low'})
     b=app.reserve('sea','alice')['binding']
     runner=runtime.Runner(app,'sea','alice')
     errors=[]
@@ -173,7 +174,7 @@ def test_handoff_request_disables_automatic_restarts_immediately(pair):
 def test_shared_controller_prevents_duplicate_runner(app,tmp_path):
     from agent_workspace.app import App
     app.create('sea','alice');root=app.root('sea','alice')
-    config={'kind':'codex','command':[sys.executable,str(NATIVE),'codex']}
+    config={'kind':'codex','command':[sys.executable,str(NATIVE),'codex'],'model':'fixture-model','effort':'low'}
     app.configure('sea','alice',config)
     binding=app.reserve('sea','alice')['binding']
     runner=runtime.Runner(app,'sea','alice');errors=[]

@@ -20,6 +20,7 @@ def make_server(app, port=8765, token=None):
     token = token or secrets.token_urlsafe(32)
 
     class Handler(BaseHTTPRequestHandler):
+        timeout = 30  # Accepted but incomplete requests must not block orderly shutdown forever.
         def log_message(self, fmt, *args):
             pass  # Never log bearer tokens or request bodies.
 

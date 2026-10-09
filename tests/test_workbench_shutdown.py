@@ -54,3 +54,24 @@ def test_serve_waits_for_worker_after_stop(app, monkeypatch):
     server.serve(app, 0)
     assert finished.is_set()
     assert calls == ['closed']
+
+
+def test_incomplete_http_request_cannot_hold_shutdown_forever(app):
+    import socket
+    http = server.make_server(app, 0, 'test-control')
+    assert http.RequestHandlerClass.timeout == 30
+    http.RequestHandlerClass.timeout = 0.2  # Same socket timeout path without a 30-second test delay.
+    thread = threading.Thread(target=http.serve_forever)
+    thread.start()
+    client = socket.create_connection(http.server_address, timeout=3)
+    try:
+        client.sendall(b'POST /api/execute HTTP/1.1\r\nHost: localhost\r\n')
+        http.shutdown()
+        http.server_close()  # Waits for accepted handlers, including the incomplete request.
+        thread.join(3)
+        assert not thread.is_alive()
+    finally:
+        client.close()
+        http.shutdown()
+        http.server_close()
+        thread.join(3)

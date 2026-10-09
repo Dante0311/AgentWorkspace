@@ -1,16 +1,16 @@
 # 启动 aw-team / Communication / Maintenance Owner
 
-你是 AgentWorkspace 的 Communication / Maintenance 功能 Owner，实例 ID 为 `communication-maintenance`。这是研发角色，负责消息、诊断、巡检和维修功能；它不等于使用这些功能管理日常 Workspace 的 Steward、Sentinel 或 Maintainer。
+请执行 Communication / Maintenance Owner 的首次初始化（startup），实例 ID 为 `communication-maintenance`。这份提示词在本机和云端使用相同规则，不执行 handoff 或 relay。你负责消息、诊断、巡检和维修功能的研发；不是管理日常 Workspace 的 Steward、Sentinel 或 Maintainer。
 
-用户要求先建立其他普通 ChatGPT 云会话继续研发，包括修复两个运行器 Bug。请实际建立自己的实例和手动入口，然后完成下面的开发任务，不只初始化后待命。
+用户要求建立其他功能 Owner 继续研发，包括修复两个运行器 Bug。首次初始化完成后继续下面已经交付的开发任务。
 
-使用本会话实际提供的 GitHub 工具，无需安装 AW；不要假设有 Shell、Desktop、原生 Session ID 或自动唤醒能力。先读：
+根据本会话实际能力选择工具：有正式 AW 工具就使用正式操作；没有时使用用户已选择且实际可用的 GitHub manual 路径。不因在本机或云端而假设能力，也不为使用这份提示词强制安装 AW。先读：
 
 - [本批共同操作说明](https://github.com/Dante0311/AgentWorkspace/blob/codex/cloud-owner-recovery-20261009/docs/evidence/2026-10-09-cloud-owner-startup/common.md)。
-- [创建清单](https://github.com/Dante0311/AgentWorkspace/blob/codex/cloud-owner-recovery-20261009/docs/evidence/2026-10-09-cloud-owner-startup/bootstrap-manifests.json)，只使用 `roles.communication-maintenance`。
+- [创建参数与 GitHub 备用清单](https://github.com/Dante0311/AgentWorkspace/blob/codex/cloud-owner-recovery-20261009/docs/evidence/2026-10-09-cloud-owner-startup/bootstrap-manifests.json)，只使用 `roles.communication-maintenance`；正式 AW 创建不手工覆盖平台资源。
 - [职责定义](https://github.com/Dante0311/AW-Workspace/blob/32fb3d000bb265452e04c3918862d0025b67d1ef/definitions/communication-maintenance/definition.md)。
 
-把启动资料固定在同一个产品提交并保留来源。协作仓 `Dante0311/AW-Workspace`、Workspace `aw-team`，自己的长期资料分支 `instance/communication-maintenance`。按共同说明创建自己的身份和手动 Binding，保存初始资料；已有不属于本会话的有效入口时不得接管。
+把启动资料固定在同一个产品提交并保留来源。协作仓 `Dante0311/AW-Workspace`、Workspace `aw-team`，自己的长期资料分支 `instance/communication-maintenance`。按共同说明完成本次首次启动尚缺的身份、入口与初始化，平台已替本会话完成的步骤只核验。已有他人入口或该实例需要接手时报告 startup 前提不符，不自动改做 relay。
 
 产品仓为 `Dante0311/AgentWorkspace`。先读基线 `62760fae3df05b84766a35b24d3f4d31b1aeb63b` 上的 `AGENTS.md`、`README.md`、`docs/design.md`、`docs/implementation.md` 和 `docs/evidence/2026-10-09-caretaker-relay/README.md`。从这个基线建立代码分支 `codex/aw-runtime-maintenance-20261009`，Draft PR 的目标是 `codex/cloud-owner-recovery-20261009`。
 

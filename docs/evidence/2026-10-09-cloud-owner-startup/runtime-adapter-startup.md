@@ -1,14 +1,14 @@
 # 启动 aw-team / Runtime / Adapter Owner
 
-你是 AgentWorkspace 的 Runtime / Adapter Owner，实例 ID 为 `runtime-adapter`。用户正在建立普通 ChatGPT 云会话继续研发，要求修复日常使用发现的 AW-RUNTIME-001、AW-RUNTIME-002。你是这两个 Bug 的主负责人。请实际建立自己的实例和手动入口，随后推进修复，不只介绍身份或等待分派。
+请执行 Runtime / Adapter Owner 的首次初始化（startup）。实例 ID 为 `runtime-adapter`；这份提示词在本机和云端使用相同规则，不执行 handoff 或 relay。用户要求修复日常使用发现的 AW-RUNTIME-001、AW-RUNTIME-002，你是这两个 Bug 的主负责人。初始化完成后继续下述修复任务。
 
-本会话通过实际可用的 GitHub 工具工作，无需安装 AW。不要假设有本地 Shell、Desktop、原生会话 ID 或自动唤醒能力。先读取：
+根据本会话实际能力选择工具：有正式 AW 工具就使用正式操作；没有时使用用户已选择且实际可用的 GitHub manual 路径。不因在本机或云端而假设能力，也不为使用这份提示词强制安装 AW。先读取：
 
 - [本批共同操作说明](https://github.com/Dante0311/AgentWorkspace/blob/codex/cloud-owner-recovery-20261009/docs/evidence/2026-10-09-cloud-owner-startup/common.md)。
-- [创建清单](https://github.com/Dante0311/AgentWorkspace/blob/codex/cloud-owner-recovery-20261009/docs/evidence/2026-10-09-cloud-owner-startup/bootstrap-manifests.json)，只使用 `roles.runtime-adapter`。
+- [创建参数与 GitHub 备用清单](https://github.com/Dante0311/AgentWorkspace/blob/codex/cloud-owner-recovery-20261009/docs/evidence/2026-10-09-cloud-owner-startup/bootstrap-manifests.json)，只使用 `roles.runtime-adapter`；正式 AW 创建不手工覆盖平台资源。
 - [职责定义](https://github.com/Dante0311/AW-Workspace/blob/32fb3d000bb265452e04c3918862d0025b67d1ef/definitions/runtime-adapter/definition.md)。
 
-读取启动材料时固定同一个产品资料提交并保存来源。协作仓为 `Dante0311/AW-Workspace`，Workspace 为 `aw-team`，自己的长期资料分支为 `instance/runtime-adapter`。按共同说明建立自己的身份、手动 Binding 与初始资料；已有他人有效入口时不得借用或覆盖。
+读取启动材料时固定同一个产品资料提交并保存来源。协作仓为 `Dante0311/AW-Workspace`，Workspace 为 `aw-team`，自己的长期资料分支为 `instance/runtime-adapter`。按共同说明完成本次首次启动仍缺的身份、入口与初始化；平台已替本会话完成的步骤只核验，不重复执行。已有他人入口或需要接手时报告 startup 前提不符，不自动改做 relay。
 
 产品仓为 `Dante0311/AgentWorkspace`。先读固定基线 `62760fae3df05b84766a35b24d3f4d31b1aeb63b` 的 `AGENTS.md`、`README.md`、`docs/design.md`、`docs/implementation.md` 和 `docs/evidence/2026-10-09-caretaker-relay/README.md`。从该基线建立代码分支 `codex/aw-runtime-recovery-20261009`，Draft PR 的目标是 `codex/cloud-owner-recovery-20261009`。
 

@@ -1,21 +1,23 @@
-# 三个云端功能 Owner 的启动材料
+# 本机与云端通用的复制提示词
 
-打开下表对应文件，将全文分别粘贴到三个具备 GitHub 工具的新云会话。每个会话只使用自己的那一份；提示词会让它读取共同说明、建立自己的实例与手动入口，并开始本次研发。
+这些提示词分别起首次初始化、handoff、relay 的作用，方便没有斜杠技能入口的会话直接执行同样的操作。本机和云端使用同一份，不维护两个版本；选择哪种工具由实际能力决定，生命周期动作由用户选择的入口决定。
 
-| 新会话 | 启动提示词 | 第一项研发任务 |
+| 用途 | 可复制的提示词 | 发到哪里 |
 | --- | --- | --- |
-| Core | [core-startup.md](core-startup.md) | 公共存储错误分类，停止与释放的核心约束 |
-| Runtime / Adapter | [runtime-adapter-startup.md](runtime-adapter-startup.md) | 主修 AW-RUNTIME-001、AW-RUNTIME-002：读取异常后恢复、继续确认既有 handoff |
-| Communication / Maintenance | [communication-maintenance-startup.md](communication-maintenance-startup.md) | 如实展示相关故障，提供有授权检查的停止恢复入口 |
+| Core 首次初始化 | [core-startup.md](core-startup.md) | Core 的首次会话 |
+| Runtime / Adapter 首次初始化 | [runtime-adapter-startup.md](runtime-adapter-startup.md) | Runtime / Adapter 的首次会话 |
+| Communication / Maintenance 首次初始化 | [communication-maintenance-startup.md](communication-maintenance-startup.md) | Communication / Maintenance 的首次会话 |
+| handoff | [handoff.md](handoff.md) | 当前拥有实例执行资格的旧会话 |
+| relay | [relay.md](relay.md) | 新的真实会话，并提供已经完成的 handoff 结果 |
 
-Workbench 已有实例和有效入口，这次不重写它的启动或继续提示词，也不创建替代会话。Lead、E2E 与三个管家沿用现有身份；本材料不重建它们。
+打开对应文件，复制全文。三份 startup 带有角色、资料来源及用户这次交付的 Bug 研发任务；不包含接手流程。handoff、relay 是独立通用入口，不复制首次初始化或当初的任务分派。handoff 真正完成后会给出一段带实际身份和检查点的 relay 内容，可以直接复制到新会话。
 
-准备时三个新 Owner 尚无实例分支；启动时必须重新核对真实登记。这里保存的是启动材料，没有因为发布这些文件就创建会话、登记实例、派发消息或启动修复。
+Workbench 已有启动材料和云会话，本轮不重写它的 startup、不创建替代入口。Lead、E2E 与三个管家的现有身份和交接状态也保持原样。
 
-产品研发从 `62760fae3df05b84766a35b24d3f4d31b1aeb63b` 建各自代码分支，Draft PR 提交到 `codex/cloud-owner-recovery-20261009`。该基线包含已记录的两个 Bug 和真实失败报告；日常运行安装没有升级。
+执行方式见 [access.md](access.md)：有正式 AW 工具时按实例 Skill 调用相应操作；没有时，在用户已选择的 manual 范围内参照 [GitHub 操作细节](github-operations.md)。工具拒绝、缺失或结果不明都如实报告，不通过换访问方式绕过权限，不把提示词当作已经实现的运行能力。
 
-[共同操作说明](common.md)提供 GitHub 条件写入、18 文件实例创建、手动 Binding、消息、检查点与交付步骤；[创建清单](bootstrap-manifests.json)预先列出三个角色的实际职责来源、资源 blob 和创建记录，避免会话自行猜字段或复制其他实例。
+首次初始化的共同步骤与本批任务范围见 [common.md](common.md)。[bootstrap-manifests.json](bootstrap-manifests.json)保存三个角色的创建参数，以及 GitHub 备用路径的 18 文件创建清单；正式 AW 工具创建时由实际安装版本生成平台资源。发布这些材料不等于创建了实例或会话。
 
-普通云会话需要实际可用的 GitHub 写工具。材料不赋予缺失的工具，也不提供自动唤醒。已确认的手动协议互通不等于 AW 自动收件已恢复；自动投递和三管家恢复仍待后续修复与实际验证。
+本批研发从 `62760fae3df05b84766a35b24d3f4d31b1aeb63b` 创建各自产品分支，Draft PR 目标为 `codex/cloud-owner-recovery-20261009`。Runtime / Adapter 主修两个 Bug，Core 与 Communication / Maintenance 按职责配合；日常运行安装没有因本次文档调整而升级。
 
-本批材料的核对范围与结果见 [validation.json](validation.json)。检查只验证材料及隔离实例记录兼容性，不代表三个云会话已经启动或 Bug 已修复。
+[原创建清单验证](validation.json)保留旧版材料的隔离核对结果；[本次三类入口核对](lifecycle-validation.json)记录修订范围与验证。前者不代表本机/云端真实启动，后者也不代表运行器 Bug、自动通信或日常管家交接已经修复。

@@ -1,0 +1,51 @@
+{
+  "status": "passed",
+  "verified_at": "2026-10-09T09:47:24.039160+00:00",
+  "previous_material_commit": "e463f88e6f903d60f0ee67342cd7aab68ae668c3",
+  "change_scope": "Documentation only: environment-neutral startup wrappers, separate handoff and relay wrappers, shared tool selection and GitHub record reference.",
+  "copyable_prompts": [
+    "core-startup.md",
+    "runtime-adapter-startup.md",
+    "communication-maintenance-startup.md",
+    "handoff.md",
+    "relay.md"
+  ],
+  "static_checks": {
+    "relative_links": 25,
+    "same_branch_file_links": 9,
+    "json_examples_parsed": 6,
+    "workbench_prompt_added": false,
+    "creation_manifest_changed": false
+  },
+  "rules_reviewed_against_actual_skills_and_source": [
+    "startup performs first initialization only and never automatically consumes a handoff.",
+    "handoff saves a fixed checkpoint and requests stop; it does not create a successor.",
+    "relay consumes an existing handoff for the same identity and loads the exact checkpoint.",
+    "Formal AW tools are preferred when available on either local or cloud sessions; permission denial does not authorize a GitHub bypass.",
+    "The selected GitHub manual extension requires conditional updates and explicit current-user confirmation of manual stop; Desktop/CLI release still requires real adapter observation."
+  ],
+  "isolated_protocol_recheck": {
+    "script_repository": "Dante0311/AgentWorkspace",
+    "script_commit": "210fabd1c2dc8afbbb5e83c6d9c5f8115a9ed165",
+    "script_path": "docs/evidence/2026-10-09-github-manual/verify_protocol.py",
+    "script_sha256": "3c394f1d9593a210bc43bafb7ecef8e03d9c547ec2a76eeb8d1579c651c0d3c9",
+    "installed_package_source": "00fb6bdb61f4accf47067b7acff48b9e5fc6284b",
+    "result": "passed",
+    "checks": {
+      "manual_active_record_without_native_session_readable": true,
+      "stale_competing_claim_rejected": true,
+      "checkpoint_pointer_and_exact_assets_readable": true,
+      "AW_receives_protocol_message_and_publishes_ACK": true,
+      "AW_reply_read_and_ACKed_through_protocol": true,
+      "handoff_consumed_by_new_manual_binding": true,
+      "old_binding_rejected": true
+    }
+  },
+  "limitations": [
+    "The seven compatibility checks use a retained temporary local Git fixture, not the daily aw-team workspace.",
+    "The prompts have not been executed by new real local/cloud sessions; no real user confirmation, native identity, idle observation, automatic delivery, or real chat handoff was verified.",
+    "Existing agent.bind still rejects a missing native session ID. The manual session=null trial is not formal command support.",
+    "No daily instance, Binding, message, checkpoint, installation, permission, or automation was changed by preparing these materials.",
+    "No application source, runtime recovery behavior, or installed Skill was changed; the two runtime defects remain pending repair and real verification."
+  ]
+}

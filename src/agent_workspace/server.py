@@ -48,6 +48,9 @@ def make_server(app, port=8765, token=None):
             if not hmac.compare_digest(supplied, token):
                 self.reply(401, {"error": "A local bearer token is required."})
                 return False
+            if self.server.stopping.is_set() and self.path != "/api/shutdown":
+                self.reply(503, {"error": "Workbench is stopping; do not start another operation."})
+                return False
             return True
 
         def do_GET(self):
@@ -98,6 +101,11 @@ def make_server(app, port=8765, token=None):
         def do_POST(self):
             if not self.authorized():
                 return
+            if self.path == "/api/shutdown":
+                self.server.stopping.set()
+                self.reply(200, {"ok": True, "result": {"shutdown_requested": True, "agent_bindings_released": False}})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return
             if self.path != "/api/execute":
                 self.reply(404, {"error": "Not found"})
                 return
@@ -114,7 +122,8 @@ def make_server(app, port=8765, token=None):
 
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.control_token = token
-    server.daemon_threads = True
+    server.daemon_threads = False
+    server.stopping = threading.Event()
     return server
 
 
@@ -127,14 +136,17 @@ def serve(app, port=8765, open_browser=False, setup=False):
         webbrowser.open(url)
     from .maintenance import run
     stop = threading.Event()
-    worker = threading.Thread(target=run, args=(app, stop), name="aw-maintenance", daemon=True)
+    worker = threading.Thread(target=run, args=(app, stop), name="aw-maintenance", daemon=False)
     worker.start()
     try:
         server.serve_forever()
+    except KeyboardInterrupt:
+        pass  # Ctrl+C is an orderly service stop, not an Agent release.
     finally:
         stop.set()
-        worker.join(timeout=5)
-        server.server_close()
+        server.server_close()  # Drain accepted HTTP handlers before stopping the worker.
+        worker.join()  # Its external operations have their own bounded timeouts.
+
 
 
 def mcp(app, actor=None):

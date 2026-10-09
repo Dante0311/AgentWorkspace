@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,7 @@ def running_workbench(aw, home, cwd, env):
                                cwd=cwd, env=env, text=True, encoding="utf-8",
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output = queue.Queue()
+    base = token = None
 
     def read_output():
         for line in process.stdout:
@@ -55,16 +57,50 @@ def running_workbench(aw, home, cwd, env):
 
         yield request
     finally:
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=10)
+        shutdown_error = None
+        try:
+            if process.poll() is None:
+                if base is None:
+                    raise RuntimeError("Workbench never provided its control endpoint.")
+                req = urllib.request.Request(base + "/api/shutdown", data=b"",
+                                             headers={"Authorization": "Bearer " + token})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    assert json.load(response)["result"]["shutdown_requested"]
+                process.wait(timeout=120)
+            if process.returncode != 0:
+                raise RuntimeError(f"Workbench did not exit cleanly: {process.returncode}")
+        except Exception as exc:
+            shutdown_error = exc
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=10)
         reader.join(timeout=5)
         process.stdout.close()
+        if shutdown_error:
+            raise RuntimeError("Orderly workbench shutdown failed; fallback termination is not a passing test.") from shutdown_error
         assert not reader.is_alive()
+
+
+@contextmanager
+def smoke_directory():
+    root = Path(tempfile.mkdtemp(prefix="aw-wheel-"))
+    try:
+        yield root
+    except BaseException:
+        print(f"FAIL: preserved isolated smoke data at {root}", flush=True)
+        raise
+    else:
+        try:
+            shutil.rmtree(root)
+        except OSError:
+            # Do not retry deletion or traverse reparse points to manufacture a pass.
+            print(f"FAIL: cleanup incomplete; preserve and inspect {root}", flush=True)
+            raise
+
 
 
 def main() -> None:
@@ -73,7 +109,7 @@ def main() -> None:
     if len(wheels) != 1:
         raise SystemExit(f"Expected one project wheel in {directory}, found {len(wheels)}")
 
-    with tempfile.TemporaryDirectory(prefix="aw-wheel-") as temporary:
+    with smoke_directory() as temporary:
         root = Path(temporary)
         environment = root / "venv"
         binary = environment / ("Scripts" if os.name == "nt" else "bin")

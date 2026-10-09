@@ -1,0 +1,75 @@
+{
+  "status": "published_and_read_back",
+  "previous_product_source": {
+    "repository": "Dante0311/AgentWorkspace",
+    "commit": "a9d429d3c9b1cee32ab4061491fee6b4d74f0fc6",
+    "directory": "docs/evidence/2026-10-09-cloud-owner-startup"
+  },
+  "canonical_destination": {
+    "repository": "Dante0311/AW-Workspace",
+    "branch": "main",
+    "directory": "knowledge/session-prompts",
+    "promotion_commit": "09224f684537e55f8d0b611de7ad0eb5ffa01282",
+    "index_commit": "ab2d71a47eccb61f6d8dae6192d7215df7b87498"
+  },
+  "source_checkpoint": {
+    "workspace": "aw-team",
+    "agent": "lead",
+    "id": "c467ec21fa3ac453c97a682d79fcd78bc",
+    "revision": "b2f32346ae8f0920aaed20a25dc15fda2d57ac1a"
+  },
+  "publication_operation": "agent.promote",
+  "selected_files": [
+    {
+      "path": "access.md",
+      "hash": "702a2aec828bdee598354b810fd5a63145ee5a7a1739ad445e9db9f0569f6241"
+    },
+    {
+      "path": "bootstrap-manifests.json",
+      "hash": "b4dd5354f8e2d723af91d22600fc5509cb02bf225ff9310ee276a0d189b000de"
+    },
+    {
+      "path": "common.md",
+      "hash": "31a0561a0d3a4e192d3690bdee8a80501fb78ae660a60cdaf1e60ee3514aeb86"
+    },
+    {
+      "path": "communication-maintenance-startup.md",
+      "hash": "029f2781109affc76378c1389572580232abdc7cdff377d0fd05ec105b5a827a"
+    },
+    {
+      "path": "core-startup.md",
+      "hash": "b63990e271640e42e73905ca57d98761e3bad88550e46f09cbe4955c5ee45198"
+    },
+    {
+      "path": "github-operations.md",
+      "hash": "409dfae29e61b3661ea3eb582ab40f33281e62a9f5e19468949bacd4802634a5"
+    },
+    {
+      "path": "handoff.md",
+      "hash": "081f259b7eb423af7269ffd94489b3793b29f833f8274509e9c1765fdacaa6d1"
+    },
+    {
+      "path": "README.md",
+      "hash": "31a8927de45bd1ae32c98983c636abd2a6b2a75abd1e0add4f151087f5a2d606"
+    },
+    {
+      "path": "relay.md",
+      "hash": "f603039daed306d5a2a55cbbf6569f054dfab2d3e71c43634e8ca6043b4fa582"
+    },
+    {
+      "path": "runtime-adapter-startup.md",
+      "hash": "a594fec539bcd6dabf2cc9635120b507c66923d817ce97dbcf5e4ceeb8f601f2"
+    }
+  ],
+  "verification": {
+    "all_ten_assets_read_back_and_matched": true,
+    "relative_links_checked": 17,
+    "json_examples_parsed": 6,
+    "provenance_points_to_saved_source_checkpoint": true,
+    "workspace_home_links_to_prompts": true,
+    "existing_agent_binding_handoff_definition_and_message_records_unchanged": true
+  },
+  "product_history_preserved": true,
+  "product_active_paths": "Migration pointers only; validation evidence remains in the product repository.",
+  "scope": "Team collaboration materials only. No new session or other instance was created, and no handoff, relay, Watch, maintenance configuration, or installation change was performed."
+}

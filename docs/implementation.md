@@ -33,8 +33,8 @@ Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试�
 
 ## 验证层次
 
-- 默认 CI：Linux/Windows、Python 3.11/3.13 的完整安装与测试；独立 wheel 安装检查内置资源和三实例创建。
-- `Native SDK contracts`：固定 SDK 版本、原生客户端回环 API、平台工具与自动交接。实际测试范围以该提交的工作流和日志为准。
+- 默认 CI：仅 Windows，覆盖 Python 3.11/3.13、Chromium 工作台和独立 wheel 安装；安装检查包含内置资源和三实例创建。当前不自动运行 Linux 兼容性回归。
+- `Native SDK contracts`：Linux 手动工作流，固定 SDK 版本、原生客户端回环 API、平台工具与自动交接；不随 PR 自动运行。实际测试范围以该提交的工作流和日志为准。
 - 本机定向回归：恢复、并发前提、未知结果、撤销授权、重复调度、HTTP/CLI 和原生工具副作用。
 - 用户实机：已安装 Desktop、真实登录、自有模型服务的实际能力、生产 Git 权限、企业微信、长期在线和新机器体验。
 

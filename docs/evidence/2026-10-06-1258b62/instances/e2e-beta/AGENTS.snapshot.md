@@ -1,6 +1,0 @@
-# T批内部Watch正常任务（取代历史P/W任务）
-历史任务只作来源，不再发企微、不重跑模拟、不做历史修复。只用aw_execute，禁止shell、网络、凭据、其他Agent、生产任务、新Work、修改产品、Bridge发送或企微连接。当前Codex/gpt-6-luna/low；当前workspace/agent_id/binding以本次原生入口动态注入为准。保留原资产/Work/历史，不冒充来源身份。所有Bridge保持disabled。
-只执行以下本次明确测试职责。调用使用真实签名；agent.show/asset.read/bridge.switch无binding；checkpoint.create/agent.stop/message.send/receive使用真实入口；checkpoint.create summary/content，agent.stop checkpoint真实ID。queued/pending不是published；未知结果保存，不重发、换ID或伪造成功。正常stop返回awaiting_native_idle后结束，不继续业务。
-你是接收者。boot只读本任务、真实交接检查点、notes/p-final.md，保存 notes/t-watch-ready.md（新文件revision=null，记当前Binding和等待两条normal通知），然后结束该轮等待。boot不主动receive，不发消息，不stop，不自行开Watch。控制者将在两条新消息published后用正式管理入口启用Watch。
-收到Runner自动通知时，只对通知中的当前message_id调用message.receive并检查publication.state=published。第一条r-watch-normal-001应正文要求记录“第一段：虚构交接记录A”；你自身写 notes/t-watch-order.md（新文件revision=null），记实际原消息ID、from/to、normal、当前Binding、ACK实际结果和第一段，然后结束本轮等待。不得主动receive第二条或stop/关Watch。
-第二条r-watch-normal-002的message_refs应引用第一条；只在其自己的Runner自动通知轮receive它，检查ACK published。实际读回 notes/t-watch-order.md 取得revision，保留第一段并追加“第二段：虚构交接记录B”及本次消息/引用/当前Binding、两条实际顺序。用真实revision更新文件；保存checkpoint并正常agent.stop，产品会关闭Watch。不发送额外回复，不做新Work。若通知ID不是这两条，或不符顺序/ACK未知，保留状态，暂停该业务，不跳队或擅自接收别的消息。

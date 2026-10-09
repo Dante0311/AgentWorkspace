@@ -82,11 +82,11 @@ AgentWorkspace 软件安装
 | [运行与维护](docs/runtime-and-maintenance.md) | 当前操作入口、支持矩阵、限制和实机验收。 |
 | [基础使用](docs/usage.md) | 基础 CLI、消息、资产、Work 与旧入口说明。 |
 | [实现状态](docs/implementation.md) | 当前模块、验证层次和剩余缺口。 |
-| [开发检查点](docs/development-checkpoint.md) | 实际提交、恢复位置、验证证据和接续事项。 |
+| [开发协作仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md) | 团队问题、调查、试验代码、交接与详细验证证据。 |
 | [开发说明](CONTRIBUTING.md) | 源码安装、测试、打包。 |
 | [开发规则](AGENTS.md) | 开发本软件的约定，不是用户实例的职责文件。 |
 
-历史验证保留在 [validation.md](docs/validation.md) 和 [validation-migration.md](docs/validation-migration.md)，不拿旧测试结论代替当前提交验证。源码和设计仅在本仓维护，Playbook 保留来源关系，见 [迁仓记录](docs/migration.md)。
+历史验证和开发过程材料统一保存在 [AW-Workspace 归档](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/README.md)，不拿旧测试结论代替当前提交验证。产品源码、正式测试、CI、安装打包、随包 Skill、设计和使用文档在本仓维护；团队任务、调查、试验与验收脚本、报告和日志在开发协作仓维护。Playbook 保留来源关系，见 [迁仓记录](docs/migration.md)。
 
 ## 许可证与发布
 

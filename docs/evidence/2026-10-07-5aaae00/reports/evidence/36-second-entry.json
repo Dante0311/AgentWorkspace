@@ -1,8 +1,0 @@
-{
-  "agent": "repair-alpha",
-  "binding": "b5498a27dda6b403fb6a077e641c861f7",
-  "phase": "starting",
-  "kind": "codex",
-  "pid": 203164,
-  "state": "starting_runner"
-}

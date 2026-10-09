@@ -1,8 +1,0 @@
-{
-  "id": "cb1992863b903412d8a142afa8df2aec5",
-  "created_at": "2026-10-08T07:58:46.320811+00:00",
-  "summary": "Codex Desktop 实例首次正式进入核验完成，已收到正式 handoff 请求并准备停止当前入口。",
-  "content": "当前入口：workspace=desktop-local，agent=desktop-probe，runtime_kind=desktop，binding=b458da103a9044b13b530c97f987664cc。正式首次进入时收到 initialization 输入，按 AGENTS.md 核实 notes/desktop-bootstrap.txt；首次 asset.write 因资产已存在返回 conflict，随后 asset.read 确认内容 DESKTOP_BOOTSTRAP_9f84a3c1，revision=cc204fd6157fdfa6bf5d84f0789cad8c59cafd28089bd903936ff000afe8d8a9。之前已保存首次进入检查点 c9ff645627df64e5a8b0fc72a1226c609。随后收到 request_id=handoff-b458da103a9044b13b530c97f987664cc，purpose=handoff；读取本实例 handoff Skill，现保存此累计状态，接下来立即以本 binding 和新检查点调用 agent.stop。没有产品目录操作，没有自行启动后继。",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

@@ -1,6 +1,0 @@
-{
-  "action": "create_missing_fictional_input",
-  "path": "inputs/tile-B.txt",
-  "previously_absent": true,
-  "sha256": "ac214a47e234a405ae08f71485abecbcd155b14d9e01470c248a385ca699714b"
-}

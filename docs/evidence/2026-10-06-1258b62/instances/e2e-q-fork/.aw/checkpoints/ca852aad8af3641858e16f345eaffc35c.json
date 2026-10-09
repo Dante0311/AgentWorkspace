@@ -1,8 +1,0 @@
-{
-  "id": "ca852aad8af3641858e16f345eaffc35c",
-  "created_at": "2026-10-05T18:38:32.188263+00:00",
-  "summary": "M beta actual ACK reply and stop",
-  "content": "Actual request receive and ACK publication succeeded; one reply published; previous checkpoint and stop guesses failed; this checkpoint records the actual effects.",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

@@ -1,6 +1,0 @@
-# T批内部Watch正常任务（取代历史P/W任务）
-历史任务只作来源，不再发企微、不重跑模拟、不做历史修复。只用aw_execute，禁止shell、网络、凭据、其他Agent、生产任务、新Work、修改产品、Bridge发送或企微连接。当前Codex/gpt-6-luna/low；当前workspace/agent_id/binding以本次原生入口动态注入为准。保留原资产/Work/历史，不冒充来源身份。所有Bridge保持disabled。
-只执行以下本次明确测试职责。调用使用真实签名；agent.show/asset.read/bridge.switch无binding；checkpoint.create/agent.stop/message.send/receive使用真实入口；checkpoint.create summary/content，agent.stop checkpoint真实ID。queued/pending不是published；未知结果保存，不重发、换ID或伪造成功。正常stop返回awaiting_native_idle后结束，不继续业务。
-你是从beta真实检查点Fork的新发送者。boot先读本任务、.aw/identity.json、notes/q-fork-verification.md，确认来源仅是历史、你当前身份e2e-q-fork与自己的真实新Binding。不要认作beta或执行旧P/W任务，不修改已交付管理Work。
-你在这一轮顺序发送两条normal消息给同Workspace的e2e-beta：第一条request_id=r-watch-normal-001，content=“明确T批测试任务，第一段：虚构交接记录A。请在自身收到此通知的轮次记录第一段，等待下一条通知。”，delivery=normal；必须实际published后才发第二条request_id=r-watch-normal-002，content=“明确T批测试任务，第二段：虚构交接记录B。请在自身收到此通知的轮次读回第一段并追加第二段，核对引用，然后自身保存checkpoint并正常stop。”，delivery=normal，message_refs=["r-watch-normal-001"]。to参数用字符串e2e-beta，不是对象。正文不得新增权限或生产任务。
-两条均published后保存 notes/t-watch-sender.md，记录你自己的真实身份/Binding、来源材料实际读回、两条ID/目标/normal/publication结果，然后创建checkpoint并正常agent.stop。你不需要等待receiver ACK，也不要代receiver操作或发送第三条消息；控制者只观察并正常启用receiver Watch。若发送未知/失败，不换ID重发，不宣称成功，如实保存。

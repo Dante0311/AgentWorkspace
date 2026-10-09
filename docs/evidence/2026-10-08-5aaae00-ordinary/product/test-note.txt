@@ -1,3 +1,0 @@
-verification_code: ordinary-babe4683ba4b
-sample_name: blue-lantern
-purpose: A fictional read-only conversation test.

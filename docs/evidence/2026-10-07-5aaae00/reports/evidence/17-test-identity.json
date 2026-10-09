@@ -1,8 +1,0 @@
-{
-  "workspace": "repair-local",
-  "agent": "repair-alpha",
-  "marker": "54f487126a3bf311a789a4982d78da7e",
-  "root": "<E2E_ROOT>\\data\\home\\instances\\repair-local\\repair-alpha",
-  "request_prefix": "repair-",
-  "old_state_copied": false
-}

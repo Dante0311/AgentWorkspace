@@ -1,8 +1,0 @@
-{
-  "id": "c7d7578ed1a994ed2a29d334dd387847d",
-  "created_at": "2026-10-08T04:55:51.154511+00:00",
-  "summary": "已读取 AGENTS.md 与 notes/source.md；以 normal 方式向 watch-beta 发送 aw-watch-001（A + source 标识）和 aw-watch-002（B + 同一标识，引用 aw-watch-001），两次返回均为 published。真实返回记录保存于 notes/watch-sender.md。未读取接收方、未 ACK、未等待或重试。",
-  "content": "",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

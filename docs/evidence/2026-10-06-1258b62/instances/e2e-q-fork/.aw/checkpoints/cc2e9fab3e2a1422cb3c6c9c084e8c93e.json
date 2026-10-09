@@ -1,8 +1,0 @@
-{
-  "id": "cc2e9fab3e2a1422cb3c6c9c084e8c93e",
-  "created_at": "2026-10-06T16:46:55.995838+00:00",
-  "summary": "T批 Watch normal 两条消息已发布并记录，准备正常停止发送者。",
-  "content": "发送者 e2e-q-fork（binding bf000d594021742cea71d260e2399277f）按本轮任务向同 workspace 的 e2e-beta 发送两条 normal 消息：r-watch-normal-001 state=published；r-watch-normal-002 state=published，message_refs=[r-watch-normal-001]。来源材料已读回并记录于 notes/t-watch-sender.md。未等待 receiver ACK，未代 receiver 操作，未发第三条消息。",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

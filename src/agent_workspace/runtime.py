@@ -15,6 +15,7 @@ import webbrowser
 
 from . import __version__
 from .messages import Messages
+from .shared import requirements
 from .rpc import Rpc
 from .native_sdk import NativeSDK, SDK_TYPES, sdk_options
 from .util import Conflict, Error, Unavailable, encode, locked, now, read_json, slug, uid, write_bytes, write_json
@@ -35,6 +36,9 @@ def entry_prompt(app, workspace, agent_id, binding, root):
                         "entry_mode": entry_mode, "runtime_kind": entry["kind"], "instance_root": str(root)}, ensure_ascii=False),
              (files("agent_workspace") / "resources/prompts/entry.md").read_text(encoding="utf-8"), capabilities,
              "平台命令使用 aw_execute 动态工具，或运行 aw。调用参数中的 workspace、agent_id、binding 必须使用上述值。"]
+    required = requirements(app, workspace, root, snap)
+    if required:
+        lines.append("required_workspace_read: " + json.dumps(required, ensure_ascii=False))
     if entry["handoff"]:
         handoff = snap.json(f"handoffs/{entry['handoff']}.json")
         point = app.checkpoint_show(workspace, agent_id, handoff["checkpoint"])
@@ -123,7 +127,7 @@ def desktop_profile(app, workspace, agent_id, model="", effort="", project_id=""
     config = read_json(root / ".aw-local/runtime.json", {})
     if config.get("kind") != "desktop":
         raise Unavailable("Capture this instance's real Desktop connection first.")
-    config.update(model=model, effort=effort, project_id=project_id)
+    config.update(model=model, effort=effort, project_id=project_id or config.get("project_id", ""))
     adapter = Desktop(root, config, None)
     try:
         project = adapter.project()
@@ -251,6 +255,7 @@ class Desktop:
             tools = self.rpc.request("tools/list")["tools"]
             names = {t["name"] for t in tools}
             self.tools = names
+            self.tool_schemas = {t["name"]: t.get("inputSchema", {}) for t in tools}
             if not {"read_thread", "send_message_to_thread"}.issubset(names):
                 self.close()
                 raise Unavailable("Installed Desktop does not expose the expected control tools; no CLI fallback was used.")
@@ -357,6 +362,9 @@ def spawn_runner(app, workspace, agent_id, directory=None):
 
 def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None):
     root = app.root(workspace, agent_id, directory)
+    if (root / ".aw-local/skill-install/operation.json").exists():
+        raise Conflict("Recover the pending Skill update before starting a session.")
+    requirements(app, workspace, root)  # Fail before reserving an entry or opening a native session.
     config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
     desktop_ready = config.get("kind") == "desktop" and all(config.get(k) for k in ("command", "pipe_path", "caller_thread"))
     if desktop_ready:

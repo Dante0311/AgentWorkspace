@@ -347,3 +347,41 @@ def test_ordinary_page_without_workspace_lost_response_does_not_open_twice(tmp_p
         server.shutdown()
         server.server_close()
         thread.join(5)
+
+
+def test_shared_skill_creation_and_update_in_real_workbench(ui):
+    app, _, page = ui
+    store = app.store('sea')
+    store.change('main', {'skills/review/SKILL.md': b'---\ndescription: Shared review\n---\nversion one',
+                         'skills/review/references/list.md': b'checklist'}, {}, 'explicit shared Skill')
+    page.locator('#create').click()
+    page.get_by_label('名称', exact=True).fill('skill-user')
+    page.get_by_label('实例 ID（可选）', exact=True).fill('skill-user')
+    page.get_by_label('运行入口', exact=True).select_option('manual')
+    page.locator('fieldset[data-key="skills"] input[value="review"]').check()
+    page.locator('#submit').click()
+    page.wait_for_function("!document.getElementById('dialog').open")
+    root = app.root('sea', 'skill-user')
+    responsibility = (root / 'AGENTS.md').read_bytes()
+    assert (root / '.agents/skills/review/references/list.md').read_bytes() == b'checklist'
+    store.change('main', {'skills/review/SKILL.md': b'version two'}, {}, 'one Skill update')
+    card = page.locator('article').filter(has=page.get_by_role('heading', name='skill-user', exact=True))
+    card.get_by_role('button', name='Skill', exact=True).click()
+    page.locator('fieldset[data-key="update"] input[value="review"]').check()
+    page.locator('#submit').click()
+    page.wait_for_function("!document.getElementById('dialog').open")
+    assert (root / '.agents/skills/review/SKILL.md').read_bytes() == b'version two'
+    assert (root / 'AGENTS.md').read_bytes() == responsibility
+    assert app.agent('sea', 'skill-user')['current'] is None
+
+
+def test_shared_material_read_in_real_workbench(ui):
+    app, _, page = ui
+    app.store('sea').change('main', {'knowledge/team.md': '共同约定：TEAM_BROWSER_MARKER'.encode()}, {}, 'shared text')
+    page.locator('[data-tab="workspaces"]').click()
+    page.get_by_role('button', name='共享资料', exact=True).click()
+    page.get_by_label('必读文件，一行一个', exact=True).fill('knowledge/team.md')
+    page.locator('#submit').click()
+    page.wait_for_function("!document.getElementById('dialog').open")
+    assert page.evaluate("lastResult.complete") is True
+    assert page.evaluate("lastResult.files[0].content") == '共同约定：TEAM_BROWSER_MARKER'

@@ -45,7 +45,7 @@ def parser():
     for field in ("model", "effort", "base-url", "env-key", "executable"):
         session["prepare"].add_argument("--" + field, default=None if field == "executable" else "")
 
-    ws = actions("workspace", ["init", "connect", "bootstrap-remote", "list", "show", "friend", "project", "doctor"])
+    ws = actions("workspace", ["init", "connect", "bootstrap-remote", "list", "show", "friend", "project", "doctor", "read", "skills"])
     for key in ("init", "connect", "bootstrap-remote"):
         ws[key].add_argument("name")
         ws[key].add_argument("directory" if key == "init" else "address")
@@ -55,14 +55,18 @@ def parser():
         ws[key].add_argument("--address")
         ws[key].add_argument("--content", default="")
 
+    ws["read"].add_argument("--path", dest="paths", action="append", required=True)
+    ws["read"].add_argument("--revision")
+    ws["skills"].add_argument("--revision")
+
     ag = actions("agent", ["create", "import", "list", "show", "connect", "configure", "versions", "update",
         "promote", "archive", "unarchive", "start", "bind", "stop", "handoff", "renew", "fork", "input",
         "capture-desktop", "configure-desktop", "sync", "upgrade-tools", "configure-codex", "configure-sdk",
-        "transfer", "transfer-profile", "transfer-continue", "transfer-status", "desktop-project", "desktop-project-save"])
+        "transfer", "transfer-profile", "transfer-continue", "transfer-status", "desktop-project", "desktop-project-save", "skills", "skill-install", "skill-update", "desktop-discover", "desktop-prepare"])
     for key, sub in ag.items():
         if key != "list":
             sub.add_argument("name" if key in ("create", "import") else "agent_id")
-            if key not in ("configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save"):
+            if key not in ("configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save", "desktop-discover", "desktop-prepare"):
                 sub.add_argument("--directory")
     for key in ("create", "import"):
         ag[key].add_argument("--id", dest="agent_id")
@@ -85,6 +89,10 @@ def parser():
     ag["fork"].add_argument("--checkpoint", required=True)
     ag["fork"].add_argument("--name", required=True)
     ag["fork"].add_argument("--new-id")
+    ag["create"].add_argument("--skill", dest="skills", action="append")
+    for key in ("skill-install", "skill-update"):
+        ag[key].add_argument("--name", required=True)
+        ag[key].add_argument("--revision")
     ag["input"].add_argument("--text", required=True)
     ag["input"].add_argument("--delivery", choices=["normal", "insert"], default="normal")
     ag["capture-desktop"].add_argument("--command", help="JSON argv array of the actual desktop MCP server.")
@@ -110,6 +118,12 @@ def parser():
     ag["desktop-project-save"].add_argument("--section-name", default="")
     ag["desktop-project-save"].add_argument("--product-path", dest="product_paths", action="append")
     ag["desktop-project-save"].add_argument("--revision")
+
+    ag["desktop-prepare"].add_argument("--request-id", required=True)
+    ag["desktop-prepare"].add_argument("--project-id")
+    ag["desktop-prepare"].add_argument("--section-id")
+    ag["desktop-prepare"].add_argument("--create-section", action="store_true")
+    ag["desktop-prepare"].add_argument("--revision")
 
     mt = actions("maintenance", ["status", "schedule", "grant", "repair", "run"])
     mt["schedule"].add_argument("--enabled", action=argparse.BooleanOptionalAction, required=True)

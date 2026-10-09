@@ -13,6 +13,10 @@ from .util import Conflict, Error, locked, now, read_json, slug, uid, write_json
 
 
 def preflight(app, workspace, agent_id, config, root):
+    from .shared import requirements
+    requirements(app, workspace, root)
+    if (root / ".aw-local/skill-install/operation.json").exists():
+        raise Conflict("Recover the pending Skill update before handing off.")
     from .native_sdk import SDK_TYPES, sdk_options
     kind = config.get("kind")
     if config.get("credential_env") and not os.environ.get(config["credential_env"]):

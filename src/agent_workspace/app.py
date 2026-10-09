@@ -9,7 +9,7 @@ import re
 import shutil
 import tempfile
 
-from . import __version__
+from . import __version__, skills as shared_skills
 from .gitstore import GitStore, GitHubStore, open_store
 from .util import Conflict, Error, digest, encode, inside, locked, now, read_json, relpath, slug, uid, write_bytes, write_json
 
@@ -205,13 +205,14 @@ class App:
         return result, {"definition": prefix, "revision": snap.revision, "files": mapping}
 
     def create(self, workspace, name, description="", agent_id=None, directory=None,
-               definition=None, revision=None, import_directory=None, assets=None, request_id=None):
+               definition=None, revision=None, import_directory=None, assets=None, request_id=None, skills=None):
+        skills = shared_skills.names(skills)
         if request_id and (not agent_id or import_directory):
             raise Error("Resumable creation needs an explicit agent ID and does not support file import.")
         creation = None
         if request_id:
             creation = {"request_id": slug(request_id), "fingerprint": digest(encode({
-                "name": name, "description": description, "definition": definition, "revision": revision}))}
+                "name": name, "description": description, "definition": definition, "revision": revision, **({"skills": skills} if skills else {})}))}
         agent_id = slug(agent_id or (name if re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name) else uid("a")))
         store = self.store(workspace)
         snap = store.snapshot()
@@ -237,7 +238,7 @@ class App:
         content = self._resources()
         content["AGENTS.md"] = f"# {name}\n\n{description or '职责待使用者逐步完善。'}\n\n工作根为本目录。平台操作参见 `.agents/skills/`；不要将没有收到的任务当作默认任务。\n".encode()
         if definition:
-            selected, source = self._definition(workspace, definition, revision)
+            selected, source = self._definition(workspace, definition, (revision or snap.revision) if skills else revision)
             for path in selected:
                 if path in content and path != "AGENTS.md":
                     raise Conflict(f"Definition overlaps a bundled platform skill: {path}")
@@ -255,6 +256,8 @@ class App:
                 if target.startswith(".aw/") or (target in content and target != "AGENTS.md"):
                     raise Conflict(f"Import overlaps managed content: {target}")
                 content[target] = source_path.read_bytes()
+        if skills:
+            shared_skills.seed(shared_skills.snapshot(self, workspace, revision or snap.revision), skills, content)
         content[".aw/identity.json"] = encode({"workspace": snap.json("workspace.json")["locator"], "agent": agent_id})
         item = {"id": agent_id, "name": name, "description": description, "branch": branch,
                 "archived": False, "current": None, "has_run": False, "handoff": None,
@@ -323,6 +326,8 @@ class App:
         return {"directory": str(root), "revision": snap.revision}
 
     def collect(self, root):
+        if (root / ".aw-local/skill-install/operation.json").exists():
+            raise Conflict("Finish or recover the pending Skill update before taking a snapshot.")
         context = read_json(root / ".aw-local/context.json")
         excludes = context["exclude"]
         content, skipped = {}, []
@@ -604,10 +609,16 @@ class App:
     def update(self, workspace, agent_id, revision=None, directory=None):
         root = self.root(workspace, agent_id, directory)
         with locked(root / ".aw-local/files.lock"):
+            if (root / ".aw-local/skill-install/operation.json").exists():
+                raise Conflict("Finish the pending Skill update before changing Definition materials.")
             source = read_json(root / "source.json")
             if source is None:
                 raise Error("This agent has no shared source. Its own assets do not need an upstream.")
             selected, new_source = self._definition(workspace, source["definition"], revision)
+            for name in read_json(root / shared_skills.MANIFEST, {}):
+                prefix = f".agents/skills/{name}/".casefold()
+                if any(p.casefold().startswith(prefix) for p in selected):
+                    raise Conflict(f"Definition overlaps independently installed shared Skill: {name}")
             for target, info in source["files"].items():
                 path = inside(root, target)
                 actual = digest(path.read_bytes()) if path.is_file() else None

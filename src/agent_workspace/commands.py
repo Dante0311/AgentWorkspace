@@ -4,17 +4,17 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects
+from . import bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills
 from .messages import Messages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
 
-READ_ONLY = {"workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
+READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "asset.list", "asset.read", "runtime.status", "bridge.status",
              "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project"}
 
-USER_MANAGEMENT = {"session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
+USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
@@ -140,9 +140,16 @@ def command_map(app):
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
         "agent.desktop-project": partial(desktop_projects.plan, app),
+        "agent.desktop-discover": partial(desktop_projects.discover, app),
+        "agent.desktop-prepare": partial(desktop_projects.prepare, app),
         "agent.desktop-project-save": partial(desktop_projects.save, app),
         "workspace.init": partial(onboarding.init_workspace, app), "workspace.connect": app.workspace_connect,
         "workspace.bootstrap-remote": app.workspace_bootstrap_remote,
+        "workspace.read": partial(shared.read, app),
+        "workspace.skills": partial(skills.catalog, app),
+        "agent.skills": partial(skills.inspect, app),
+        "agent.skill-install": partial(skills.apply, app, "install"),
+        "agent.skill-update": partial(skills.apply, app, "update"),
         "workspace.list": app.workspace_list, "workspace.show": app.workspace_show,
         "workspace.relation": app.relation,
         "setup.scan": onboarding.scan, "setup.check-git": onboarding.check_git,
@@ -206,6 +213,8 @@ def execute(app, command, arguments, *, actor=None):
             args.setdefault("workspace", workspace)
         if "agent_id" in signature.parameters and command != "agent.create":
             args.setdefault("agent_id", aid)
+        if command in ("workspace.read", "workspace.skills") and args["workspace"] != workspace:
+            raise Conflict("Shared materials must belong to the calling Workspace.")
         if command in USER_MANAGEMENT and not maintenance.allowed(app, actor, command, args):
             raise Error("This is a user-management operation; a scoped caretaker grant is required.")
         # Ordinary agents may act on their own assets; another instance is a management target.

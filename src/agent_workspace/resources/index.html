@@ -79,7 +79,7 @@ function renderAgents(){const agents=state.agents.filter(a=>!$('filter').value||
   card.append(el('span','状态读取失败','tag'),el('h3',a.name,'name'),el('div',a.workspace+' / '+a.id,'muted'),el('p','部分观测不可读，不能据此判断停工、重启或接管。原身份和文件保持不变。','notice'),el('p',a.observation_error,'muted'),button('健康检查',()=>healthReport({alias:a.workspace})));
   grid.append(card);continue;
  }
- const card=el('article',undefined,'card'),tag=el('span',a.archived?'已归档':a.binding?.phase||'尚未进入','tag');card.append(tag,el('h3',a.name,'name'),el('div',a.workspace+' / '+a.id,'muted'));if(a.description)card.append(el('p',a.description,'muted'));const kv=el('div',undefined,'kv');for(const [key,val] of [['当前入口',a.binding?.kind||'未绑定'],['会话',a.binding?.session||'尚无已确认会话'],['自动投递',a.watch?.enabled?'已启用':'关闭'],['运行器',(a.runtime?.state||'未运行')+(a.runtime?.runner_alive===false&&a.runtime?.pid?'（历史观测，进程已停止）':'')]])kv.append(el('span',key),el('span',val));card.append(kv);const actions=el('div',undefined,'buttons');actions.append(button('详情',()=>act('agent.show',base(a))),button('配置',()=>configureAgent(a)),button('桌面项目',()=>desktopProject(a)),button('Desktop 控制配置',()=>configureDesktop(a)));if(!a.current&&!a.archived)actions.append(button('进入新会话',()=>act('agent.start',{...base(a),open_app:false}),true));if(a.current){actions.append(button('交出',()=>act('agent.handoff',base(a))),button('换新会话',()=>act('agent.handoff',{...base(a),renew:true})),button('切换 Harness',()=>transferAgent(a)),button(a.watch?.enabled?'关闭投递':'开启投递',()=>act('message.watch',{...base(a),operation:a.watch?.enabled?'stop':'start'})),button('启动运行器',()=>act('runtime.start',base(a))))}actions.append(button('交接进度',()=>act('agent.transfer-status',base(a))),button('继续原交接',()=>act('agent.transfer-continue',base(a))),button('资料',()=>act('asset.list',base(a))),button('检查点',()=>checkpoints(a)),button('版本差异',()=>act('agent.versions',base(a))));if(!a.current)actions.append(button(a.archived?'解除归档':'归档',()=>act('agent.archive',{...base(a),archived:!a.archived})));card.append(actions);grid.append(card)}$('content').append(grid)}
+ const card=el('article',undefined,'card'),tag=el('span',a.archived?'已归档':a.binding?.phase||'尚未进入','tag');card.append(tag,el('h3',a.name,'name'),el('div',a.workspace+' / '+a.id,'muted'));if(a.description)card.append(el('p',a.description,'muted'));const kv=el('div',undefined,'kv');for(const [key,val] of [['当前入口',a.binding?.kind||'未绑定'],['会话',a.binding?.session||'尚无已确认会话'],['自动投递',a.watch?.enabled?'已启用':'关闭'],['运行器',(a.runtime?.state||'未运行')+(a.runtime?.runner_alive===false&&a.runtime?.pid?'（历史观测，进程已停止）':'')]])kv.append(el('span',key),el('span',val));card.append(kv);const actions=el('div',undefined,'buttons');actions.append(button('详情',()=>act('agent.show',base(a))),button('配置',()=>configureAgent(a)),button('桌面项目',()=>desktopProject(a)),button('Desktop 控制配置',()=>configureDesktop(a)));if(!a.current&&!a.archived)actions.append(button('进入新会话',()=>act('agent.start',{...base(a),open_app:false}),true));if(a.current){actions.append(button('交出',()=>act('agent.handoff',base(a))),button('换新会话',()=>act('agent.handoff',{...base(a),renew:true})),button('切换 Harness',()=>transferAgent(a)),button(a.watch?.enabled?'关闭投递':'开启投递',()=>act('message.watch',{...base(a),operation:a.watch?.enabled?'stop':'start'})),button('启动运行器',()=>act('runtime.start',base(a))))}actions.append(button('交接进度',()=>act('agent.transfer-status',base(a))),button('继续原交接',()=>act('agent.transfer-continue',base(a))),button('资料',()=>act('asset.list',base(a))),button('检查点',()=>checkpoints(a)),button('版本差异',()=>act('agent.versions',base(a))),button('Skill',()=>manageSkills(a)));if(!a.current)actions.append(button(a.archived?'解除归档':'归档',()=>act('agent.archive',{...base(a),archived:!a.archived})));card.append(actions);grid.append(card)}$('content').append(grid)}
 function runtimeFields(a){return [
  {key:'kind',label:'运行环境（原生 CLI；不代表 Desktop）',options:[['codex','Codex CLI'],['claude','Claude Code CLI / SDK'],['codebuddy','CodeBuddy Code CLI / SDK']],value:['codex','claude','codebuddy'].includes(a.configured_kind)?a.configured_kind:'codex'},
  {key:'model',label:'模型 ID（可选）'}, {key:'effort',label:'推理强度（以服务实际支持为准）'},
@@ -98,10 +98,36 @@ async function desktopProject(a){
   form('准备持久 Agent 的桌面项目','',fields,async v=>{if(v.harness!==current.harness)throw new Error('请等待所选桌面的配置读取完成。');return command('agent.desktop-project-save',{...base(a),harness:v.harness,project_name:v.project_name,section_name:v.section_name||'',product_paths:(v.product_paths||'').split('\n').map(x=>x.trim()).filter(Boolean),revision:current.revision})});
   const guide=el('details');guide.append(el('summary','手动准备步骤与限制'),el('pre',current.instructions));$('fields').append(guide);
   explain();
+  const discover=button('发现并复用 Codex 项目',()=>discoverDesktop(a));$('fields').append(discover);
   $('f-harness').onchange=async()=>{const harness=$('f-harness').value;$('submit').disabled=true;try{const value=await command('agent.desktop-project',{...base(a),harness});if($('f-harness').value!==harness)return;current=value;for(const key of ['project_name','section_name'])$('f-'+key).value=current.project[key];$('f-product_paths').value=current.project.product_paths.join('\n');$('f-section_name').disabled=harness!=='codex';explain()}catch(e){$('form-description').textContent=e.message}finally{if($('f-harness').value===current.harness)$('submit').disabled=false}};
   $('f-product_paths').value=current.project.product_paths.join('\n');
  }catch(e){$('error').textContent=e.message}
 }
+
+function readShared(w){form('读取 Workspace 共同资料','仓内相对路径，不是裸 Git 仓库的磁盘路径。一次读取同一提交的全文；不会修改实例职责或让已有模型自动加载。',[
+ {key:'paths',label:'必读文件，一行一个',multiline:true,required:true,placeholder:'knowledge/team-rules.md'},
+ {key:'revision',label:'固定 Git 提交（留空读取当前 main）'}],v=>command('workspace.read',{workspace:w.alias,...v,paths:v.paths.split('\n').map(x=>x.trim()).filter(Boolean)}))}
+async function manageSkills(a){try{
+ const current=await command('agent.skills',base(a));
+ const install=current.skills.filter(v=>v.state==='not_installed'&&v.available),updates=current.skills.filter(v=>v.state==='update_available');
+ form('管理实例 Skill','共享 Skill 独立安装、显式更新。定义附带的 Skill 仍随定义更新；本地修改、来源删除及同名冲突不会被覆盖。更新文件不代表当前模型已读取，之后按需保存检查点。',[
+  {key:'install',label:'安装共享 Skill',checks:install.map(v=>[v.name,v.name+(v.description?'：'+v.description:'')])},
+  {key:'update',label:'更新已安装的共享 Skill',checks:updates.map(v=>[v.name,v.name])}
+ ],async values=>{const results=[];for(const operation of ['install','update'])for(const name of values[operation]||[]){try{results.push(await command('agent.skill-'+operation,{...base(a),name,revision:current.revision}))}catch(e){return {complete:false,results,failed_skill:name,error:e.message,model_reloaded:false}}}return {complete:true,results,model_reloaded:false,shared_snapshot_saved:false}});
+ if(current.pending_skill){const pending=current.pending_skill;$('fields').append(button('继续原 Skill 更新',()=>act('agent.skill-'+pending.operation,{...base(a),name:pending.name,revision:pending.revision})))}
+ const statuses={not_installed:'未安装',current:'已是最新',update_available:'有更新',local_changes:'本地已修改，需先处理差异',source_missing:'来源已删除，保留实例副本',owned_elsewhere:'来自其他来源，不自动覆盖'};
+ const status=el('details');status.append(el('summary','全部 Skill 与来源'),el('pre',current.skills.map(v=>v.name+' · '+v.origin+' · '+(statuses[v.state]||v.state)).join('\n')));$('fields').append(status);
+ }catch(e){$('error').textContent=e.message}}
+async function discoverDesktop(a){try{
+ const current=await command('agent.desktop-discover',base(a));show(current);
+ if(!current.projects?.length){$('form-description').textContent='主目录：'+current.primary_folder+'。'+(current.state==='connection_required'?'请先在真实 Codex Desktop 捕获控制连接。':'请按下面说明建立项目或修正其主目录，然后再次发现。')+'分区可跳过，不会自动创建聊天或替换到 CLI。';return}
+ const request_id='desktop-prepare-'+crypto.randomUUID();
+ form('复用 Codex 项目','只列出主目录精确匹配的已有本地项目。复用不创建聊天；分区操作只在当前连接实际提供兼容接口时启用，否则集中手动补齐。附加产品目录仍须手动核对。',[
+  {key:'project_id',label:'原生项目',options:current.projects.map(p=>[p.projectId,(p.label||p.projectId)+' · '+p.projectId]),value:current.selected_project?.projectId||'',required:true},
+  {key:'section_id',label:'已有分区（留空保持布局）',options:[['','不移动'],...(current.sections||[]).map(s=>[s.sectionId,s.name])]},
+  {key:'create_section',label:'使用建议分区，缺少时创建（需实际接口）',checkbox:true}
+ ],values=>command('agent.desktop-prepare',{...base(a),...values,request_id,revision:current.revision}));
+ }catch(e){$('error').textContent=e.message}}
 
 function configureDesktop(a){form('Codex 桌面配置','先在真实 Codex 聊天完成一次 capture-desktop，并把实例目录设为已有项目的主目录。保存时核验项目；随后“进入新会话”和“换新会话”会自动复用它。留空模型和强度沿用桌面默认配置。',[
  {key:'model',label:'模型 ID（可选）'},{key:'effort',label:'推理强度（可选）'},
@@ -189,20 +215,22 @@ function sendMessage(){
 
 function checkpoints(a){form('保存 / 查看检查点','保存范围限实际文件，外部产品与不可取得的原生状态不会被伪装成完整备份。',[{key:'summary',label:'累计摘要',multiline:true,help:'留空则查看已保存检查点。'},{key:'content',label:'阶段事实与不确定性',multiline:true}],v=>command(v.summary?'checkpoint.create':'checkpoint.list',v.summary?{...base(a),...v,binding:a.current}:base(a)))}
 function addWorkspace(){location.href='/setup';}
-function renderWorkspaces(){const row=el('div',undefined,'buttons');row.append(button('创建 / 接入 Workspace',addWorkspace,true));$('content').append(row);for(const w of state.workspaces){const card=el('article',undefined,'card');card.style.marginTop='16px';card.append(el('h3',w.alias),el('p',w.address,'muted'));const actions=el('div',undefined,'buttons');actions.append(button('查看',()=>act('workspace.show',{workspace:w.alias})),button('健康检查',()=>healthReport(w)),button('巡检状态',()=>act('maintenance.status',{workspace:w.alias})),button('巡检计划',()=>scheduleMaintenance(w)),button('管家授权',()=>caretakerGrant(w)),button('限定维修',()=>repairWorkspace(w)));for(const [kind,label] of [['friends','好友'],['projects','产品']])actions.append(button('管理'+label,()=>form('管理'+label,'只管理关联，不删除资源，不自动为对方登记。',[{key:'operation',label:'动作',options:[['list','查看'],['add','增加'],['remove','移除']]},{key:'alias',label:'简称'},{key:'address',label:'访问地址（增加时填写）'},{key:'content',label:'用途'}],a=>command('workspace.relation',{workspace:w.alias,kind,...a}))));card.append(actions);$('content').append(card)}}
+function renderWorkspaces(){const row=el('div',undefined,'buttons');row.append(button('创建 / 接入 Workspace',addWorkspace,true));$('content').append(row);for(const w of state.workspaces){const card=el('article',undefined,'card');card.style.marginTop='16px';card.append(el('h3',w.alias),el('p',w.address,'muted'));const actions=el('div',undefined,'buttons');actions.append(button('查看',()=>act('workspace.show',{workspace:w.alias})),button('健康检查',()=>healthReport(w)),button('共享资料',()=>readShared(w)),button('巡检状态',()=>act('maintenance.status',{workspace:w.alias})),button('巡检计划',()=>scheduleMaintenance(w)),button('管家授权',()=>caretakerGrant(w)),button('限定维修',()=>repairWorkspace(w)));for(const [kind,label] of [['friends','好友'],['projects','产品']])actions.append(button('管理'+label,()=>form('管理'+label,'只管理关联，不删除资源，不自动为对方登记。',[{key:'operation',label:'动作',options:[['list','查看'],['add','增加'],['remove','移除']]},{key:'alias',label:'简称'},{key:'address',label:'访问地址（增加时填写）'},{key:'content',label:'用途'}],a=>command('workspace.relation',{workspace:w.alias,kind,...a}))));card.append(actions);$('content').append(card)}}
 function renderCollaboration(){const card=el('section',undefined,'card');card.append(el('h3','明确发送，按需使用 Work'),el('p','ACK 只表示已确认通知，不代表已读或已完成。工单不是 Agent 运行的前提。','muted'));const buttons=el('div',undefined,'buttons');buttons.append(button('消息列表',()=>act('message.list',{workspace:workspace()})),button('发送消息',sendMessage),button('工单列表',()=>act('work.list',{workspace:workspace()})),button('创建工单',()=>form('创建 Work','创建只保存工单，不自动通知、启动模型或发布产品。',[{key:'owner',label:'负责人实例 ID',required:true},{key:'parent_id',label:'父工单 ID（可选）'},{key:'content',label:'工作说明',required:true,multiline:true}],a=>command('work.create',{workspace:workspace(),...a}))));card.append(buttons);$('content').append(card);const advanced=el('details',undefined,'card');advanced.style.marginTop='18px';advanced.append(el('summary','明确的高级操作（同一套 API）'),el('p','用于导入选定资产、更新、交付、桥接配置等。不会执行任意 shell。','muted'),button('执行平台操作',()=>form('平台操作','命令与参数参见 docs/usage.md 或 aw --help。',[{key:'command',label:'命令',required:true,placeholder:'work.show'},{key:'arguments',label:'参数 JSON',kind:'json',multiline:true,required:true,value:JSON.stringify({workspace:workspace()},null,2)}],a=>command(a.command,a.arguments))));$('content').append(advanced)}
-$('create').onclick=()=>{try{
+$('create').onclick=async()=>{try{
  const w=workspace(),request_id='create-'+crypto.randomUUID(),generated_id='a'+crypto.randomUUID().replaceAll('-','');
+ const catalog=await command('workspace.skills',{workspace:w});
  const fields=[{key:'name',label:'名称',required:true,placeholder:'构建助手'},
  {key:'agent_id',label:'实例 ID（可选）',placeholder:'build-helper'},
  {key:'description',label:'自然语言描述（可选）',multiline:true},
  {key:'definition',label:'共享定义路径（可选）',placeholder:'definitions/build-helper'},
+ {key:'skills',label:'Workspace 共享 Skill（按需选择，定义自带 Skill 会另行带入）',checks:catalog.skills.filter(v=>v.available).map(v=>[v.name,v.name+(v.description?'：'+v.description:'')])},
  {key:'kind',label:'运行入口',options:[['codex','Codex CLI'],['claude','Claude Code CLI / SDK'],['codebuddy','CodeBuddy Code CLI / SDK'],['manual','手动接入'],['desktop','Codex Desktop（需控制配置）']]},
  ...runtimeFields({}).slice(1),
  {key:'enter',label:'创建后',options:[['no','只创建并保存配置'],['yes','创建并进入新会话']]}];
  form('建立 Agent','使用同一实例创建与运行配置流程。失败沿用原创建请求补齐，不覆盖资料或重复创建会话。Desktop 控制连接需另外明确配置。',fields,async a=>{
   const {kind,enter,model,effort,base_url,env_key,executable,allow_http,...values}=a;
-  const created=await command('agent.create',{workspace:w,...values,agent_id:values.agent_id||generated_id,request_id});
+  const created=await command('agent.create',{workspace:w,...values,revision:catalog.revision,agent_id:values.agent_id||generated_id,request_id});
   const target={workspace:w,agent_id:created.id};
   if(['codex','claude','codebuddy'].includes(kind)){
    const profile={model:model||'',effort:effort||'',base_url:base_url||'',env_key:env_key||'',allow_http:allow_http===true,...(executable?{executable}:{})};

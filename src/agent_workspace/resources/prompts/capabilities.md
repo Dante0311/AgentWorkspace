@@ -37,4 +37,10 @@
 
 非本机 HTTP 模型服务需用户对当前配置明确 `allow_http=true`。不根据 IP 段猜测可信程度，不自动补 URL 后缀，凭据只从实际运行环境读取。管家不能自行开启新的明文确认；配置接受不代表服务已验证。
 
-持久 Agent 的 `agent.desktop-project` 返回当前安装的项目/分区手动说明；`agent.desktop-project-save` 由用户保存本机名称和产品目录引用。一个 Agent 复用一个桌面项目，Codex 按 Workspace 分区；不批量新建、不改用户既有布局、不复制职责。Codex Desktop 自动启动会读取实际项目列表并核对主目录；项目/分区的创建修改仍由用户完成，保存引用不等于原生操作成功。主目录是 Agent 既有实例目录，产品目录按需关联；单一有效入口规则不变。
+持久 Agent 的 `agent.desktop-project` 返回当前安装的项目/分区手动说明；`agent.desktop-project-save` 由用户保存本机名称和产品目录引用。一个 Agent 复用一个桌面项目，Codex 按 Workspace 分区；不批量新建、不改用户既有布局、不复制职责。Codex Desktop 自动启动会读取实际项目列表并核对主目录；原生项目创建和文件夹编辑仍手动。agent.desktop-discover/desktop-prepare 可发现并复用核验过的项目 ID；分区只在真实工具名称/schema 相符时按用户明确选择创建或移动，写后核对成员关系。接口不符或不可用集中手动补齐，分区失败不阻塞已支持的项目使用。未知结果不重复创建，保存引用不等于原生操作成功。主目录是 Agent 既有实例目录，产品目录按需关联；单一有效入口规则不变。
+
+## 共同职责与共享 Skill
+
+workspace.read 从所属 Workspace 的同一 Git 快照读取明确材料路径，返回完整 UTF-8 正文及版本；不要求本机检出 main。AGENTS.md 原样保留 @workspace-read 指令，每个新会话（含 relay/fork）必须实际读取，预检成功不证明模型已读或理解；缺文件/网络错误/超限如实失败。没有指令的原定义不变，平台不改写私人职责或产品规则。
+
+workspace.skills 发现共享 skills/ 候选；agent.create 可选 skills，已有实例用 agent.skills 与 skill-install/skill-update。全目录复制、来源按 Skill 保存，不自动全装/覆盖/重载模型。Definition 的专用 Skill、软件七个 Skill 和自有 Skill 保留各自更新边界，来源删除不删实例副本，私人差异与同名冲突须处理。交换未完成先恢复原记录，不发布半成品。实际用户模型、目标 Desktop 分区写入和最终 Windows 安装仍须按对应构建验证，开发夹具不替代实机。

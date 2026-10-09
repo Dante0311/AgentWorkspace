@@ -16,7 +16,7 @@ from .util import Conflict, Error, digest, encode, locked, now, read_json, slug,
 GRANTABLE = {"agent.start", "runtime.stop", "agent.transfer-profile", "agent.transfer-continue",
              "agent.configure-codex", "agent.configure-sdk", "setup.prepare-instance",
              "maintenance.schedule", "maintenance.repair", "agent.input", "agent.handoff", "message.watch",
-             "agent.archive", "agent.sync", "agent.update", "agent.upgrade-tools", "bridge.switch", "asset.write"}
+             "agent.archive", "agent.sync", "agent.update", "agent.skill-install", "agent.skill-update", "agent.upgrade-tools", "bridge.switch", "asset.write"}
 
 
 def folder(app, workspace):

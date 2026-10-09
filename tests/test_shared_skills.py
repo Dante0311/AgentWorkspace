@@ -177,3 +177,25 @@ def test_case_conflict_and_invalid_skill_do_not_create_identity(app):
     with pytest.raises(Conflict): app.create('sea', 'a', skills=['review', 'Review'])
     with pytest.raises(Error): app.create('sea', 'a', skills=['invalid'])
     assert not app.agents('sea')
+
+
+def test_caretaker_skill_grant_is_explicit_scoped_and_revocable(app):
+    from agent_workspace import maintenance
+    from agent_workspace.util import encode
+    publish(app)
+    for name in ('steward', 'a', 'b'):
+        app.create('sea', name)
+    store = app.store('sea'); snap = store.snapshot(); meta = snap.json('workspace.json')
+    meta['caretakers'] = {'steward': 'steward'}
+    store.change('main', {'workspace.json': encode(meta)}, {'workspace.json': snap.entries['workspace.json']}, 'test role')
+    binding = app.reserve('sea', 'steward')['binding']; app.bind('sea', 'steward', binding, 'test-steward')
+    actor = ('sea', 'steward', binding)
+    maintenance.grant(app, 'sea', 'steward', ['agent.skill-install', 'agent.skill-update'], ['a'])
+    with pytest.raises(Error, match='grant'):
+        execute(app, 'agent.skill-install', {'agent_id': 'b', 'name': 'review'}, actor=actor)
+    assert execute(app, 'agent.skill-install', {'agent_id': 'a', 'name': 'review'}, actor=actor)['state'] == 'installed'
+    publish(app, b'new version')
+    maintenance.grant(app, 'sea', 'steward', [], [])
+    with pytest.raises(Error, match='grant'):
+        execute(app, 'agent.skill-update', {'agent_id': 'a', 'name': 'review'}, actor=actor)
+    assert app.root('sea', 'a').joinpath('.agents/skills/review/SKILL.md').read_bytes().endswith(b'first')

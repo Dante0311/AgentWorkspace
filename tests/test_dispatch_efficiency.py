@@ -11,7 +11,7 @@ import pytest
 
 from agent_workspace import bridges, commands, runtime
 from agent_workspace.messages import Messages
-from agent_workspace.util import Conflict, Error, read_json, write_json
+from agent_workspace.util import Conflict, Error, encode, read_json, write_json
 
 
 ACTOR = ("sea", "alice", "b-current")
@@ -192,7 +192,9 @@ def test_empty_input_pass_does_not_fall_back_to_another_read(local_app, monkeypa
 def message_snapshot(records=None):
     values = {"workspace.json": {"locator": "local:sea"}, "agents/alice.json": {}, "bindings/b-current.json": {}}
     values.update(records or {})
-    return SimpleNamespace(entries={path: path for path in values}, json=lambda path, default=None: values.get(path, default))
+    return SimpleNamespace(entries={path: path for path in values},
+                           json=lambda path, default=None: values.get(path, default),
+                           bytes=lambda path: encode(values[path]) if path in values else None)
 
 
 def incoming(identifier, target="alice", timestamp="1"):
@@ -226,7 +228,10 @@ def test_list_filtering_and_later_queries_use_fresh_snapshot(local_app):
 @pytest.mark.parametrize("failure_at", ["binding", "commit", None])
 def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_at):
     store = local_app.store.return_value
-    store.snapshot.return_value = message_snapshot({"message-index/m.json": incoming("m")})
+    store.snapshot.return_value = message_snapshot({
+        "message-index/m.json": incoming("m"),
+        "messages/m.json": {**incoming("m"), "message_refs": [], "content": "fixture message"},
+    })
     adapter = Mock()
     adapter.status.return_value = "idle"
     if failure_at == "binding":

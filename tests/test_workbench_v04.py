@@ -118,5 +118,5 @@ def test_inline_scripts_parse_when_node_is_available():
     for name in ("index.html", "setup.html"):
         text = (root / name).read_text(encoding="utf-8")
         script = text.split("<script>", 1)[1].rsplit("</script>", 1)[0]
-        result = subprocess.run([node, "--check", "-"], input=script, text=True, capture_output=True)
+        result = subprocess.run([node, "--check", "-"], input=script, text=True, encoding="utf-8", capture_output=True)
         assert result.returncode == 0, result.stderr

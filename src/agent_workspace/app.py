@@ -11,6 +11,7 @@ import tempfile
 
 from . import __version__, skills as shared_skills
 from .gitstore import GitStore, GitHubStore, open_store
+from . import model_profiles
 from .util import Conflict, Error, digest, encode, inside, locked, now, read_json, relpath, slug, uid, write_bytes, write_json
 
 
@@ -472,7 +473,10 @@ class App:
         root = self.root(workspace, agent_id, directory)
         if value.get("kind", "manual") not in ("manual", "desktop", "codex", "claude", "codebuddy"):
             raise Error("Runtime kind must be manual, desktop, codex, claude or codebuddy.")
-        write_json(root / ".aw-local/runtime.json", value)
+        if value.get("kind") in model_profiles.CODEX_KINDS:
+            model_profiles.configure(root, value)
+        else:
+            write_json(root / ".aw-local/runtime.json", value)
         return {"configured": True, "entry_changed": False}
 
     def show(self, workspace, agent_id, directory=None):
@@ -492,6 +496,7 @@ class App:
                 result["runtime"]["runner_alive"] = True
             result["watch"] = read_json(root / ".aw-local/watch.json", {"enabled": False})
             result["configured_kind"] = read_json(root / ".aw-local/runtime.json", {}).get("kind", "manual")
+            result["model_selection"] = model_profiles.desired(root)
         return result
 
     def archive(self, workspace, agent_id, archived=True, directory=None):
@@ -507,7 +512,9 @@ class App:
 
     def reserve(self, workspace, agent_id, directory=None, binding_id=None):
         root = self.root(workspace, agent_id, directory)
-        config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
+        config = model_profiles.migrate(root)
+        profile = (model_profiles.selected(root) if config.get("kind") in model_profiles.CODEX_KINDS
+                   and model_profiles.desired(root) is not None else None)
         store = self.store(workspace)
         snap = store.snapshot()
         item = self.agent(workspace, agent_id, snap)
@@ -532,7 +539,10 @@ class App:
         item.update(current=binding, has_run=True, handoff=None)
         changes[path] = encode(item)
         store.change("main", changes, expected, f"Reserve entry {binding}")
-        write_json(root / ".aw-local/entry.json", {"binding": binding, "config": config})
+        record = {"binding": binding, "config": config}
+        if profile is not None:
+            record.update(model_profile=profile, model_adopted_at=now())
+        write_json(root / ".aw-local/entry.json", record)
         return {"agent": agent_id, "binding": binding, "phase": "starting", "kind": entry["kind"]}
 
     def bind(self, workspace, agent_id, binding, session, directory=None):

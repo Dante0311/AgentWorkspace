@@ -26,6 +26,8 @@ def local_runner(app):
     runner.binding = "b-current"
     # Exercise the real Runner methods without starting an external Runtime.
     runner.adapter = object.__new__(runtime.Codex)
+    runner.adapter.profile = {"model": "fixture-model", "effort": "low", "source": {"path": "runtime.json"}}
+    runner.adapter.profile_validation = {"catalog": "fixture_unconfirmed"}
     runner.adapter.completed = queue.Queue()
     runner.adapter.status = Mock(return_value="idle")
     runner.adapter.notify = Mock(return_value={"turn": {"id": "t1"}})

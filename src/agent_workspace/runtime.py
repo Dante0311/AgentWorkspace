@@ -14,6 +14,7 @@ import urllib.parse
 import webbrowser
 
 from . import __version__
+from . import model_profiles
 from .messages import Messages
 from .shared import requirements
 from .rpc import Rpc
@@ -110,13 +111,15 @@ def configure_desktop(app, workspace, agent_id, command=None, directory=None):
     pipe, thread = os.environ.get("CODEX_APP_TOOLS_PIPE_PATH"), os.environ.get("CODEX_THREAD_ID")
     if not pipe or not thread:
         raise Error("Run capture-desktop inside the real Desktop session; both CODEX environment values are required.")
-    value = read_json(root / ".aw-local/runtime.json", {})
-    value.update(kind="desktop", pipe_path=pipe, caller_thread=thread)
-    if command:
-        value["command"] = command
-    if not value.get("command"):
-        raise Error("Supply the actual desktop MCP server command as a JSON array; do not start codex app-server here.")
-    write_json(root / ".aw-local/runtime.json", value)
+    model_profiles.migrate(root)
+    with locked(root / ".aw-local/files.lock"):
+        value = read_json(root / ".aw-local/runtime.json", {})
+        value.update(kind="desktop", pipe_path=pipe, caller_thread=thread)
+        if command:
+            value["command"] = command
+        if not value.get("command"):
+            raise Error("Supply the actual desktop MCP server command as a JSON array; do not start codex app-server here.")
+        write_json(root / ".aw-local/runtime.json", value)
     return {"captured": True, "kind": "desktop", "credentials_printed": False}
 
 
@@ -144,6 +147,11 @@ class Codex:
     def __init__(self, app, workspace, agent_id, binding, root, config, session=None):
         self.app, self.workspace, self.agent_id, self.binding, self.root = app, workspace, agent_id, binding, root
         self.session = session
+        model_profiles.migrate(root)
+        self.profile = model_profiles.pin(root, binding, model_profiles.adopted(root, binding, session=session))
+        self.profile_validation = {"catalog": "unconfirmed", "effective": "unconfirmed"}
+        self.model_receipt = model_profiles.receipt(self.profile, self.profile_validation)
+        config, _, _ = model_profiles.split_config(config)
         self.busy, self.turn_id = False, None
         self.completed = queue.Queue()
         self.record = root / "records" / binding / "runtime.jsonl"
@@ -155,23 +163,50 @@ class Codex:
             self.rpc.request("initialize", {"clientInfo": {"name": "agent_workspace", "version": __version__},
                                              "capabilities": {"experimentalApi": True}})
             self.rpc.send({"method": "initialized", "params": {}})
+            self._validate_model(config)
             if session:
-                self.rpc.request("thread/resume", {"threadId": session})
+                params = {"threadId": session, "model": self.profile["model"],
+                          "config": {"model_reasoning_effort": self.profile["effort"]}}
+                if config.get("modelProvider"):
+                    params["modelProvider"] = config["modelProvider"]
+                result = self.rpc.request("thread/resume", params)
             else:
                 params = {"cwd": str(root), "approvalPolicy": "never", "sandbox": config.get("sandbox", "workspace-write"),
                           "dynamicTools": [{"type": "function", "name": "aw_execute", "description": "Operate the Agent Workspace platform; not a shell.",
                                             "inputSchema": TOOL_SCHEMA}]}
-                if config.get("model"):
-                    params["model"] = config["model"]
+                params.update(model=self.profile["model"], config={"model_reasoning_effort": self.profile["effort"]})
                 if config.get("modelProvider"):
                     params["modelProvider"] = config["modelProvider"]
-                write_json(root / ".aw-local/launch.json", {"binding": binding, "attempted": True})
+                write_json(root / ".aw-local/launch.json", {"binding": binding, "attempted": True,
+                           "model_profile": model_profiles.receipt(self.profile, self.profile_validation)})
                 result = self.rpc.request("thread/start", params)
                 self.session = result["thread"]["id"]
+            self.model_receipt = model_profiles.receipt(self.profile, self.profile_validation, accepted=True, result=result)
+            launch = read_json(root / ".aw-local/launch.json", {})
+            write_json(root / ".aw-local/launch.json", {**launch, "binding": binding,
+                       "session": self.session, "model_profile": self.model_receipt})
+            model_profiles.require_matching(self.model_receipt)
             self.status()
         except BaseException:
             self.rpc.close()
             raise
+
+    def _validate_model(self, config):
+        if config.get("modelProvider"):
+            self.profile_validation = {"catalog": "custom_provider_unconfirmed", "effective": "unconfirmed"}
+            return
+        models, cursor = [], None
+        try:
+            for _ in range(5):
+                page = self.rpc.request("model/list", {"limit": 100, "cursor": cursor}, timeout=10)
+                models.extend(page["data"])
+                cursor = page.get("nextCursor")
+                if not cursor:
+                    break
+        except (Error, KeyError, TypeError):
+            # This optional read-only interface may not exist on an older native client.
+            return
+        self.profile_validation = model_profiles.check_catalog(self.profile, models, complete=not cursor)
 
     def event(self, value):
         with locked(self.root / ".aw-local/records.lock"):
@@ -220,13 +255,22 @@ class Codex:
         if state == "unknown":
             raise Unavailable("Native thread status is unknown.")
         params = {"threadId": self.session, "input": [{"type": "text", "text": prompt}]}
+        self.model_receipt = model_profiles.receipt(self.profile, self.profile_validation)
         if state == "busy":
             if delivery != "insert" or not self.turn_id:
                 raise Conflict("Native turn is busy; normal input must wait.")
             params["expectedTurnId"] = self.turn_id
-            return self.rpc.request("turn/steer", params)
+            result = self.rpc.request("turn/steer", params)
+            self.model_receipt = model_profiles.receipt(self.profile, self.profile_validation, accepted=True, result=result)
+            self.model_receipt["application"] = "existing_turn"
+            model_profiles.require_matching(self.model_receipt)
+            return result
+        params.update(model=self.profile["model"], effort=self.profile["effort"])
         self.busy = True
-        return self.rpc.request("turn/start", params)
+        result = self.rpc.request("turn/start", params)
+        self.model_receipt = model_profiles.receipt(self.profile, self.profile_validation, accepted=True, result=result)
+        model_profiles.require_matching(self.model_receipt)
+        return result
 
     def close(self):
         self.rpc.close()
@@ -239,7 +283,8 @@ class Desktop:
     def __init__(self, root, config, session):
         self.root, self.session = root, session
         self.config = config
-        for name in ("model", "effort", "project_id"):
+        self.profile = None
+        for name in ("project_id",):
             if name in config and not isinstance(config[name], str):
                 raise Error(f"Desktop {name} must be a string.")
         command = config.get("command")
@@ -303,6 +348,7 @@ class Desktop:
         return matches[0]
 
     def create(self, binding):
+        profile, validation = self.model_choice("create_thread", binding)
         project = self.project()
         path = self.root / ".aw-local/launch.json"
         previous = read_json(path, {})
@@ -311,12 +357,13 @@ class Desktop:
         prompt = (files("agent_workspace") / "resources/prompts/desktop-connect.md").read_text(encoding="utf-8")
         arguments = {"target": {"type": "project", "projectId": project["projectId"],
                                 "environment": {"type": "local"}}, "prompt": prompt}
-        for source, target in (("model", "model"), ("effort", "thinking")):
-            if self.config.get(source):
-                arguments[target] = self.config[source]
-        write_json(path, {"binding": binding, "attempted": True, "project_id": project["projectId"]})
+        arguments.update(model=profile["model"], thinking=profile["effort"])
+        write_json(path, {"binding": binding, "attempted": True, "project_id": project["projectId"],
+                   "model_profile": model_profiles.receipt(profile, validation)})
         result = self.call("create_thread", arguments)
-        write_json(path, {"binding": binding, "attempted": True, "result": result})
+        self.model_receipt = model_profiles.receipt(profile, validation, accepted=True, result=result)
+        write_json(path, {"binding": binding, "attempted": True, "result": result, "model_profile": self.model_receipt})
+        model_profiles.require_matching(self.model_receipt)
         if not result.get("threadId") or result.get("hostId") != "local":
             raise Unavailable("Desktop did not return a ready local chat; preserve the launch receipt, do not repeat creation.")
         self.session = result["threadId"]
@@ -338,10 +385,37 @@ class Desktop:
                 if value.get("status") in ("completed", "interrupted", "failed")}
 
     def notify(self, prompt, delivery):
+        profile, validation = self.model_choice("send_message_to_thread")
+        self.model_receipt = model_profiles.receipt(profile, validation)
         state = self.status()
         if state == "unknown" or (state == "busy" and delivery == "normal"):
             raise Conflict("Desktop is not ready for this delivery mode.")
-        return self.call("send_message_to_thread", {"threadId": self.session, "prompt": prompt})
+        result = self.call("send_message_to_thread", {"threadId": self.session, "prompt": prompt,
+                           "model": profile["model"], "thinking": profile["effort"]})
+        self.model_receipt = model_profiles.receipt(profile, validation, accepted=True, result=result)
+        model_profiles.require_matching(self.model_receipt)
+        return result
+
+    def model_choice(self, tool, binding=None, *, selected=None):
+        profile = selected or self.profile or model_profiles.adopted(self.root, binding, session=self.session)
+        validation = {"catalog": "unconfirmed", "effective": "unconfirmed"}
+        schema = self.tool_schemas.get(tool)
+        if schema:
+            properties = schema.get("properties", {})
+            for field, native in (("model", "model"), ("effort", "thinking")):
+                if native not in properties:
+                    raise Unavailable(f"Desktop {tool} cannot explicitly select {native}; no inherited configuration was used.")
+                allowed = properties[native].get("enum")
+                if allowed is not None and profile[field] not in allowed:
+                    raise Error(f"Desktop {tool} does not support the selected {field}; no fallback was used.")
+            validation["parameters"] = "reported_by_current_desktop"
+        record = read_json(self.root / ".aw-local/entry.json", {})
+        if selected is None and record.get("binding"):
+            profile = model_profiles.pin(self.root, binding or record["binding"], profile)
+        if selected is None:
+            self.profile = profile
+            self.profile_validation = validation
+        return profile, validation
 
     def close(self):
         self.rpc.close()
@@ -365,11 +439,16 @@ def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=N
     if (root / ".aw-local/skill-install/operation.json").exists():
         raise Conflict("Recover the pending Skill update before starting a session.")
     requirements(app, workspace, root)  # Fail before reserving an entry or opening a native session.
-    config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
+    config = model_profiles.migrate(root)
+    item = app.agent(workspace, agent_id)
+    profile = None
+    if config.get("kind") in model_profiles.CODEX_KINDS:
+        profile = model_profiles.adopted(root, item["current"]) if item["current"] else model_profiles.selected(root)
     desktop_ready = config.get("kind") == "desktop" and all(config.get(k) for k in ("command", "pipe_path", "caller_thread"))
     if desktop_ready:
         adapter = Desktop(root, config, None)
         try:
+            adapter.model_choice("create_thread", selected=profile)
             adapter.project()
         finally:
             adapter.close()
@@ -384,7 +463,6 @@ def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=N
         if not executable or not Path(executable).is_file():
             raise Unavailable("Native CLI is missing; install it before starting a session.")
         sdk_options(config, app, workspace, agent_id, "", root)
-    item = app.agent(workspace, agent_id)
     existing = read_json(root / ".aw-local/entry.json", {})
     if item["current"]:
         if binding_id and item["current"] != binding_id:
@@ -525,6 +603,9 @@ class Runner:
             self.adapter_closed = True
 
     def status(self, **values):
+        model_receipt = getattr(self.adapter, "model_receipt", None)
+        if isinstance(model_receipt, dict):
+            values["model_profile"] = model_receipt
         write_json(self.root / ".aw-local/status.json", {"pid": os.getpid(), "binding": self.binding,
                    "observed_at": now(), **values})
 
@@ -563,6 +644,10 @@ class Runner:
             raise Conflict("Handoff is already in progress; do not restart its execution components.")
         if entry.get("controller"):
             raise Conflict("Another runner owns this binding. A crashed controller is not automatically taken over.")
+        if entry["kind"] in model_profiles.CODEX_KINDS:
+            model_profiles.migrate(self.root)
+            profile = model_profiles.adopted(self.root, self.binding, session=entry["session"])
+            model_profiles.pin(self.root, self.binding, profile)
         controller = uid("r")
         path = f"bindings/{self.binding}.json"
         app.store(workspace).change("main", {path: encode({**entry, "controller": controller})},
@@ -786,6 +871,11 @@ class Runner:
             if self.adapter.status() == "busy" and item["delivery"] == "normal":
                 return
             self.app.require_binding(self.workspace, self.agent_id, self.binding)
+            if isinstance(self.adapter, Desktop):
+                profile, validation = self.adapter.model_choice("send_message_to_thread", self.binding)
+                item["model_profile"] = model_profiles.receipt(profile, validation)
+            elif isinstance(self.adapter, Codex):
+                item["model_profile"] = model_profiles.receipt(self.adapter.profile, self.adapter.profile_validation)
             item.update(state="dispatching", attempted_at=now())
             write_json(path, item)
             try:
@@ -801,10 +891,16 @@ class Runner:
                     latest = read_json(path) if isinstance(self.adapter, Desktop) else item
                     received = latest.get("result", {}).get("turn", {}).get("id")
                     latest.update(state="submitted" if received else "outcome_unknown", error=str(exc))
+                    model_receipt = getattr(self.adapter, "model_receipt", None)
+                    if isinstance(model_receipt, dict):
+                        latest["model_profile"] = model_receipt
                     write_json(path, latest)
                 raise
             with locked(path.with_suffix(".lock")):
                 latest = read_json(path) if isinstance(self.adapter, Desktop) else item
                 latest.update(state="submitted", result={**response, **latest.get("result", {})})
+                model_receipt = getattr(self.adapter, "model_receipt", None)
+                if isinstance(model_receipt, dict):
+                    latest["model_profile"] = model_receipt
                 write_json(path, latest)
             return

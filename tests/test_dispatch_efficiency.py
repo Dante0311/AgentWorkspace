@@ -31,6 +31,8 @@ def runner_for(app):
     runner = runtime.Runner(app, *ACTOR[:2])
     runner.binding = ACTOR[2]
     runner.adapter = object.__new__(runtime.Codex)
+    runner.adapter.profile = {"model": "fixture-model", "effort": "low", "source": {"path": "runtime.json"}}
+    runner.adapter.profile_validation = {"catalog": "fixture_unconfirmed"}
     runner.adapter.completed = queue.Queue()
     runner.adapter.status = Mock(return_value="idle")
     runner.adapter.notify = Mock(return_value={"turn": {"id": "t1"}})
@@ -269,7 +271,8 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
     snap = SimpleNamespace(entries={"agents/alice.json": "agent-sha", "bindings/b-current.json": "binding-sha"},
                            json=lambda path: dict(entry))
     local_app.store.return_value.snapshot.return_value = snap
-    write_json(local_app.root() / ".aw-local/entry.json", {"binding": ACTOR[2], "config": {"kind": "codex"}})
+    write_json(local_app.root() / ".aw-local/entry.json", {"binding": ACTOR[2], "config": {"kind": "codex"},
+               "model_profile": {"model": "fixture-model", "effort": "low", "source": {"path": "runtime.json"}}})
     adapter = Mock(session="existing")
     adapter.status.return_value = "idle"
     monkeypatch.setattr(runtime, "Codex", Mock(return_value=adapter))

@@ -10,6 +10,7 @@ import shutil
 import os
 
 from .util import Conflict, Error, locked, now, read_json, slug, uid, write_json
+from . import model_profiles
 
 
 def preflight(app, workspace, agent_id, config, root):
@@ -19,6 +20,10 @@ def preflight(app, workspace, agent_id, config, root):
         raise Conflict("Recover the pending Skill update before handing off.")
     from .native_sdk import SDK_TYPES, sdk_options
     kind = config.get("kind")
+    profile = None
+    if kind in model_profiles.CODEX_KINDS:
+        _, choice, _ = model_profiles.split_config(config)
+        profile = model_profiles.validate(choice) if choice else model_profiles.selected(root)
     if config.get("credential_env") and not os.environ.get(config["credential_env"]):
         raise Error("Target credential environment variable is missing; the old entry was not handed off.")
     if kind == "codex":
@@ -33,11 +38,13 @@ def preflight(app, workspace, agent_id, config, root):
         from .runtime import Desktop
         adapter = Desktop(root, config, None)
         try:
+            adapter.model_choice("create_thread", selected=profile)
             adapter.project()
         finally:
             adapter.close()
     else:
         raise Error("Automatic transfer needs a managed native entry; no Desktop/CLI substitution.")
+    return profile
 
 
 def request(app, workspace, agent_id, target_config, request_id=None, directory=None):
@@ -62,11 +69,13 @@ def request(app, workspace, agent_id, target_config, request_id=None, directory=
             return previous
         if previous and previous["state"] != "completed":
             raise Conflict("Another transfer is unresolved; continue its original request.")
-        preflight(app, workspace, agent_id, target_config, root)
+        profile = preflight(app, workspace, agent_id, target_config, root)
         current = app.agent(workspace, agent_id)["current"]
         app.require_binding(workspace, agent_id, current)
         record = {"id": identifier, "old_binding": current, "target_binding": uid("b"),
                   "target_config": target_config, "state": "handoff_requested", "created_at": now()}
+        if profile is not None:
+            record["target_model_profile"] = profile
         if previous:
             write_json(root / ".aw-local/transfers" / (previous["id"] + ".json"), previous)
         write_json(path, record)
@@ -108,10 +117,13 @@ def advance(app, workspace, agent_id, directory=None):
             raise Conflict("The original entry has not published a usable handoff.")
         if record["state"] in ("launching", "starting", "outcome_unknown"):
             raise Conflict("The original launch needs reconciliation; no replacement session was created.")
-        preflight(app, workspace, agent_id, record["target_config"], root)
+        target_config = dict(record["target_config"])
+        if record.get("target_model_profile"):
+            target_config.update(model_profiles.validate(record["target_model_profile"]))
+        preflight(app, workspace, agent_id, target_config, root)
         # This lock also proves the original local runner has finished its cleanup.
         with locked(root / ".aw-local/runner.lock", wait=0):
-            app.configure(workspace, agent_id, record["target_config"], str(root))
+            app.configure(workspace, agent_id, target_config, str(root))
             record["state"] = "launching"
             write_json(path, record)
         try:

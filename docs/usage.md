@@ -113,7 +113,7 @@ aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-模型和强度可省略以沿用桌面默认配置；同一实例主目录匹配多个项目时，用 `--project-id` 明确选择。配置和启动都会读取实际项目列表核对主目录。缺项目或控制接口时先报错，不预留第二个执行入口。
+模型和强度必须明确选择，保存在实例根 `runtime.json` 的 `codex` 段；本机文件只保存连接和项目信息。可选 Definition 提供创建模板，实例此后独立维护；详见[实例模型配置](instance-model-profiles.md)。同一实例主目录匹配多个项目时，用 `--project-id` 明确选择。配置和启动都会读取实际项目列表核对主目录。缺配置、项目或控制接口时先报错，不预留第二个执行入口。
 
 运行器通过 `create_thread` 在该项目创建真实新聊天，读取实际 ID 与 `cwd` 后才绑定。第一轮仅建立连接；正式进入材料随后作为输入交付。桌面 Agent 使用提示中的 `aw call --desktop-agent` 命令前缀，由真实 `CODEX_THREAD_ID` 约束平台身份，不继承管理权限。输入先通过 `runtime.receive-input` 关联当前原生轮次；只有该轮明确完成才记录完成并为初次进入发布检查点，发送回执或 idle 本身不算业务完成。
 
@@ -128,12 +128,12 @@ Desktop 重启后命名管道可能变化。可从实际会话再次 capture；�
 先由使用者安装并完成原生 CLI 登录，然后：
 
 ```sh
-aw -w sea agent configure helper --config '{"kind":"codex","command":["codex","app-server"]}'
+aw -w sea agent configure helper --config '{"kind":"codex","command":["codex","app-server"],"model":"MODEL_ID","effort":"NATIVE_EFFORT"}'
 aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-程序通过 app-server 创建原生线程、提交初始化输入、记录事件；`aw_execute` 动态工具直接调用公共操作，不要求模型切到开发目录。可选配置 `model`、`modelProvider`、`sandbox`，未指定时使用原生配置和 `workspace-write`。原生审批/额外授权请求不会被自动批准。
+程序通过 app-server 创建原生线程、提交初始化输入、记录事件；`aw_execute` 动态工具直接调用公共操作，不要求模型切到开发目录。实例须明确选择 `model` 与 `effort`，保存到根 `runtime.json`；`modelProvider` 与 `sandbox` 留在本机连接配置，sandbox 默认 `workspace-write`。旧模型覆盖首次使用时迁移并保留来源，缺项不继承原生默认。原生审批/额外授权请求不会被自动批准。
 
 Windows npm `.cmd` 启动器有单独的 argv 处理；未在真实 Windows/Codex 环境完成验收。CLI 成功不等于 Desktop 成功。
 

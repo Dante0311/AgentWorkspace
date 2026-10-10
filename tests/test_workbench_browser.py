@@ -92,6 +92,7 @@ def test_message_response_loss_continues_only_original_request(ui, delivered):
     page.wait_for_function("!busy && !!pendingMessage() && !!document.getElementById('error').textContent")
     assert len(attempts) == 1
     identifier = pending(page)["args"]["request_id"]
+    assert pending(page)["args"]["delivery"] == "normal"
     assert attempts[0]["binding"] == bindings["alice"]
     assert len(Messages(app).list("sea")) == int(delivered)
 
@@ -171,6 +172,7 @@ def test_caretaker_grants_are_explicit_and_revocable(ui):
     page.locator("#refresh").click()
     nav(page, "caretakers")
     page.get_by_role("button", name="管家授权", exact=True).click()
+    assert page.locator("#f-agent_id").input_value() == "steward"
     action = page.locator('fieldset[data-key="commands"] input[value="agent.start"]')
     target = page.locator('fieldset[data-key="targets"] input[value="alice"]')
     action.check()

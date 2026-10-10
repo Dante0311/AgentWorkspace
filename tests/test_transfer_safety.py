@@ -20,7 +20,7 @@ def owner(app):
 
 def test_unknown_launch_is_not_retried_when_no_successor_was_observed(owner, monkeypatch):
     app, binding, root = owner
-    target = {"kind": "codex", "command": [sys.executable, "-c", "pass"]}
+    target = {"kind": "codex", "command": [sys.executable, "-c", "pass"], "model": "fixture-model", "effort": "low"}
     transfer.request(app, "sea", "alice", target, request_id="one-transfer")
     point = app.checkpoint("sea", "alice", "explicit handoff", binding=binding)
     app.stop("sea", "alice", binding, point["id"])
@@ -47,7 +47,7 @@ def test_preflight_failure_does_not_touch_the_old_entry(owner):
 
 def test_unconfirmed_native_close_does_not_release_binding(app, monkeypatch):
     app.create("sea", "alice")
-    app.configure("sea", "alice", {"kind": "codex", "command": [sys.executable]})
+    app.configure("sea", "alice", {"kind": "codex", "command": [sys.executable], "model": "fixture-model", "effort": "low"})
     binding = app.reserve("sea", "alice")["binding"]
     app.bind("sea", "alice", binding, "native-session")
     point = app.checkpoint("sea", "alice", "explicit handoff", binding=binding)

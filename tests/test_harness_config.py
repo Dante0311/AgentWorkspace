@@ -120,9 +120,11 @@ def test_model_context_suffix_is_preserved_for_profiles_and_ordinary_sessions(ap
     result = commands.execute(app, command, args)
     assert result['sessions_started'] is False and result['model_access'] == 'unchecked'
     profile = read_json(app.root('sea', 'model-test') / '.aw-local/runtime.json')
-    assert profile['model'] == model
     if kind == 'codex':
-        assert overrides(profile)['model'] == model
+        assert read_json(app.root('sea', 'model-test') / 'runtime.json')['codex']['model'] == model
+        assert 'model' not in profile and 'model' not in overrides(profile)
+    else:
+        assert profile['model'] == model
     project = tmp_path / 'ordinary'
     project.mkdir()
     prepared = sessions.prepare(app, kind, str(project), model=model, effort='low',
@@ -143,7 +145,7 @@ def test_model_context_suffix_reaches_transfer_profile_unchanged(app, executable
     app.create('sea', 'alice')
     binding = app.reserve('sea', 'alice')['binding']
     app.bind('sea', 'alice', binding, 'source-session')
-    preflight = Mock()  # Only test argument/configuration routing; do not open a native client.
+    preflight = Mock(return_value=None)  # Only test routing; do not open a native client.
     monkeypatch.setattr(transfer, 'preflight', preflight)
     model = 'claude-deepseek-v4.1-flash[1m]'
     result = transfer.request_profile(app, 'sea', 'alice', kind, model=model, effort='low',

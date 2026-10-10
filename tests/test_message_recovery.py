@@ -3,9 +3,11 @@ from unittest.mock import Mock
 
 import pytest
 
+from agent_workspace import maintenance
 from agent_workspace.commands import execute
+from agent_workspace.gitstore import GitStore
 from agent_workspace.messages import Messages
-from agent_workspace.util import Conflict, Error, read_json, write_json
+from agent_workspace.util import Conflict, Error, Uncertain, read_json, write_json
 
 
 def test_missing_operation_does_not_create_or_read_git(app, monkeypatch):
@@ -66,4 +68,40 @@ def test_receipt_scope_and_stale_binding_are_not_rewritten(pair, tmp_path):
     assert messages.reconcile('original')['state'] == 'published'
     with pytest.raises(Conflict):
         messages.send('sea', 'alice', bindings['alice'], 'bob', 'old', request_id='another')
+    assert len(messages.list('sea')) == 1
+
+
+def test_repair_confirms_ack_written_before_lost_response_without_republishing(pair, monkeypatch):
+    app, bindings = pair
+    messages = Messages(app)
+    messages.send('sea', 'alice', bindings['alice'], 'bob', 'original message', request_id='ack-unknown')
+    change = GitStore.change
+    ack_writes = []
+
+    def lost_response(store, branch, changes, expected, message, **kwargs):
+        result = change(store, branch, changes, expected, message, **kwargs)
+        if 'acks/ack-unknown.json' in changes:
+            ack_writes.append(result)
+            raise Uncertain('ACK accepted; response was lost')
+        return result
+
+    monkeypatch.setattr(GitStore, 'change', lost_response)
+    received = messages.receive('sea', 'bob', bindings['bob'], 'ack-unknown')
+    assert received['message']['content'] == 'original message'
+    assert received['publication']['state'] == 'outcome_unknown'
+    assert messages.show('sea', 'ack-unknown')['ack'] == {'message_id': 'ack-unknown'}
+
+    checkpoint = app.checkpoint('sea', 'bob', 'original receiver handoff', binding=bindings['bob'])
+    app.stop('sea', 'bob', bindings['bob'], checkpoint['id'])
+    app.finish_stop('sea', 'bob', bindings['bob'], observed_idle=True)
+    before = app.store('sea').snapshot().revision
+    repaired = maintenance.repair(app, 'sea', 'bob', 'publication-reconcile', 'confirm-original-ack',
+                                  operation_id=received['publication']['id'])
+
+    assert repaired['state'] == 'applied' and repaired['result']['state'] == 'published'
+    assert repaired['result']['id'] == 'ack-ack-unknown'
+    assert repaired['result']['binding'] == bindings['bob']
+    assert len(ack_writes) == 1
+    assert app.store('sea').snapshot().revision == before
+    assert app.agent('sea', 'bob')['current'] is None
     assert len(messages.list('sea')) == 1

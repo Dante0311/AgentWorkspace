@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -20,6 +21,15 @@ class Error(RuntimeError):
 
 class Conflict(Error):
     code = "conflict"
+
+
+class LockBusy(Conflict):
+    code = "lock_busy"
+
+
+class RetryableRead(Error):
+    """Only the failed read is safe to repeat, not its caller's business operation."""
+    code = "retryable_read"
 
 
 class Uncertain(Error):
@@ -111,9 +121,11 @@ def locked(path: Path, *, wait: float = 30):
                     import fcntl
                     fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except (BlockingIOError, OSError):
+            except OSError as exc:
+                if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                    raise
                 if time.monotonic() >= deadline:
-                    raise Conflict(f"Resource is in use: {path.name}") from None
+                    raise LockBusy(f"Resource is in use: {path.name}") from exc
                 time.sleep(0.04)
         try:
             yield
@@ -127,15 +139,19 @@ def locked(path: Path, *, wait: float = 30):
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
+def command_detail(output: bytes | str | None) -> str:
+    detail = output.decode("utf-8", errors="replace") if isinstance(output, bytes) else output or ""
+    # Credentials can appear in remote URLs. Redact before truncating a diagnostic.
+    detail = re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", detail)
+    return detail.strip()[-1500:]
+
+
 def run(args: list[str], *, cwd: Path | None = None, data: bytes | None = None,
         env: dict | None = None, check: bool = True, timeout: float = 60):
     result = subprocess.run(args, cwd=cwd, input=data, capture_output=True, env=env,
                             timeout=timeout, check=False)
     if check and result.returncode:
-        # Credentials can appear in remote URLs, so do not dump an entire command line.
-        detail = result.stderr.decode("utf-8", errors="replace")[-1500:]
-        detail = re.sub(r"https?://[^/@\s]+:[^/@\s]+@", "https://[redacted]@", detail)
-        raise Error(detail.strip() or f"{Path(args[0]).name} exited {result.returncode}")
+        raise Error(command_detail(result.stderr) or f"{Path(args[0]).name} exited {result.returncode}")
     return result
 
 

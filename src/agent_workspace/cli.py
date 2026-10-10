@@ -133,9 +133,9 @@ def parser():
     mt["grant"].add_argument("--command", dest="commands", action="append", default=[])
     mt["grant"].add_argument("--target", dest="targets", action="append", default=[])
     mt["repair"].add_argument("agent_id")
-    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle"], required=True)
+    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle", "continue-stop"], required=True)
     mt["repair"].add_argument("--request-id", required=True)
-    for field in ("operation-id", "bridge", "expected-binding", "expected-generation"):
+    for field in ("operation-id", "bridge", "expected-binding", "expected-generation", "expected-checkpoint"):
         mt["repair"].add_argument("--" + field)
 
     cp = actions("checkpoint", ["create", "list", "show"])
@@ -192,6 +192,7 @@ def parser():
     for sub in rt.values():
         sub.add_argument("agent_id")
         sub.add_argument("--directory")
+    rt["run"].add_argument("--stop-binding")
     bridge = actions("bridge", ["configure", "start", "stop", "status", "send"])
     for key, sub in bridge.items():
         sub.add_argument("agent_id")

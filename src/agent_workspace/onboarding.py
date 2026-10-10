@@ -122,7 +122,7 @@ def instance_directories(app, workspace: str, directories=None) -> dict[str, str
     if unknown:
         raise Error("未知的管家目录角色：" + ", ".join(sorted(unknown)))
     result = {role: instance_directory(app, workspace, role, directories.get(role)) for role in ROLES}
-    if len(set(result.values())) != len(result):
+    if len({Path(path) for path in result.values()}) != len(result):
         raise Error("三名管家不能共用同一个实例目录。")
     return result
 

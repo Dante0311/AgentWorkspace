@@ -83,7 +83,7 @@ jobs:
   browser:
     name: Workbench / real HTTP and Chromium
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:

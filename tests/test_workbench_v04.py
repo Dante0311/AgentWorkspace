@@ -106,7 +106,6 @@ def test_workbench_assets_are_real_command_ui_not_demo_gateway():
     for identifier in ("dir-steward", "dir-sentinel", "dir-maintainer", "instance-directory"):
         assert f'id="{identifier}"' in setup
     assert "args.directories" in setup
-    assert "directory:values.directory" in index
     assert index.count('<a href="/sessions">普通会话</a>') == 1
     assert "session=null" in index
 

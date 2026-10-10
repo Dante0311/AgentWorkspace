@@ -2,6 +2,7 @@
 from collections import Counter
 from functools import partial
 import inspect
+import json
 import queue
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -10,7 +11,7 @@ import pytest
 
 from agent_workspace import bridges, commands, runtime
 from agent_workspace.messages import Messages
-from agent_workspace.util import Conflict, Error, read_json, write_json
+from agent_workspace.util import Conflict, Error, encode, read_json, write_json
 
 
 ACTOR = ("sea", "alice", "b-current")
@@ -31,6 +32,8 @@ def runner_for(app):
     runner = runtime.Runner(app, *ACTOR[:2])
     runner.binding = ACTOR[2]
     runner.adapter = object.__new__(runtime.Codex)
+    runner.adapter.profile = {"model": "fixture-model", "effort": "low", "source": {"path": "runtime.json"}}
+    runner.adapter.profile_validation = {"catalog": "fixture_unconfirmed"}
     runner.adapter.completed = queue.Queue()
     runner.adapter.status = Mock(return_value="idle")
     runner.adapter.notify = Mock(return_value={"turn": {"id": "t1"}})
@@ -189,7 +192,9 @@ def test_empty_input_pass_does_not_fall_back_to_another_read(local_app, monkeypa
 def message_snapshot(records=None):
     values = {"workspace.json": {"locator": "local:sea"}, "agents/alice.json": {}, "bindings/b-current.json": {}}
     values.update(records or {})
-    return SimpleNamespace(entries={path: path for path in values}, json=lambda path, default=None: values.get(path, default))
+    return SimpleNamespace(entries={path: path for path in values},
+                           json=lambda path, default=None: values.get(path, default),
+                           bytes=lambda path: encode(values[path]) if path in values else None)
 
 
 def incoming(identifier, target="alice", timestamp="1"):
@@ -223,7 +228,10 @@ def test_list_filtering_and_later_queries_use_fresh_snapshot(local_app):
 @pytest.mark.parametrize("failure_at", ["binding", "commit", None])
 def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_at):
     store = local_app.store.return_value
-    store.snapshot.return_value = message_snapshot({"message-index/m.json": incoming("m")})
+    store.snapshot.return_value = message_snapshot({
+        "message-index/m.json": incoming("m"),
+        "messages/m.json": {**incoming("m"), "message_refs": [], "content": "fixture message"},
+    })
     adapter = Mock()
     adapter.status.return_value = "idle"
     if failure_at == "binding":
@@ -269,7 +277,15 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
     snap = SimpleNamespace(entries={"agents/alice.json": "agent-sha", "bindings/b-current.json": "binding-sha"},
                            json=lambda path: dict(entry))
     local_app.store.return_value.snapshot.return_value = snap
-    write_json(local_app.root() / ".aw-local/entry.json", {"binding": ACTOR[2], "config": {"kind": "codex"}})
+
+    def change(branch, changes, *args):
+        value = json.loads(changes["bindings/b-current.json"])
+        entry.clear()
+        entry.update(value)
+
+    local_app.store.return_value.change.side_effect = change
+    write_json(local_app.root() / ".aw-local/entry.json", {"binding": ACTOR[2], "config": {"kind": "codex"},
+               "model_profile": {"model": "fixture-model", "effort": "low", "source": {"path": "runtime.json"}}})
     adapter = Mock(session="existing")
     adapter.status.return_value = "idle"
     monkeypatch.setattr(runtime, "Codex", Mock(return_value=adapter))
@@ -278,7 +294,13 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
     runner.stop_event = Mock()
     runner.stop_event.wait.side_effect = [False, False, True]
     runner._complete_inputs = Mock()
-    local_app.finish_stop.return_value = {"id": "handoff"}
+
+    def finish_stop(*args, **kwargs):
+        entry["phase"] = "released"
+        local_app.agent.return_value = {"current": None}
+        return {"id": "handoff"}
+
+    local_app.finish_stop.side_effect = finish_stop
     failure = Conflict("persistent input conflict")
 
     def fail(records):

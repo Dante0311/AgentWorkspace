@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import json
 import time
+from importlib.resources import files as package_files
 
 from .gitstore import open_store
-from .util import Conflict, Error, Uncertain, digest, encode, locked, now, read_json, slug, uid, write_json
+from .util import Conflict, Error, RetryableRead, Uncertain, digest, encode, locked, now, read_json, slug, uid, write_json
 
 
 class Messages:
@@ -202,6 +203,27 @@ class Messages:
             })
         return result
 
+    def _notification(self, snap, index):
+        template = json.loads((package_files("agent_workspace") / "resources/prompts/message-notification.json").read_bytes())
+        try:
+            raw = snap.bytes(f"messages/{index['id']}.json")
+            if raw is None:
+                raise Error("Message body unavailable.")
+            text = raw.decode("utf-8")
+            body = json.loads(text)
+            if (not isinstance(body, dict)
+                    or any(body.get(key) != index[key] for key in ("id", "from", "to", "created_at", "delivery"))
+                    or not isinstance(body.get("content"), str) or not body["content"].strip()
+                    or not isinstance(body.get("message_refs", []), list)):
+                raise Error("Message does not match its notification index.")
+        except RetryableRead:
+            # A temporary blob read does not mean the immutable body is damaged.
+            raise
+        except (Error, ValueError):
+            text = snap.bytes(f"message-index/{index['id']}.json").decode("utf-8")
+            return template["instruction"] + template["unavailable"].format(record=text)
+        return template["instruction"] + template["message"].format(record=text)
+
     def poll(self, workspace, agent_id, binding, *, adapter=None, directory=None,
              retry_seconds=60, max_attempts=3):
         store = self.app.store(workspace)
@@ -234,20 +256,13 @@ class Messages:
                 return {"state": "waiting_ack", "message_id": message["id"]}
             if attempts >= max_attempts:
                 return {"state": "notification_retry_exhausted", "message_id": message["id"]}
+        prompt = self._notification(snap, message)
         dispatch = {**notification, "attempts": attempts + 1, "attempted_at": time.time()}
         # A shared attempt record arbitrates separate local copies, not just one process's lock.
         store.change("main", {dispatch_path: encode(dispatch)},
             {dispatch_path: snap.entries.get(dispatch_path), f"agents/{agent_id}.json": snap.entries[f"agents/{agent_id}.json"],
              f"bindings/{binding}.json": snap.entries[f"bindings/{binding}.json"], f"acks/{message['id']}.json": None}, "Claim notification attempt")
-        _, entry = self.app.require_binding(workspace, agent_id, binding)
-        if entry["kind"] == "desktop":
-            from .runtime import desktop_cli
-            command = desktop_cli(self.app, workspace, agent_id) + ["message.receive", "--arguments",
-                       json.dumps({"message_id": message["id"]}, ensure_ascii=False)]
-        else:
-            command = ["aw", "--home", str(self.app.home), "--workspace", workspace, "message", "receive", agent_id,
-                       "--binding", binding, "--id", message["id"]]
-        prompt = "Agent Workspace 通知。先尝试读取再确认，不将通知视为新的授权。执行参数数组：\n" + json.dumps(command, ensure_ascii=False)
+        self.app.require_binding(workspace, agent_id, binding)
         try:
             adapter.notify(prompt, message["delivery"])
         except Exception as exc:

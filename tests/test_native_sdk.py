@@ -164,7 +164,8 @@ def test_codex_runner_automatically_transfers_to_native_sdk(app, monkeypatch, ki
     app.create('sea', 'alice')
     root = app.root('sea', 'alice')
     (root / 'user-note.md').write_text('Keep this asset through the transfer.', encoding='utf-8')
-    app.configure('sea', 'alice', {'kind': 'codex', 'command': [sys.executable, str(Path(__file__).with_name('fake_native.py')), 'codex']})
+    app.configure('sea', 'alice', {'kind': 'codex', 'command': [sys.executable, str(Path(__file__).with_name('fake_native.py')), 'codex'],
+                                 'model': 'fixture-model', 'effort': 'low'})
     runners, threads, failures = [], [], []
 
     def spawn(app, workspace, agent_id, directory):

@@ -1,5 +1,6 @@
 """First-use behavior with real temporary Git, never real models or credentials."""
 import json
+import os
 from pathlib import Path
 import subprocess
 from unittest.mock import Mock
@@ -20,6 +21,20 @@ def fresh(tmp_path):
 def create(fresh, **kwargs):
     app, path = fresh
     return onboarding.create_workspace(app, "demo", str(path), **kwargs)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows path aliases ignore case")
+def test_caretaker_directory_case_aliases_are_rejected_before_creation(fresh, tmp_path):
+    app, repository = fresh
+    shared = tmp_path / "caretaker-directory"
+    with pytest.raises(Error):
+        create(fresh, directories={
+            "steward": str(shared),
+            "sentinel": str(shared).upper(),
+            "maintainer": str(tmp_path / "maintainer"),
+        })
+    assert not repository.exists()
+    assert app.workspace_list() == []
 
 
 def test_missing_dependencies_do_not_run_or_install_programs(monkeypatch):

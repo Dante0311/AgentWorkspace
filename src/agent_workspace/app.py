@@ -11,10 +11,12 @@ import tempfile
 
 from . import __version__, skills as shared_skills
 from .gitstore import GitStore, GitHubStore, open_store
-from .util import Conflict, Error, digest, encode, inside, locked, now, read_json, relpath, slug, uid, write_bytes, write_json
+from . import model_profiles
+from .util import Conflict, Error, RetryableRead, Uncertain, digest, encode, inside, locked, now, read_json, relpath, slug, uid, write_bytes, write_json
 
 
 DEFAULT_EXCLUDES = [".git", ".aw-local", ".local", "__pycache__", ".env", ".env.*", "secrets"]
+_UNOBSERVED = object()
 
 
 class App:
@@ -86,8 +88,8 @@ class App:
     def workspace_list(self):
         return [{"alias": k, **v} for k, v in self.local()["workspaces"].items()]
 
-    def workspace_show(self, workspace):
-        snap = self.store(workspace).snapshot()
+    def workspace_show(self, workspace, *, snapshot=None):
+        snap = snapshot or self.store(workspace).snapshot()
         return {**snap.json("workspace.json"), "revision": snap.revision,
                 "access": self.local()["workspaces"][workspace]}
 
@@ -157,8 +159,8 @@ class App:
             raise Error(f"Unknown agent {agent_id} in {workspace}.")
         return item
 
-    def agents(self, workspace, archived=None):
-        snap = self.store(workspace).snapshot()
+    def agents(self, workspace, archived=None, *, snapshot=None):
+        snap = snapshot or self.store(workspace).snapshot()
         items = [snap.json(p) for p in snap.entries if p.startswith("agents/") and p.endswith(".json")]
         return [a for a in items if archived is None or a["archived"] == archived]
 
@@ -168,6 +170,8 @@ class App:
         if not binding or agent["current"] != binding or agent["archived"]:
             raise Conflict("This is not the agent's current execution entry. Do not resume an old session.")
         entry = snap.json(f"bindings/{binding}.json")
+        if not isinstance(entry, dict) or entry.get("id") != binding or entry.get("agent") != agent_id:
+            raise Error("Binding record does not belong to this execution entry.")
         if entry["phase"] != "active" and not (allow_stopping and entry["phase"] == "stopping"):
             raise Conflict(f"Entry is {entry['phase']}; it cannot perform this operation.")
         return agent, entry
@@ -176,8 +180,18 @@ class App:
         root = package_files("agent_workspace") / "resources"
         result = {}
         for name in ("workspace", "work", "message", "agent", "handoff", "relay", "fork"):
-            result[f".agents/skills/{name}/SKILL.md"] = (root / "skills" / name / "SKILL.md").read_bytes()
-        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md", "capabilities.md", "desktop-projects.md"):
+            pending = [(root / "skills" / name, f".agents/skills/{name}")]
+            while pending:
+                source, prefix = pending.pop()
+                for item in source.iterdir():
+                    if item.name == "__pycache__":
+                        continue
+                    path = prefix + "/" + item.name
+                    if item.is_dir():
+                        pending.append((item, path))
+                    else:
+                        result[path] = item.read_bytes()
+        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md", "capabilities.md", "desktop-projects.md", "message-notification.json"):
             result[f".aw/prompts/{name}"] = (root / "prompts" / name).read_bytes()
         result[".aw/software.json"] = encode({"version": __version__,
             "files": {p: digest(v) for p, v in result.items()}})
@@ -442,11 +456,25 @@ class App:
 
     def checkpoint_show(self, workspace, agent_id, checkpoint):
         store = self.store(workspace)
-        pointer = store.snapshot().json(f"checkpoints/{agent_id}/{slug(checkpoint)}.json")
+        return self._read_checkpoint(store, store.snapshot(), agent_id, checkpoint)
+
+    def _read_checkpoint(self, store, shared, agent_id, checkpoint):
+        checkpoint = slug(checkpoint)
+        pointer = shared.json(f"checkpoints/{agent_id}/{checkpoint}.json")
         if pointer is None:
             raise Error("Unknown saved checkpoint.")
+        if (not isinstance(pointer, dict) or pointer.get("id") != checkpoint or pointer.get("agent") != agent_id
+                or pointer.get("path") != f".aw/checkpoints/{checkpoint}.json" or not pointer.get("revision")):
+            raise Error("Saved checkpoint reference does not match this instance and checkpoint.")
         snap = store.snapshot(revision=pointer["revision"])
-        return {**pointer, "record": snap.json(pointer["path"]), "files": list(snap.entries)}
+        identity = snap.json(".aw/identity.json")
+        if (not isinstance(identity, dict) or identity.get("agent") != agent_id
+                or identity.get("workspace") != shared.json("workspace.json")["locator"]):
+            raise Error("Saved checkpoint material belongs to a different instance or workspace.")
+        record = snap.json(pointer["path"])
+        if not isinstance(record, dict) or record.get("id") != checkpoint:
+            raise Error("Saved checkpoint material is missing or does not match its reference.")
+        return {**pointer, "record": record, "files": list(snap.entries)}
 
     def fork(self, workspace, agent_id, checkpoint, name, new_id=None, directory=None):
         point = self.checkpoint_show(workspace, agent_id, checkpoint)
@@ -472,12 +500,15 @@ class App:
         root = self.root(workspace, agent_id, directory)
         if value.get("kind", "manual") not in ("manual", "desktop", "codex", "claude", "codebuddy"):
             raise Error("Runtime kind must be manual, desktop, codex, claude or codebuddy.")
-        write_json(root / ".aw-local/runtime.json", value)
+        if value.get("kind") in model_profiles.CODEX_KINDS:
+            model_profiles.configure(root, value)
+        else:
+            write_json(root / ".aw-local/runtime.json", value)
         return {"configured": True, "entry_changed": False}
 
-    def show(self, workspace, agent_id, directory=None):
+    def show(self, workspace, agent_id, directory=None, *, snapshot=None):
         store = self.store(workspace)
-        snap = store.snapshot()
+        snap = snapshot or store.snapshot()
         item = self.agent(workspace, agent_id, snap)
         binding = snap.json(f"bindings/{item['current']}.json") if item["current"] else None
         locations = self.local()["workspaces"][workspace].get("instances", {}).get(agent_id, [])
@@ -492,6 +523,7 @@ class App:
                 result["runtime"]["runner_alive"] = True
             result["watch"] = read_json(root / ".aw-local/watch.json", {"enabled": False})
             result["configured_kind"] = read_json(root / ".aw-local/runtime.json", {}).get("kind", "manual")
+            result["model_selection"] = model_profiles.desired(root)
         return result
 
     def archive(self, workspace, agent_id, archived=True, directory=None):
@@ -507,7 +539,9 @@ class App:
 
     def reserve(self, workspace, agent_id, directory=None, binding_id=None):
         root = self.root(workspace, agent_id, directory)
-        config = read_json(root / ".aw-local/runtime.json", {"kind": "manual"})
+        config = model_profiles.migrate(root)
+        profile = (model_profiles.selected(root) if config.get("kind") in model_profiles.CODEX_KINDS
+                   and model_profiles.desired(root) is not None else None)
         store = self.store(workspace)
         snap = store.snapshot()
         item = self.agent(workspace, agent_id, snap)
@@ -532,7 +566,10 @@ class App:
         item.update(current=binding, has_run=True, handoff=None)
         changes[path] = encode(item)
         store.change("main", changes, expected, f"Reserve entry {binding}")
-        write_json(root / ".aw-local/entry.json", {"binding": binding, "config": config})
+        record = {"binding": binding, "config": config}
+        if profile is not None:
+            record.update(model_profile=profile, model_adopted_at=now())
+        write_json(root / ".aw-local/entry.json", record)
         return {"agent": agent_id, "binding": binding, "phase": "starting", "kind": entry["kind"]}
 
     def bind(self, workspace, agent_id, binding, session, directory=None):
@@ -560,34 +597,91 @@ class App:
 
     def stop(self, workspace, agent_id, binding, checkpoint, directory=None):
         root = self.root(workspace, agent_id, directory)
-        point = self.checkpoint_show(workspace, agent_id, checkpoint)
         store = self.store(workspace)
         snap = store.snapshot()
         _, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True, snapshot=snap)
+        point = self._read_checkpoint(store, snap, agent_id, checkpoint)
+        result = {"state": "awaiting_native_idle", "binding": binding, "checkpoint": checkpoint}
+        if entry["phase"] == "stopping":
+            if entry["checkpoint"] != checkpoint:
+                raise Conflict("A pending stop cannot be replaced with a different checkpoint.")
+            return result
         # Disable local automatic restarts before requesting the native end-of-turn observation.
         write_json(root / ".aw-local/watch.json", {"enabled": False, "reason": "handoff"})
         entry.update(phase="stopping", checkpoint=point["id"], stop_requested_at=now())
         path = f"bindings/{binding}.json"
         store.change("main", {path: encode(entry)}, {path: snap.entries[path],
+                     f"checkpoints/{agent_id}/{checkpoint}.json": snap.entries[f"checkpoints/{agent_id}/{checkpoint}.json"],
                      f"agents/{agent_id}.json": snap.entries[f"agents/{agent_id}.json"]}, "Prepare handoff")
-        return {"state": "awaiting_native_idle", "binding": binding, "checkpoint": checkpoint}
+        return result
 
-    def finish_stop(self, workspace, agent_id, binding, *, observed_idle):
+    def _released_handoff(self, snap, agent_id, binding, expected_controller, expected_checkpoint, expected_session):
+        entry = snap.json(f"bindings/{binding}.json")
+        if entry is None:
+            return None
+        if not isinstance(entry, dict):
+            raise Error("Binding record is damaged; refusing stop confirmation.")
+        if entry["phase"] != "released":
+            return None
+        handoff_id = "h" + binding[1:]
+        handoff = snap.json(f"handoffs/{handoff_id}.json")
+        if (entry.get("id") != binding or entry.get("agent") != agent_id or not handoff
+                or handoff.get("id") != handoff_id or handoff.get("agent") != agent_id
+                or handoff.get("entry") != binding or handoff.get("checkpoint") != entry.get("checkpoint")):
+            raise Error("Released entry has no matching saved handoff.")
+        if expected_checkpoint is not _UNOBSERVED and entry.get("checkpoint") != expected_checkpoint:
+            raise Conflict("Saved handoff belongs to a different stop checkpoint.")
+        if expected_session is not _UNOBSERVED and entry.get("session") != expected_session:
+            raise Conflict("Saved handoff belongs to a different native session.")
+        if expected_controller is not _UNOBSERVED and entry.get("controller") != expected_controller:
+            raise Conflict("Saved handoff belongs to a different controller.")
+        return handoff
+
+    def finish_stop(self, workspace, agent_id, binding, *, observed_idle,
+                    expected_controller=_UNOBSERVED, expected_checkpoint=_UNOBSERVED,
+                    expected_session=_UNOBSERVED):
         if not observed_idle:
             raise Conflict("Native stop has not been confirmed. Entry remains owned.")
         store = self.store(workspace)
         snap = store.snapshot()
+        released = self._released_handoff(snap, agent_id, binding, expected_controller, expected_checkpoint, expected_session)
+        if released is not None:
+            return released
         item, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True, snapshot=snap)
         if entry["phase"] != "stopping":
             raise Conflict("No explicit handoff request is pending.")
+        for field, expected in (("controller", expected_controller), ("checkpoint", expected_checkpoint),
+                                ("session", expected_session)):
+            if expected is not _UNOBSERVED and entry.get(field) != expected:
+                raise Conflict(f"The stop observation no longer matches the binding's {field}.")
+        self._read_checkpoint(store, snap, agent_id, entry["checkpoint"])
         handoff_id = "h" + binding[1:]
         handoff = {"id": handoff_id, "agent": agent_id, "entry": binding,
                    "checkpoint": entry["checkpoint"], "created_at": now(), "consumed_by": None}
         item.update(current=None, handoff=handoff_id)
         entry.update(phase="released", stopped_at=now())
         ap, bp = f"agents/{agent_id}.json", f"bindings/{binding}.json"
-        store.change("main", {ap: encode(item), bp: encode(entry), f"handoffs/{handoff_id}.json": encode(handoff)},
-                     {ap: snap.entries[ap], bp: snap.entries[bp], f"handoffs/{handoff_id}.json": None}, "Release entry")
+        cp = f"checkpoints/{agent_id}/{entry['checkpoint']}.json"
+        try:
+            store.change("main", {ap: encode(item), bp: encode(entry), f"handoffs/{handoff_id}.json": encode(handoff)},
+                         {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp],
+                          f"handoffs/{handoff_id}.json": None}, "Release entry")
+        except (Conflict, Uncertain) as failure:
+            # A competing observer or a lost push reply may have completed this exact request.
+            # Only read its result; never repeat the release mutation here.
+            try:
+                latest = store.snapshot()
+            except (Error, OSError, ValueError) as exc:
+                raise Uncertain(f"{failure}\nCould not confirm the original stop publication: {exc}") from exc
+            # A snapshot lists versions; reading its result content can still fail remotely.
+            try:
+                released = self._released_handoff(latest, agent_id, binding,
+                                                  entry.get("controller"), entry["checkpoint"], entry.get("session"))
+            except RetryableRead as exc:
+                raise Uncertain(f"{failure}\nCould not confirm the original stop result content: {exc}") from exc
+            if released is not None:
+                return released
+            raise
         return handoff
 
     def versions(self, workspace, agent_id, directory=None):

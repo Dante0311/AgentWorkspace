@@ -1,0 +1,74 @@
+name: Finalize Workbench v0.4 browser fix
+
+on:
+  push:
+    branches:
+      - fix/workbench-v04-ci-20261010
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13'
+      - name: Fix select defaults and lock the behavior
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:120]!r}")
+              with target.open("w", encoding="utf-8", newline="\n") as stream:
+                  stream.write(text.replace(old, new, 1))
+
+          index = "src/agent_workspace/resources/index.html"
+          replace_once(
+              index,
+              "}else{input.value=field.value??'';if(field.placeholder)",
+              "}else{if(field.value!==undefined)input.value=field.value;if(field.placeholder)",
+          )
+
+          browser = "tests/test_workbench_browser.py"
+          replace_once(
+              browser,
+              '    identifier = pending(page)["args"]["request_id"]\n    assert attempts[0]["binding"] == bindings["alice"]\n',
+              '    identifier = pending(page)["args"]["request_id"]\n    assert pending(page)["args"]["delivery"] == "normal"\n    assert attempts[0]["binding"] == bindings["alice"]\n',
+          )
+          replace_once(
+              browser,
+              '    page.get_by_role("button", name="管家授权", exact=True).click()\n    action = page.locator(\'fieldset[data-key="commands"] input[value="agent.start"]\')\n',
+              '    page.get_by_role("button", name="管家授权", exact=True).click()\n    assert page.locator("#f-agent_id").input_value() == "steward"\n    action = page.locator(\'fieldset[data-key="commands"] input[value="agent.start"]\')\n',
+          )
+      - name: Install Chromium test dependencies
+        run: |
+          python -m pip install -e ".[test]" playwright==1.57.0
+          python -m playwright install chromium
+      - name: Run focused real browser checks
+        env:
+          AW_BROWSER_TESTS: '1'
+        run: python -m pytest tests/test_workbench_browser.py::test_message_response_loss_continues_only_original_request tests/test_workbench_browser.py::test_caretaker_grants_are_explicit_and_revocable -q
+      - name: Run focused non-browser checks
+        run: python -m pytest tests/test_workbench_v04.py tests/test_setup_interfaces.py -q
+      - name: Commit verified product fix and remove helpers
+        shell: pwsh
+        run: |
+          git diff --check
+          git config user.name "Agent Workspace"
+          git config user.email "aw@localhost"
+          git add -- src/agent_workspace/resources/index.html tests/test_workbench_browser.py
+          git rm -- .github/workflows/workbench-v04-debug.yml .github/workflows/workbench-v04-finalize.yml
+          git commit -m "Fix Workbench select defaults and recovery"
+          git push origin HEAD:${{ github.ref_name }}

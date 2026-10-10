@@ -62,10 +62,37 @@ def allowed(app, actor, command, arguments):
     return agent_id in snap.json("workspace.json").get("caretakers", {}).values()
 
 
+def _lock_held(path):
+    try:
+        with locked(path, wait=0):
+            return False
+    except Conflict:
+        return True
+
+
+def _schedule_observation(app, workspace, schedule):
+    try:
+        worker_running = _lock_held(app.home / "maintenance/worker.lock")
+        if schedule is None:
+            state = "not_configured"
+        elif not schedule["enabled"]:
+            state = "disabled"
+        elif (schedule["owner"] != read_json(app.home / "installation.json", {}).get("id")
+              or schedule.get("owner_workspace") != workspace):
+            state = "not_owned"
+        else:
+            state = "worker_observed" if worker_running else "worker_not_observed"
+    except (OSError, ValueError, KeyError) as exc:
+        return {"state": "unavailable", "schedule": schedule, "worker_running": None,
+                "error_type": type(exc).__name__}
+    return {"state": state, "schedule": schedule, "worker_running": worker_running}
+
+
 def doctor(app, workspace):
     """Read shared protocol facts and explicitly label this machine's coverage."""
     observed = now()
     issues, local_agents, remote_agents = [], [], []
+    observations = {}
     try:
         snap = app.store(workspace).snapshot()
     except (Error, OSError, ValueError, KeyError) as exc:
@@ -93,19 +120,38 @@ def doctor(app, workspace):
             continue
         try:
             control = read_json(root / ".aw-local/control.json", {})
-            intentional_stop = control.get("stop") == binding or control.get("handoff") == binding
             runtime = read_json(root / ".aw-local/status.json", {})
-            if binding and entry and entry["kind"] != "manual" and not intentional_stop:
-                try:
-                    with locked(root / ".aw-local/runner.lock", wait=0):
-                        running = False
-                except Conflict:
-                    running = True
-                if not running:
+            running = _lock_held(root / ".aw-local/runner.lock")
+            watch = read_json(root / ".aw-local/watch.json")
+            if watch is None:
+                watch_state = "not_configured"
+            elif not watch.get("enabled"):
+                watch_state = "disabled"
+            else:
+                watch_state = "enabled" if binding and watch.get("binding") == binding else "binding_mismatch"
+            monitor_stopped = bool(binding and control.get("stop") == binding)
+            observations[aid] = {
+                "binding": binding, "phase": entry.get("phase") if entry else None,
+                "runner_observed": running, "monitor_stop_requested": monitor_stopped,
+                "runtime": runtime if binding and runtime.get("binding") == binding else None,
+                "watch": {**(watch or {}), "state": watch_state},
+            }
+            if binding and entry and entry["kind"] != "manual":
+                if entry["phase"] == "stopping" and not running:
+                    issue("stop_confirmation_not_observed", aid, binding=binding,
+                          checkpoint=entry.get("checkpoint"))
+                elif not running and not monitor_stopped:
                     issue("runner_not_observed", aid, binding=binding,
                           controller_present=bool(entry.get("controller")))
-                if runtime.get("binding") == binding and runtime.get("state") in ("failed", "connection_failed", "native_stop_unconfirmed"):
-                    issue("runtime_fault", aid, state=runtime["state"])
+                if runtime.get("binding") == binding:
+                    state = runtime.get("state")
+                    if state in ("failed", "connection_failed", "native_stop_unconfirmed"):
+                        issue("runtime_fault", aid, state=state)
+                    elif state == "shared_read_backoff":
+                        issue("runtime_shared_read_backoff", aid, binding=binding)
+                    elif state == "stop_observation_unknown":
+                        issue("stop_observation_unknown", aid, binding=binding,
+                              checkpoint=entry.get("checkpoint"))
             for p in (root / ".aw-local/inputs").glob("*.json"):
                 record = read_json(p)
                 if record["state"] in ("dispatching", "outcome_unknown"):
@@ -129,6 +175,7 @@ def doctor(app, workspace):
         except (OSError, ValueError, KeyError) as exc:
             # One damaged local record must not hide the health of other instances.
             issue("local_observation_failed", aid, error_type=type(exc).__name__)
+            observations[aid] = {"binding": binding, "state": "unavailable", "error_type": type(exc).__name__}
     for p in (app.home / "operations").glob("*.json"):
         try:
             receipt = read_json(p)
@@ -145,10 +192,17 @@ def doctor(app, workspace):
             if f"acks/{item['id']}.json" not in snap.entries and item["to"]["workspace"] == meta["locator"]:
                 aid = item["to"]["agent"]
                 waiting[aid] = waiting.get(aid, 0) + 1
+    monitoring = _schedule_observation(app, workspace, snap.json("maintenance/schedule.json"))
+    if monitoring["state"] == "worker_not_observed":
+        issue("maintenance_worker_not_observed")
+    elif monitoring["state"] == "unavailable":
+        issue("maintenance_observation_failed", error_type=monitoring["error_type"])
     issues.sort(key=lambda item: (item["code"], item.get("agent", ""), item.get("operation", ""), item.get("bridge", "")))
-    return {"state": "degraded" if issues else "partial" if remote_agents else "healthy", "observed_at": observed,
+    partial = bool(remote_agents) or monitoring["state"] == "not_owned"
+    return {"state": "degraded" if issues else "partial" if partial else "healthy", "observed_at": observed,
             "revision": snap.revision, "issues": issues, "unacknowledged_notifications": waiting,
-            "coverage": {"local": local_agents, "unobserved_remote": remote_agents}}
+            "coverage": {"local": local_agents, "unobserved_remote": remote_agents},
+            "local_observations": observations, "maintenance": monitoring}
 
 
 def repair(app, workspace, agent_id, action, request_id, operation_id=None, bridge=None,
@@ -289,7 +343,7 @@ def tick(app, workspace):
             notice = run.get("notice", {})
             if (notice.get("fingerprint"), notice.get("binding")) != (fingerprint, binding):
                 run["notice"] = {"id": uid("health-"), "fingerprint": fingerprint,
-                                 "binding": binding, "state": "pending"}
+                                 "agent": sentinel, "binding": binding, "state": "pending"}
             write_json(root / "run.json", run)
             if sentinel and binding and run["notice"]["state"] == "pending":
                 # A user may disable/move the schedule while diagnostics are running.
@@ -309,14 +363,25 @@ def tick(app, workspace):
 
 def status(app, workspace):
     root = folder(app, workspace)
-    try:
-        with locked(app.home / "maintenance/worker.lock", wait=0):
-            worker_running = False
-    except Conflict:
-        worker_running = True
-    return {"worker_running": worker_running, "grantable_commands": sorted(GRANTABLE),
-            "schedule": app.store(workspace).snapshot().json("maintenance/schedule.json"),
-            "local_run": read_json(root / "run.json"),
+    snap = app.store(workspace).snapshot()
+    monitoring = _schedule_observation(app, workspace, snap.json("maintenance/schedule.json"))
+    run = read_json(root / "run.json")
+    notice = run.get("notice") if run else None
+    if notice:
+        # Queue acceptance and the original native input's outcome are separate facts.
+        sentinel = notice.get("agent") or snap.json("workspace.json").get("caretakers", {}).get("sentinel")
+        locations = app.local()["workspaces"][workspace].get("instances", {}).get(sentinel, [])
+        notice["input_state"] = "not_observed"
+        if locations:
+            try:
+                path = Path(locations[0]) / ".aw-local/inputs" / (slug(notice["id"]) + ".json")
+                record = read_json(path)
+                if (record and record["id"] == notice["id"] and record["binding"] == notice["binding"]
+                        and record["purpose"] == "maintenance"):
+                    notice["input_state"] = record["state"]
+            except (OSError, ValueError, KeyError) as exc:
+                notice.update(input_state="unavailable", error_type=type(exc).__name__)
+    return {**monitoring, "grantable_commands": sorted(GRANTABLE), "local_run": run,
             "worker_error": read_json(root / "worker-error.json"), "grants": read_json(root / "grants.json", {})}
 
 

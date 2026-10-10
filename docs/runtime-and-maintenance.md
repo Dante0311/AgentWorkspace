@@ -112,6 +112,14 @@ aw -w demo maintenance status
 
 健康报告基于共享登记和当前机器可观察的状态；其他机器的进程列为未观察范围。异常通知经稳定请求 ID 进入已运行的 Sentinel 会话，同一异常不每次巡检重复通知。没有可用 Sentinel 会话时保留待通知，不自动新增模型会话。Sentinel 可将诊断交给 Maintainer；业务判断和修复只能使用已授权工具。
 
+`workspace doctor` 的 `local_observations` 分别列出当前 Binding、入口阶段、是否观察到本机 Runner、该入口最近的运行状态以及 Watch 配置。Watch 的 `not_configured`、`disabled`、`enabled` 和 `binding_mismatch` 分别表示没有配置、已关闭、为当前入口开启和配置仍指向其他入口；`enabled` 不证明通知已经送达。`runtime=null` 表示没有当前入口的运行记录。主动停止监视器不会抹去已经记录的故障；已进入 `stopping` 却没有本机观察进程时报告 `stop_confirmation_not_observed`，保留原 Binding 和 checkpoint 供核对，正常等待繁忙会话结束不会仅因等待被判为失效。
+
+运行器报告 `shared_read_backoff` 时，诊断列出 `runtime_shared_read_backoff`；停止观察返回未知时列出 `stop_observation_unknown`。最近记录中的退避次数、等待秒数和原因保留在 `local_observations`，不会因程序仍在运行而显示健康。状态记录的时间也要一并查看，较早的网络失败记录不证明当前网络仍然故障。
+
+报告中的 `maintenance` 和 `maintenance.status` 区分计划未配置、已停用、由其他安装执行、本机 worker 未观察到和 worker 已观察到。只有本机拥有的启用计划缺少 worker 时才报告 `maintenance_worker_not_observed`；其他安装的计划列为 `not_owned`，本机报告不据此声称整个 Workspace 健康。`worker_observed` 只证明本机程序存在，实际检查结果仍查看 `local_run`。
+
+`maintenance.status.local_run.notice.state=queued` 是通知排队记录。另一个字段 `input_state` 只读回同一通知 ID、Binding 和用途对应的原输入状态；`completed` 只表示记录中的原生轮次结束，不证明维修或业务完成，`outcome_unknown` 仍须核对原输入。原记录缺失或不属于该入口时显示 `not_observed`，无法读取时显示 `unavailable`。查看状态不重新排队、不生成 ACK、不覆盖已保存的通知事实。
+
 ```sh
 aw -w demo maintenance schedule --no-enabled
 aw -w demo maintenance grant maintainer

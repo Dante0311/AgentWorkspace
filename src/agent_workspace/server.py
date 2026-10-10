@@ -13,13 +13,90 @@ import webbrowser
 
 from .commands import command_map, execute
 from .runtime import TOOL_SCHEMA
-from .util import Error
+from .util import Error, now
+
+
+def build_state(app):
+    """Build the authenticated Workbench projection from shared and local facts.
+
+    The projection labels its source revision and local observation instead of
+    inventing a global online/offline state. It remains read-only; commands still
+    re-check authorization, object revisions and Binding conditions.
+    """
+    from .maintenance import installation_id
+
+    observed_at = now()
+    installation = installation_id(app)
+    result = {
+        "installation_id": installation,
+        "observed_at": observed_at,
+        "default_instance_root": str((app.home / "instances").resolve()),
+        "workspaces": [],
+        "agents": [],
+        "errors": [],
+    }
+    for access in app.workspace_list():
+        alias = access["alias"]
+        workspace = {**access, "observed_at": observed_at}
+        try:
+            shared = app.workspace_show(alias)
+            workspace.update(
+                snapshot_revision=shared["revision"],
+                locator=shared.get("locator", access.get("locator")),
+                caretakers=shared.get("caretakers", {}),
+                projects=shared.get("projects", {}),
+                friends=shared.get("friends", {}),
+            )
+        except (Error, ValueError, OSError, KeyError) as exc:
+            workspace["unknown_reason"] = "workspace_read_failed"
+            result["errors"].append({"workspace": alias, "error": str(exc)})
+            result["workspaces"].append(workspace)
+            continue
+        result["workspaces"].append(workspace)
+        try:
+            agents = app.agents(alias)
+        except (Error, ValueError, OSError, KeyError) as exc:
+            result["errors"].append({"workspace": alias, "error": str(exc)})
+            continue
+        for agent in agents:
+            try:
+                detail = app.show(alias, agent["id"])
+                directories = list(detail.get("directories", []))
+                detail.update(
+                    directory=directories[0] if directories else None,
+                    local_ready=bool(directories),
+                    observed_at=observed_at,
+                    snapshot_revision=workspace.get("snapshot_revision"),
+                    observation_source={
+                        "installation_id": installation,
+                        "kind": "local_registry_and_runtime",
+                    },
+                )
+            except (Error, ValueError, OSError, KeyError) as exc:
+                # Keep the known identity, not invented liveness or ownership.
+                error = f"Instance observation failed ({type(exc).__name__}); use workspace doctor."
+                detail = {
+                    **agent,
+                    "directory": None,
+                    "directories": [],
+                    "local_ready": False,
+                    "observed_at": observed_at,
+                    "snapshot_revision": workspace.get("snapshot_revision"),
+                    "unknown_reason": "instance_observation_failed",
+                    "observation_error": error,
+                }
+                result["errors"].append({"workspace": alias, "agent": agent["id"],
+                                         "error": f"{agent['id']}: {error}"})
+            result["agents"].append({"workspace": alias, **detail})
+    return result
 
 
 def make_server(app, port=8765, token=None):
     token = token or secrets.token_urlsafe(32)
 
     class Handler(BaseHTTPRequestHandler):
+        timeout = 30  # Accepted but incomplete requests must not block orderly shutdown forever.
+
         def log_message(self, fmt, *args):
             pass  # Never log bearer tokens or request bodies.
 
@@ -48,6 +125,9 @@ def make_server(app, port=8765, token=None):
             if not hmac.compare_digest(supplied, token):
                 self.reply(401, {"error": "A local bearer token is required."})
                 return False
+            if self.server.stopping.is_set() and self.path != "/api/shutdown":
+                self.reply(503, {"error": "Workbench is stopping; do not start another operation."})
+                return False
             return True
 
         def do_GET(self):
@@ -71,23 +151,7 @@ def make_server(app, port=8765, token=None):
                 if self.path == "/api/commands":
                     result = list(command_map(app))
                 elif self.path == "/api/state":
-                    from .maintenance import installation_id
-                    result = {"installation_id": installation_id(app),
-                              "workspaces": app.workspace_list(), "agents": [], "errors": []}
-                    for workspace in result["workspaces"]:
-                        try:
-                            for agent in app.agents(workspace["alias"]):
-                                try:
-                                    detail = app.show(workspace["alias"], agent["id"])
-                                except (Error, ValueError, OSError, KeyError) as exc:
-                                    # Keep the known identity, not invented liveness or ownership.
-                                    error = f"Instance observation failed ({type(exc).__name__}); use workspace doctor."
-                                    detail = {**agent, "observation_error": error}
-                                    result["errors"].append({"workspace": workspace["alias"], "agent": agent["id"],
-                                                             "error": f"{agent['id']}: {error}"})
-                                result["agents"].append({"workspace": workspace["alias"], **detail})
-                        except (Error, ValueError, OSError, KeyError) as exc:
-                            result["errors"].append({"workspace": workspace["alias"], "error": str(exc)})
+                    result = build_state(app)
                 else:
                     self.reply(404, {"error": "Not found"})
                     return
@@ -97,6 +161,11 @@ def make_server(app, port=8765, token=None):
 
         def do_POST(self):
             if not self.authorized():
+                return
+            if self.path == "/api/shutdown":
+                self.server.stopping.set()
+                self.reply(200, {"ok": True, "result": {"shutdown_requested": True, "agent_bindings_released": False}})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return
             if self.path != "/api/execute":
                 self.reply(404, {"error": "Not found"})
@@ -114,7 +183,8 @@ def make_server(app, port=8765, token=None):
 
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.control_token = token
-    server.daemon_threads = True
+    server.daemon_threads = False
+    server.stopping = threading.Event()
     return server
 
 
@@ -127,14 +197,16 @@ def serve(app, port=8765, open_browser=False, setup=False):
         webbrowser.open(url)
     from .maintenance import run
     stop = threading.Event()
-    worker = threading.Thread(target=run, args=(app, stop), name="aw-maintenance", daemon=True)
+    worker = threading.Thread(target=run, args=(app, stop), name="aw-maintenance", daemon=False)
     worker.start()
     try:
         server.serve_forever()
+    except KeyboardInterrupt:
+        pass  # Ctrl+C is an orderly service stop, not an Agent release.
     finally:
         stop.set()
-        worker.join(timeout=5)
-        server.server_close()
+        server.server_close()  # Drain accepted HTTP handlers before stopping the worker.
+        worker.join()  # Its external operations have their own bounded timeouts.
 
 
 def mcp(app, actor=None):

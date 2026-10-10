@@ -11,10 +11,12 @@ import threading
 import pytest
 
 from agent_workspace.harness_config import codex_config
-from agent_workspace.runtime import Codex
+from agent_workspace.runtime import Codex, entry_prompt
+from agent_workspace.shared import requirements
 
 
-def test_native_codex_custom_provider_tools_and_two_turns(app, tmp_path, monkeypatch):
+@pytest.mark.parametrize("operation", ["checkpoint", "shared"] )
+def test_native_codex_custom_provider_tools_and_two_turns(app, tmp_path, monkeypatch, operation):
     executable = os.environ.get("AW_TEST_CODEX")
     if not executable or not Path(executable).is_file():
         pytest.skip("An explicit Codex test executable is required.")
@@ -36,7 +38,7 @@ def test_native_codex_custom_provider_tools_and_two_turns(app, tmp_path, monkeyp
             number = len(requests)
             if number == 1:
                 item = {"id": "fc-test", "type": "function_call", "call_id": "call-test", "name": "aw_execute",
-                        "arguments": json.dumps({"command": "checkpoint.create", "arguments": {"summary": "Explicit native protocol checkpoint"}}),
+                        "arguments": json.dumps(read_call if operation == "shared" else {"command": "checkpoint.create", "arguments": {"summary": "Explicit native protocol checkpoint"}}),
                         "status": "completed"}
             else:
                 item = {"id": f"msg-{number}", "type": "message", "role": "assistant", "status": "completed",
@@ -59,7 +61,8 @@ def test_native_codex_custom_provider_tools_and_two_turns(app, tmp_path, monkeyp
     thread.start()
     adapter = None
     try:
-        app.create("sea", "native-test")
+        app.store("sea").change("main", {"knowledge/native.md": b"TEAM_RULE_NATIVE_MARKER_9167"}, {}, "explicit shared fixture")
+        app.create("sea", "native-test", description="@workspace-read knowledge/native.md" if operation == "shared" else "")
         root = app.root("sea", "native-test")
         config = codex_config(model="offline-test-model", effort="low", base_url=f"http://127.0.0.1:{server.server_port}/v1",
                               env_key="AW_TEST_MODEL_KEY", executable=executable)
@@ -68,13 +71,19 @@ def test_native_codex_custom_provider_tools_and_two_turns(app, tmp_path, monkeyp
         adapter = Codex(app, "sea", "native-test", binding, root, config)
         app.bind("sea", "native-test", binding, adapter.session)
         session = adapter.session
-        for text in ("Explicit protocol fixture, not a user task.", "Explicit second protocol fixture."):
+        read_call = requirements(app, "sea", root)
+        prompt = entry_prompt(app, "sea", "native-test", binding, root)
+        for text in (prompt, "Explicit second protocol fixture."):
             result = adapter.notify(text, "normal")
             completed = adapter.completed.get(timeout=30)
             assert completed["status"] == "completed", completed
             assert completed["id"] == result["turn"]["id"]
         assert adapter.session == session and adapter.status() == "idle"
-        assert app.checkpoints("sea", "native-test")
+        if operation == "checkpoint":
+            assert app.checkpoints("sea", "native-test")
+        else:
+            assert "TEAM_RULE_NATIVE_MARKER_9167" not in json.dumps(requests[0][2])
+            assert "TEAM_RULE_NATIVE_MARKER_9167" in json.dumps(requests[1][2])
         assert len(requests) == 3  # Tool call, tool result continuation, second user turn.
         assert all(path == "/v1/responses" and auth == "Bearer isolated-test-key" for path, auth, _ in requests)
         assert all(body["model"] == "offline-test-model" for _, _, body in requests)

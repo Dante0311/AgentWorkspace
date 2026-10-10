@@ -4,13 +4,17 @@
 
 AgentWorkspace 为持久 Agent 管理独立工作根、职责、Skill、资料和历史，通过 Git Workspace 通信，并按需使用 Work / Delivery。它操作已有 Harness 的真实会话，不重写模型推理或工具循环，也不要求用户改用新的聊天客户端。
 
-> **`0.1.0a1` 开发预览。** 当前功能分支已有首次配置、三名管家、受管 Codex/Claude/CodeBuddy、自动交接与维护工具。本批已接入并实测 Windows Codex Desktop 的指定路径，具体结果及限制见下方记录；不代表其他 Desktop、自有模型服务、生产 Git、企业微信或长期运行已经验收。尚未发布正式 Release 或 PyPI 包。
+> **`0.1.0a1` 开发预览。** 当前代码已有首次配置、三名管家、受管 Codex/Claude/CodeBuddy、自动交接与维护工具。本批已接入并实测 Windows Codex Desktop 的指定路径，具体结果及限制见下方记录；不代表其他 Desktop、自有模型服务、生产 Git、企业微信或长期运行已经验收。尚未发布正式 Release 或 PyPI 包。
 
 Codex Desktop 已增加在已有本地项目中的自动创建、真实会话绑定、持续投递和同实例交接；需要先准备实例项目并从真实桌面聊天捕获控制连接。操作和限制见 [Codex Desktop](docs/usage.md#42-codex-desktop)，验证范围见 [实现进展](docs/implementation.md#codex-desktop-自动接入2026-10-08)。Claude/WorkBuddy Desktop 本批未接入。
 
+## 本批新增：共同职责与共享 Skill
+
+共同职责可通过 AGENTS.md 的 `@workspace-read` 指引，从所属 Workspace 同一 Git 提交读取；共享 `skills/` 可在创建时选择、后续安装更新，Definition 自带 Skill 保留并保护私人修改。Codex 准备入口发现/复用真实项目，分区仅在实际接口 schema 相符时执行，项目创建及文件夹编辑仍明确手动降级。[使用说明](docs/shared-materials.md)和[统一验收](https://github.com/Dante0311/AW-Workspace/blob/5ec6e5e99dcc68b8ec58e701a7ff9d7b119974e8/development/archive/2026-10-10-unified-57446de/docs/shared-materials-acceptance.md)区分开发回归、原生协议与待执行实机验证。
+
 ## 普通会话与桌面项目
 
-工作台和首次配置页可进入“新建普通会话”，在已有目录启动 Codex/Claude Code/CodeBuddy 交互 CLI，无需 Workspace 或 Git。对明确的内网 HTTP 模型地址提供逐配置确认，不保存密钥。持久 Agent 的桌面项目默认按 Agent 复用，Codex 分区按 Workspace 组织；当前提供本机引用与手动步骤，不宣称已自动控制桌面项目。操作及终端限制见 [普通会话与桌面项目](docs/session-projects.md)。
+工作台和首次配置页可进入“新建普通会话”，在已有目录启动 Codex/Claude Code/CodeBuddy 交互 CLI，无需 Workspace 或 Git。对明确的内网 HTTP 模型地址提供逐配置确认，不保存密钥。持久 Agent 的桌面项目默认按 Agent 复用，Codex 分区按 Workspace 组织；当前提供本机引用、真实项目发现/复用与按实际接口提供的分区准备，不宣称已自动创建原生项目或编辑文件夹。操作及终端限制见 [普通会话与桌面项目](docs/session-projects.md)。
 
 ## 使用流程
 
@@ -39,7 +43,7 @@ aw setup --open
 | 能力 | 实现范围 |
 | --- | --- |
 | 持久实例 | 独立工作根、AGENTS.md、七个 Skill 和检查点；用户实例不强制 Definition 或 Work。 |
-| 首次配置 | Git/Harness 发现、只读 Git 检查、可补齐的初始化；新空间建立 Steward、Sentinel、Maintainer 三个真实实例，不隐式启动。 |
+| 首次配置 | Git/Harness 发现、只读 Git 检查、可补齐的初始化；新空间为 Steward、Sentinel、Maintainer 分别选择本机实例目录，不隐式启动。 |
 | 模型与会话 | Codex App Server、Claude/CodeBuddy 原生 SDK；实例独立的服务地址、凭据引用、模型/强度配置，持续会话与原生事件。 |
 | 通信与交接 | 不可变 Message/ACK、当前 Binding 路由、固定后继的跨 Harness 自动交接；原生客户端对回环 API 的工具与接手测试。 |
 | 管家维护 | 明确作用域的委托、健康检查、持久巡检、去重通知、有限维修及独立复查；不强制接管或重放未知业务。 |
@@ -80,6 +84,7 @@ AgentWorkspace 软件安装
 | [产品设计](docs/design.md) | 唯一产品合同，V1 目标及 V2/V3 边界。 |
 | [首次配置](docs/first-use.md) | 新机器准备、本机/远端 Git、三实例初始化。 |
 | [运行与维护](docs/runtime-and-maintenance.md) | 当前操作入口、支持矩阵、限制和实机验收。 |
+| [Workbench 0.4](docs/workbench.md) | 工作台信息架构、状态依据、目录选择、部分成功与恢复语义。 |
 | [基础使用](docs/usage.md) | 基础 CLI、消息、资产、Work 与旧入口说明。 |
 | [实现状态](docs/implementation.md) | 当前模块、验证层次和剩余缺口。 |
 | [开发协作仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md) | 团队问题、调查、试验代码、交接与详细验证证据。 |

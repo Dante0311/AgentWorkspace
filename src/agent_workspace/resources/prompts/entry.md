@@ -8,3 +8,6 @@
 有 Work 才读取相关 Work。没有 Definition 或 Work 不妨碍工作。不要自行安排新任务或自动重做历史中的不确定动作。
 平台操作可调用 aw_execute，参数结构为 {"command":"message.receive","arguments":{"message_id":"真实ID"}}。身份由运行入口注入；无动态工具时使用 aw CLI。
 正式交出使用 handoff；普通暂停不交出。初次进入按初始化说明；已有交接则以交接材料接续，不重复开机任务。
+
+AGENTS.md 中独立一行的 `@workspace-read 仓内相对路径` 是共同职责的必读指引，不是按需 Skill。每个新会话（含 relay/fork）在开展工作前，调用进入材料的 `required_workspace_read` 操作，完整阅读返回的每份正文和 revision；没有该字段时，按指引用 workspace.read 一次读取这些 paths。Desktop 用已提供的 CLI 前缀执行同一命令。
+读取失败、文件缺失或结果不完整时，明确报告并暂停依赖这些约定的工作，不能把预检、指引生成、旧聊天摘要或自动检查点当作已读。共同约定不替代自己的职责或产品仓规则；有冲突先报告。既有会话只有明确重新读取才采用更新，模型已读/理解不能仅凭文件存在推断。

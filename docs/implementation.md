@@ -13,6 +13,8 @@
 | `harness_config.py` | Codex/Claude 原生模型选项查询、三种受管入口的实例独立模型配置；凭据只保存引用。 |
 | `runtime.py`、`rpc.py`、`native_sdk.py` | 实际原生入口、持续事件、工具边界、初始接入、独占 Runner 与停工观测。 |
 | `transfer.py` | 原绑定和固定后继的持久 handoff/relay，结果未知不重新创建会话。 |
+| `shared.py`、`skills.py` | 同一共享提交的职责材料读取，以及共享 Skill 发现、安装、来源比较与受保护更新。 |
+| `desktop_projects.py` | 实例主目录匹配的原生项目发现/复用，按实际接口能力执行显式分区准备。 |
 | `messages.py` | Message/ACK、Git 发布补齐、FIFO 与当前入口通知。 |
 | `maintenance.py` | 作用域授权、健康观测、安装位置归属明确的巡检、有限维修和结果复查。 |
 | `bridges.py`、`wecom.py` | 可选外部渠道、文本收发与组件看护。 |
@@ -51,9 +53,19 @@ Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试�
 
 设计目标保留，当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制交付，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。获得可靠接口后再按同一执行权合同增加支持。不静默改用后台 CLI、不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份、强制接管和通用迁移仍未实现。
 
+## 共同职责、共享 Skill 与桌面准备
+
+共同职责使用 `@workspace-read` 指引并从所属 Workspace 的同一提交读取全文；预检可读不等于模型已读。共享 Skill 可在创建时选择或后续安装、更新，保留来源并保护实例修改；未完成的文件交换须恢复后才能快照、交出或启动。用法见 [共享资料](shared-materials.md)。
+
+Codex 项目准备按可靠 ID 和实例主目录发现、复用已有项目，分区只在实际控制接口支持时显式处理并读回。原生项目创建、文件夹编辑仍需手动准备，不把保存引用或协议夹具当成桌面操作通过。
+
+Windows 测试按文件分四片，保留选择清单与 JUnit。安装检查请求正常服务停机并等待本进程的 HTTP/巡检线程；清理仅对已确认的普通只读文件恢复写位并重试一次。原 WinError 145 尚不能仅由此断言根因或关闭，集成版本的结果须单独验证。
+
+原包 `57446de` 的开发结果和失败证据见 [归档报告](https://github.com/Dante0311/AW-Workspace/blob/5ec6e5e99dcc68b8ec58e701a7ff9d7b119974e8/development/archive/2026-10-10-unified-57446de/docs/evidence/2026-10-09-shared-materials/README.md)。这些结果只对应原包；当前候选的 Windows、浏览器、原生 Desktop 和真实模型效果分别报告。
+
 ## Codex Desktop 自动接入（2026-10-08）
 
-已接入已有本地项目的自动创建会话、实例主目录核验、真实会话 ID 绑定、持续投递与同实例交接。项目和分区首次准备仍需手动完成；运行器复用项目，不静默换用 CLI，也不读写应用私有数据库。
+已接入已有本地项目的自动创建会话、实例主目录核验、真实会话 ID 绑定、持续投递与同实例交接。项目可通过准备入口发现和复用，分区操作按实际控制接口确认；缺失项目与文件夹设置仍需手动补齐。运行器复用项目，不静默换用 CLI，也不读写应用私有数据库。
 
 桌面发送回执只含聊天 ID，输入通过 `runtime.receive-input` 绑定执行时的真实轮次，再根据该轮原生结束状态保存完成和初始检查点。Desktop CLI 校验真实 `CODEX_THREAD_ID` 与当前 Binding；创建结果不明不另开聊天，停工要求原端 checkpoint、stop 和实际 idle。
 
@@ -63,7 +75,7 @@ Windows Codex Desktop 的限定实测覆盖自动创建、目录和身份绑定�
 
 日常使用另确认了共享仓库读取失败可能令运行器退出，以及运行器退出后 `stopping` 缺少继续确认交出的路径。两项仍为已登记、待修复与待复验的问题；正常路径的历史通过结果不能覆盖它们。具体原因、修复范围和验收要求只在开发仓的 [AW-RUNTIME-001 / AW-RUNTIME-002 登记](https://github.com/Dante0311/AW-Workspace/blob/main/development/issues.md)维护。
 
-创建时目录选择、首次模型设置、Codex 项目与分区准备等已登记需求也在同一问题页；本文不把待办写成已实现能力。
+创建时目录选择、实例模型设置与相关验收事项仍在同一问题页跟踪；共享资料和项目准备的实现范围见上文。本文不把待办或其他分支实现写成当前版本已验证能力。
 
 ## 历史验证与追溯
 

@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from agent_workspace.gitstore import GitStore
+
 
 @pytest.fixture
 def smoke():
@@ -25,6 +27,20 @@ def test_remove_ordinary_owned_tree(smoke, tmp_path):
 def test_real_windows_git_readonly_cleanup(smoke, tmp_path):
     root = tmp_path / 'smoke'; root.mkdir(); path = root / 'git-object'; path.write_bytes(b'object')
     path.chmod(stat.S_IREAD)
+    smoke.remove_smoke_tree(root)
+    assert not root.exists()
+
+
+def test_real_git_round_trip_and_cleanup(smoke, tmp_path):
+    root = tmp_path / 'smoke'
+    remote = root / 'shared.git'
+    GitStore.initialize(remote)
+    store = GitStore(str(remote), root / 'home')
+    revision = store.change('main', {'asset.txt': b'owned asset'},
+                            {'asset.txt': None}, 'Write smoke asset')
+    snapshot = store.snapshot()
+    assert snapshot.revision == revision
+    assert snapshot.bytes('asset.txt') == b'owned asset'
     smoke.remove_smoke_tree(root)
     assert not root.exists()
 

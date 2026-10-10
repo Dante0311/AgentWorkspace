@@ -48,7 +48,8 @@ class GitStore:
         with locked(self.root.with_suffix(".lock")):
             if not self.root.exists():
                 self.root.parent.mkdir(parents=True, exist_ok=True)
-                run(["git", "init", "--bare", str(self.root)])
+                # Assets are regular files; avoid Git for Windows' symlink probe.
+                run(["git", "-c", "core.symlinks=false", "init", "--bare", str(self.root)])
                 self.git("remote", "add", "origin", address)
 
     def git(self, *args, **kwargs):
@@ -60,7 +61,7 @@ class GitStore:
         if path.exists() and any(path.iterdir()):
             raise Conflict("Workspace target must be empty; use workspace connect for an existing repo.")
         path.mkdir(parents=True, exist_ok=True)
-        run(["git", "init", "--bare", "--initial-branch=main", str(path)])
+        run(["git", "-c", "core.symlinks=false", "init", "--bare", "--initial-branch=main", str(path)])
 
     def head(self, branch: str) -> str | None:
         result = self.git("ls-remote", "--heads", "origin", f"refs/heads/{branch}")

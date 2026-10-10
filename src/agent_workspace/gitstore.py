@@ -6,15 +6,19 @@ and uses a fast-forward push. Independent appends can retry; business conflicts 
 from __future__ import annotations
 
 import base64
+import contextlib
+import errno
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
 
-from .util import Conflict, Error, Uncertain, digest, encode, locked, relpath, run
+from .util import (Conflict, Error, LockBusy, RetryableRead, Uncertain, command_detail,
+                   digest, encode, locked, relpath, run)
 
 
 def git_env(env=None):
@@ -23,6 +27,30 @@ def git_env(env=None):
                 GIT_ASKPASS="", SSH_ASKPASS="", GIT_SSH_VARIANT="ssh",
                 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes")
 
+
+
+def permanent_git_failure(detail: str) -> bool:
+    # A partial transfer can mention both a network symptom and invalid data.
+    # Do not let the network wording hide an explicit access or integrity failure.
+    return any(word in detail.lower() for word in ("permission denied", "access denied", "authentication failed",
+            "repository not found", "not a git repository", "certificate", "host key verification failed",
+            "could not read username", "terminal prompts disabled", "corrupt", "bad object",
+            "invalid object", "protocol error", "schannel", "sec_e_", "ssl", "tls",
+            "the requested url returned error: 401",
+            "the requested url returned error: 403"))
+
+
+def temporary_transport_failure(detail: str) -> bool:
+    if permanent_git_failure(detail):
+        return False
+    detail = detail.lower()
+    return any(word in detail for word in (
+        "could not resolve host", "could not resolve proxy", "could not resolve hostname",
+        "temporary failure in name resolution", "failed to connect to", "connection timed out",
+        "operation timed out", "connection reset", "connection refused", "network is unreachable",
+        "no route to host", "empty reply from server", "remote end hung up unexpectedly",
+        "unexpected disconnect while reading sideband packet",
+        *(f"the requested url returned error: {code}" for code in (408, 429, 500, 502, 503, 504))))
 
 
 class Snapshot:
@@ -45,7 +73,7 @@ class GitStore:
     def __init__(self, address: str, home: Path):
         self.address = address
         self.root = home / "git" / digest(address.encode())[:24]
-        with locked(self.root.with_suffix(".lock")):
+        with self._cache_lock():
             if not self.root.exists():
                 self.root.parent.mkdir(parents=True, exist_ok=True)
                 run(["git", "init", "--bare", str(self.root)])
@@ -53,7 +81,36 @@ class GitStore:
 
     def git(self, *args, **kwargs):
         kwargs["env"] = git_env(kwargs.get("env"))
-        return run(["git", "-c", "credential.interactive=false", "--git-dir", str(self.root), *args], **kwargs)
+        check = kwargs.pop("check", True)
+        try:
+            result = run(["git", "-c", "credential.interactive=false", "--git-dir", str(self.root), *args],
+                         check=False, **kwargs)
+        except subprocess.TimeoutExpired as exc:
+            if args[0] == "push":
+                # The publication boundary knows the original commit and can check its result.
+                raise
+            output = exc.stderr or exc.output or ""
+            full_detail = output.decode("utf-8", errors="replace") if isinstance(output, bytes) else output
+            detail = command_detail(output)
+            message = f"Git {args[0]} timed out after {exc.timeout} seconds. {detail}".strip()
+            if args[0] in ("ls-remote", "fetch") and not permanent_git_failure(full_detail):
+                raise RetryableRead(message) from exc
+            raise Error(message) from exc
+        if check and result.returncode:
+            output = result.stdout + result.stderr
+            detail = command_detail(output) or f"Git {args[0]} exited {result.returncode}"
+            if args[0] in ("ls-remote", "fetch") and temporary_transport_failure(output.decode("utf-8", errors="replace")):
+                raise RetryableRead(detail)
+            raise Error(detail)
+        return result
+
+    @contextlib.contextmanager
+    def _cache_lock(self):
+        try:
+            with locked(self.root.with_suffix(".lock")):
+                yield
+        except LockBusy as exc:
+            raise RetryableRead(str(exc)) from exc
 
     @staticmethod
     def initialize(path: Path):
@@ -68,7 +125,7 @@ class GitStore:
         if not lines:
             return None
         sha = lines[0].split()[0]
-        with locked(self.root.with_suffix(".lock")):
+        with self._cache_lock():
             self.git("fetch", "--quiet", "--no-tags", "origin", sha)
         return sha
 
@@ -77,7 +134,8 @@ class GitStore:
         if sha is None:
             return Snapshot(self, "", {})
         if self.git("cat-file", "-e", sha, check=False).returncode:
-            self.git("fetch", "--quiet", "origin", sha)
+            with self._cache_lock():
+                self.git("fetch", "--quiet", "origin", sha)
         raw = self.git("ls-tree", "-rz", sha).stdout
         entries = {}
         for item in raw.split(b"\0"):
@@ -115,21 +173,44 @@ class GitStore:
             return self.git(*args, data=message.encode(), env=env).stdout.decode().strip()
 
     def publish(self, branch: str, commit: str, expected: str) -> None:
-        # No force push. A stale parent produces a divergent commit and is rejected.
-        result = self.git("push", "--porcelain", "origin", f"{commit}:refs/heads/{branch}", check=False)
-        if result.returncode == 0:
-            return
+        args = ["push", "--porcelain"]
+        if not expected:
+            # This lease only creates an absent ref; it cannot replace an existing branch.
+            args.append(f"--force-with-lease=refs/heads/{branch}:")
+        args += ["origin", f"{commit}:refs/heads/{branch}"]
+        try:
+            result = self.git(*args, check=False)
+        except subprocess.TimeoutExpired as exc:
+            detail = f"Git push timed out after {exc.timeout} seconds. {command_detail(exc.stderr or exc.output)}".strip()
+            failure = Uncertain(detail)
+            failure.__cause__ = exc
+            rejected = False
+        else:
+            if result.returncode == 0:
+                return
+            detail = command_detail(result.stdout + result.stderr) or f"Git push exited {result.returncode}"
+            failure = Uncertain(detail) if temporary_transport_failure((result.stdout + result.stderr).decode("utf-8", errors="replace")) else Error(detail)
+            rejected = any(reason in result.stdout.decode("utf-8", errors="replace") for reason in (
+                "[rejected] (non-fast-forward)", "[rejected] (fetch first)", "[rejected] (stale info)",
+                "[remote rejected] (incorrect old value provided)"))
+            if not isinstance(failure, Uncertain) and not rejected:
+                raise failure
         try:
             actual = self.head(branch)
-        except (Error, OSError, TimeoutError) as exc:
-            raise Uncertain(f"Commit {commit} may have been published; inspect before retrying.") from exc
-        if actual == commit:
-            return
-        if actual and not self.git("merge-base", "--is-ancestor", commit, actual, check=False).returncode:
-            return
-        if actual != (expected or None):
-            raise Conflict("Shared branch advanced; reread the operation preconditions.")
-        raise Error("Git push rejected. Check access, branch rules, and that a local authority is a bare repo.")
+            if actual == commit:
+                return
+            if actual:
+                ancestry = self.git("merge-base", "--is-ancestor", commit, actual, check=False)
+                if ancestry.returncode == 0:
+                    return
+                if ancestry.returncode != 1:
+                    raise Error(command_detail(ancestry.stderr) or "Could not inspect publication ancestry.")
+        except (Error, OSError) as exc:
+            raise Uncertain(f"{detail}\nCould not confirm commit {commit}: {exc}") from exc
+        if rejected:
+            raise Conflict(f"{detail}\nShared branch rejected the expected version; reread the operation preconditions.")
+        # Even an unchanged ref does not prove a timed-out server operation cannot finish later.
+        raise Uncertain(f"{detail}\nCommit {commit} is not confirmed; inspect the original operation before retrying.") from failure
 
     def change(self, branch: str, changes: dict[str, bytes | None], expected: dict[str, str | None],
                message: str, *, base: str | None = None) -> str:
@@ -158,13 +239,7 @@ class GitStore:
         else:
             changes = files
         commit = self.commit(parent, changes, f"Create {name}")
-        # Creation must be compare-and-set too, not a push that could fast-forward an existing ref.
-        result = self.git("push", "--porcelain", f"--force-with-lease=refs/heads/{name}:",
-                          "origin", f"{commit}:refs/heads/{name}", check=False)
-        if result.returncode:
-            actual = self.head(name)
-            if actual != commit:
-                raise Conflict(f"Could not create {name}; an existing branch was not replaced.")
+        self.publish(name, commit, "")
         return commit
 
 
@@ -196,10 +271,19 @@ class GitHubStore(GitStore):
                 return None
             if exc.code in (409, 422):
                 raise Conflict("GitHub rejected a stale or invalid Git update.") from None
+            if exc.code in (408, 429, 500, 502, 503, 504):
+                if method == "GET":
+                    raise RetryableRead(f"GitHub HTTP {exc.code}; no shared state was confirmed.") from exc
+                raise Uncertain(f"GitHub HTTP {exc.code}; inspect the original write result.") from exc
             raise Error(f"GitHub HTTP {exc.code}; check token permissions and branch rules.") from None
         except (urllib.error.URLError, TimeoutError) as exc:
             if method != "GET":
                 raise Uncertain("GitHub write result is unknown; inspect the original operation.") from exc
+            reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+            if not permanent_git_failure(str(reason)) and (isinstance(reason, TimeoutError) or (isinstance(reason, OSError) and reason.errno in
+                    (errno.ETIMEDOUT, errno.ECONNRESET, errno.ECONNREFUSED, errno.ENETUNREACH, errno.EHOSTUNREACH))
+                    or temporary_transport_failure(str(reason))):
+                raise RetryableRead("GitHub read temporarily unavailable; no shared state was confirmed.") from exc
             raise Error("GitHub read failed; no shared state was confirmed.") from exc
 
     def bootstrap(self, metadata):
@@ -259,8 +343,12 @@ class GitHubStore(GitStore):
                 self.request("POST", "/git/refs", {"ref": "refs/heads/" + branch, "sha": commit})
             else:
                 self.request("PATCH", path, {"sha": commit, "force": False})
-        except (Conflict, Uncertain):
-            if self.head(branch) == commit:
+        except (Conflict, Uncertain) as failure:
+            try:
+                actual = self.head(branch)
+            except (Error, OSError) as exc:
+                raise Uncertain(f"{failure}\nCould not confirm commit {commit}: {exc}") from exc
+            if actual == commit:
                 return
             raise
 

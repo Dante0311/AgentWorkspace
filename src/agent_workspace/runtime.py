@@ -17,11 +17,16 @@ from . import __version__
 from .messages import Messages
 from .rpc import Rpc
 from .native_sdk import NativeSDK, SDK_TYPES, sdk_options
-from .util import Conflict, Error, Unavailable, encode, locked, now, read_json, slug, uid, write_bytes, write_json
+from .util import (Conflict, Error, LockBusy, RetryableRead, Unavailable, Uncertain, encode,
+                   locked, now, read_json, slug, uid, write_bytes, write_json)
 
 
 TOOL_SCHEMA = {"type": "object", "properties": {"command": {"type": "string"},
     "arguments": {"type": "object"}}, "required": ["command", "arguments"], "additionalProperties": False}
+
+
+class _ReadStopped(Exception):
+    """The local monitor was stopped while waiting for an authoritative read."""
 
 
 def entry_prompt(app, workspace, agent_id, binding, root):
@@ -232,12 +237,14 @@ class Desktop:
     supports_insert = True
 
     """Attach to the desktop-owned MCP control endpoint; never spawn a competing writer."""
-    def __init__(self, root, config, session):
+    def __init__(self, root, config, session, *, read_only=False):
         self.root, self.session = root, session
         self.config = config
-        for name in ("model", "effort", "project_id"):
-            if name in config and not isinstance(config[name], str):
-                raise Error(f"Desktop {name} must be a string.")
+        self.read_only = read_only
+        if not read_only:
+            for name in ("model", "effort", "project_id"):
+                if name in config and not isinstance(config[name], str):
+                    raise Error(f"Desktop {name} must be a string.")
         command = config.get("command")
         if not command or not config.get("pipe_path") or not config.get("caller_thread"):
             raise Unavailable("Desktop connection is not captured. Configure the real MCP command and capture it in Desktop.")
@@ -251,8 +258,11 @@ class Desktop:
             tools = self.rpc.request("tools/list")["tools"]
             names = {t["name"] for t in tools}
             self.tools = names
-            if not {"read_thread", "send_message_to_thread"}.issubset(names):
+            required = {"read_thread"} if read_only else {"read_thread", "send_message_to_thread"}
+            if not required.issubset(names):
                 self.close()
+                if read_only:
+                    raise Error("Installed Desktop cannot observe the original session; the stop request remains pending.")
                 raise Unavailable("Installed Desktop does not expose the expected control tools; no CLI fallback was used.")
         except BaseException:
             self.rpc.close()
@@ -279,8 +289,11 @@ class Desktop:
         return "unknown"
 
     def read(self, **options):
-        return self.call("read_thread", {"threadId": self.session, "turnLimit": 1,
-                                        "maxOutputCharsPerItem": 100, **options})
+        result = self.call("read_thread", {"threadId": self.session, "turnLimit": 1,
+                                          "maxOutputCharsPerItem": 100, **options})
+        if result["thread"].get("id") != self.session:
+            raise Conflict("Desktop returned a different native session; its state was not used.")
+        return result
 
     def project(self):
         if not {"create_thread", "list_projects"}.issubset(self.tools):
@@ -298,6 +311,8 @@ class Desktop:
         return matches[0]
 
     def create(self, binding):
+        if self.read_only:
+            raise Conflict("A stop observer cannot create a native session.")
         project = self.project()
         path = self.root / ".aw-local/launch.json"
         previous = read_json(path, {})
@@ -333,6 +348,8 @@ class Desktop:
                 if value.get("status") in ("completed", "interrupted", "failed")}
 
     def notify(self, prompt, delivery):
+        if self.read_only:
+            raise Conflict("A stop observer cannot send model input.")
         state = self.status()
         if state == "unknown" or (state == "busy" and delivery == "normal"):
             raise Conflict("Desktop is not ready for this delivery mode.")
@@ -342,17 +359,79 @@ class Desktop:
         self.rpc.close()
 
 
-def spawn_runner(app, workspace, agent_id, directory=None):
+def spawn_runner(app, workspace, agent_id, directory=None, *, stop_binding=None):
     root = app.root(workspace, agent_id, directory)
     log = root / ".aw-local/runner.log"
     with log.open("ab") as output:
         args = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "--workspace", workspace,
                 "runtime", "run", agent_id, "--directory", str(root)]
+        if stop_binding:
+            args += ["--stop-binding", stop_binding]
         kwargs = {"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}
         env = {key: value for key, value in os.environ.items()
                if key not in ("AW_HOME", "AW_WORKSPACE", "AW_AGENT", "AW_BINDING", "CODEX_THREAD_ID")}
         proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output, stderr=output, env=env, **kwargs)
     return {"pid": proc.pid, "state": "starting_runner"}
+
+
+def _released_stop(snap, agent_id, binding, entry, expected_checkpoint=None):
+    handoff_id = "h" + binding[1:]
+    handoff = snap.json(f"handoffs/{handoff_id}.json")
+    if (entry.get("id") != binding or entry.get("agent") != agent_id or not handoff
+            or handoff.get("id") != handoff_id or handoff.get("agent") != agent_id
+            or handoff.get("entry") != binding or handoff.get("checkpoint") != entry.get("checkpoint")):
+        raise Conflict("The released entry has no matching handoff; inspect its original publication.")
+    if expected_checkpoint is not None and entry.get("checkpoint") != expected_checkpoint:
+        raise Conflict("The original stopping checkpoint changed.")
+    return {"state": "released", "binding": binding, "handoff": handoff_id,
+            "checkpoint": entry["checkpoint"], "session": entry["session"]}
+
+
+def continue_stop(app, workspace, agent_id, binding, directory=None, *, expected_checkpoint=None):
+    """Continue one saved stop request without starting an execution adapter."""
+    root = app.root(workspace, agent_id, directory)
+    snap = app.store(workspace).snapshot()
+    agent = app.agent(workspace, agent_id, snap)
+    entry = snap.json(f"bindings/{binding}.json")
+    if not entry or entry["agent"] != agent_id:
+        raise Conflict("The stop request does not belong to this instance.")
+    if expected_checkpoint is not None and entry.get("checkpoint") != expected_checkpoint:
+        raise Conflict("The original stopping checkpoint changed.")
+    if entry["phase"] == "released":
+        return _released_stop(snap, agent_id, binding, entry, expected_checkpoint)
+    if agent["current"] != binding or entry["phase"] != "stopping":
+        raise Conflict("Only the current binding's existing stop request can be continued.")
+    local = read_json(root / ".aw-local/entry.json", {})
+    if local.get("binding") != binding:
+        raise Conflict("This directory is not attached to the original stopping entry.")
+    app.checkpoint_show(workspace, agent_id, entry["checkpoint"])
+    request = {"binding": binding, "checkpoint": entry["checkpoint"], "session": entry["session"]}
+    # A held OS lock is evidence of a live local runner, unlike an old PID file.
+    # The child takes this same lock before connecting to any native interface.
+    with locked(root / ".aw-local/stop-launch.lock"):
+        try:
+            with locked(root / ".aw-local/runner.lock", wait=0):
+                pass
+        except LockBusy:
+            return {**request, "state": "runner_present"}
+        if entry["kind"] != "desktop":
+            reason = ("Manual stop requires the current owner's explicit confirmation." if entry["kind"] == "manual"
+                      else "The original managed CLI runner is absent. No independent native stop observation is available; no writer was restarted.")
+            result = {**request, "state": "stop_observation_unknown", "kind": entry["kind"], "reason": reason}
+            write_json(root / ".aw-local/status.json", {**result, "observed_at": now(),
+                       "entry_automatically_released": False})
+            return result
+        config = read_json(root / ".aw-local/runtime.json", {})
+        if config.get("kind") != "desktop":
+            raise Conflict("Configured Runtime changed before stop observation.")
+        if not all(config.get(key) for key in ("command", "pipe_path", "caller_thread")):
+            result = {**request, "state": "stop_observation_unknown", "kind": "desktop",
+                      "reason": "The original Desktop control connection is not captured; stop was not confirmed."}
+            write_json(root / ".aw-local/status.json", {**result, "observed_at": now(),
+                       "entry_automatically_released": False})
+            return result
+        result = spawn_runner(app, workspace, agent_id, str(root), stop_binding=binding)
+        return {**request, **result, "state": "starting_stop_observer"}
 
 
 def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None):
@@ -500,7 +579,7 @@ def watch(app, workspace, agent_id, operation, interval=5, directory=None):
 
 
 class Runner:
-    def __init__(self, app, workspace, agent_id, directory=None):
+    def __init__(self, app, workspace, agent_id, directory=None, stop_binding=None):
         self.app, self.workspace, self.agent_id = app, workspace, agent_id
         self.root = app.root(workspace, agent_id, directory)
         self.adapter = None
@@ -510,6 +589,11 @@ class Runner:
         self.runtime_kind = None
         self.controller = None
         self.adapter_closed = False
+        self.stop_binding = stop_binding
+        self.stop_only = False
+        self.cleanup_errors = []
+        self.primary_failure = None
+        self.stop_request = None
 
     def _close_adapter(self):
         if self.adapter is not None and not self.adapter_closed:
@@ -518,17 +602,102 @@ class Runner:
 
     def status(self, **values):
         write_json(self.root / ".aw-local/status.json", {"pid": os.getpid(), "binding": self.binding,
-                   "observed_at": now(), **values})
+                   "observed_at": now(), **({"primary_failure": self.primary_failure} if self.primary_failure else {}),
+                   **({"stop_request": self.stop_request} if self.stop_request else {}),
+                   **values})
+
+    def _wait_shared_read(self, stage, failure, attempts):
+        delay = min(2 ** min(attempts, 5), 30)
+        self.status(state="shared_read_backoff", stage=stage, reason=str(failure),
+                    error_code=failure.code, attempts=attempts, retry_seconds=delay,
+                    kind=self.runtime_kind, session=getattr(self.adapter, "session", None),
+                    entry_automatically_released=False)
+        if self.stop_event.wait(delay):
+            raise _ReadStopped(str(failure)) from failure
+
+    def _shared_read(self, stage, read, *args, **kwargs):
+        # Only call this with a read. Retrying an outer operation could replay
+        # inputs, native creation or a publication whose result is unknown.
+        attempts = 0
+        while True:
+            try:
+                result = read(*args, **kwargs)
+            except RetryableRead as exc:
+                attempts += 1
+                self._wait_shared_read(stage, exc, attempts)
+                continue
+            if attempts:
+                self.status(state="shared_read_recovered", stage=stage, attempts=attempts,
+                            kind=self.runtime_kind, session=getattr(self.adapter, "session", None))
+            return result
+
+    def _read_state(self, stage="ownership"):
+        def read():
+            snap = self.app.store(self.workspace).snapshot()
+            owner = self.app.agent(self.workspace, self.agent_id, snap)
+            entry = snap.json(f"bindings/{self.binding}.json")
+            return snap, owner, entry
+        return self._shared_read(stage, read)
+
+    def _cleanup_native(self, bridges=None):
+        original = sys.exception()
+        failures = []
+        for close in ([bridges.stop_all] if bridges is not None else []) + [self._close_adapter]:
+            try:
+                close()
+            except Exception as exc:
+                failures.append(exc)
+        if not failures:
+            return
+        self.cleanup_errors.extend(str(exc) for exc in failures)
+        if original is not None:
+            for exc in failures:
+                original.add_note("Native cleanup failed: " + str(exc))
+            return
+        raise failures[0]
 
     def run(self):
         with locked(self.root / ".aw-local/runner.lock", wait=0):
+            failure = None
             try:
                 self._run_owned()
-            except Exception as exc:
-                self.status(state="failed", reason=str(exc), entry_automatically_released=False)
-                raise
-            finally:
+            except _ReadStopped:
+                self.status(state="monitor_stopped", entry_still_owned=True)
+            except BaseException as exc:
+                failure = exc
+                self.primary_failure = {"reason": str(exc), "error_code": getattr(exc, "code", None)}
+            try:
                 self._release_controller()
+            except BaseException as exc:
+                if failure is None:
+                    failure = exc
+                else:
+                    failure.add_note("Controller cleanup failed: " + str(exc))
+                    self.cleanup_errors.append(str(exc))
+        pending_stop = None
+        if not self.stop_only and self.binding and not isinstance(failure, Uncertain):
+            # A stop can arrive while an execution runner is exiting. Reuse the
+            # saved request after releasing the local lock, never restart work.
+            try:
+                _, owner, entry = self._read_state("stop_handover")
+                if owner["current"] == self.binding and entry["phase"] == "stopping":
+                    pending_stop = continue_stop(self.app, self.workspace, self.agent_id, self.binding,
+                                                 str(self.root), expected_checkpoint=entry["checkpoint"])
+            except BaseException as exc:
+                if failure is None:
+                    failure = exc
+                else:
+                    failure.add_note("Stop observation continuation failed: " + str(exc))
+                    self.cleanup_errors.append(str(exc))
+        if failure is not None:
+            self.status(state="failed", reason=str(failure), error_code=getattr(failure, "code", None),
+                        cleanup_errors=self.cleanup_errors, stop_observation=pending_stop,
+                        entry_automatically_released=False)
+            raise failure
+        if pending_stop is not None:
+            return
+        if self.stop_only:
+            return
         transfer = read_json(self.root / ".aw-local/transfer.json")
         if transfer and transfer["old_binding"] == self.binding:
             from .transfer import advance
@@ -543,16 +712,26 @@ class Runner:
         if not record:
             raise Error("No local entry; use relay/start before launching a runner.")
         self.binding = record["binding"]
-        snap = app.store(workspace).snapshot()
-        item = app.agent(workspace, aid, snap)
+        if self.stop_binding and self.binding != self.stop_binding:
+            raise Conflict("The original stopping binding changed before its observer started.")
+        snap, item, entry = self._read_state()
+        if self.stop_binding and entry and entry["phase"] == "released":
+            self.stop_only = True
+            result = self._shared_read("stop_result", _released_stop, snap, aid, self.binding, entry)
+            self.status(**result)
+            return
         if item["current"] != self.binding:
             raise Conflict("Local runner entry has been superseded.")
-        entry = snap.json(f"bindings/{self.binding}.json")
         config = read_json(self.root / ".aw-local/runtime.json", record["config"])
         if config.get("kind", "manual") != entry["kind"]:
             raise Conflict("Configured Runtime changed; handoff is required before changing the active Runtime.")
+        if self.stop_binding and entry["phase"] != "stopping":
+            raise Conflict("The observer cannot start or resume an execution entry.")
         if entry["phase"] == "stopping":
-            raise Conflict("Handoff is already in progress; do not restart its execution components.")
+            self.stop_only = True
+            self.runtime_kind = entry["kind"]
+            self._observe_stop(entry, config)
+            return
         if entry.get("controller"):
             raise Conflict("Another runner owns this binding. A crashed controller is not automatically taken over.")
         controller = uid("r")
@@ -561,7 +740,7 @@ class Runner:
             {path: snap.entries[path], f"agents/{aid}.json": snap.entries[f"agents/{aid}.json"]}, "Claim binding runner")
         self.controller = controller
         self.runtime_kind = entry["kind"]
-        failures, next_poll, bridges = 0, 0.0, None
+        failures, read_failures, next_poll, bridges = 0, 0, 0.0, None
         self.status(state="connecting", kind=entry["kind"])
         try:
             if entry["kind"] == "manual":
@@ -593,23 +772,35 @@ class Runner:
                     app.bind(workspace, aid, self.binding, self.adapter.session, str(self.root))
                     queue_input(app, workspace, aid, entry_prompt(app, workspace, aid, self.binding, self.root),
                                 purpose="initial", directory=str(self.root), request_id="boot-" + self.binding)
-                entry = app.store(workspace).snapshot().json(f"bindings/{self.binding}.json")
+                _, _, entry = self._read_state()
             from .bridges import BridgeManager
             from .transfer import persist_completion
             bridges = BridgeManager(app, workspace, aid, self.binding, self.root)
             self.status(state="running", kind=entry["kind"], session=self.adapter.session)
             while not self.stop_event.wait(0.5):
-                snap = app.store(workspace).snapshot()
-                agent = app.agent(workspace, aid, snap)
+                snap, agent, current = self._read_state()
                 if agent["current"] != self.binding:
                     break
-                current = snap.json(f"bindings/{self.binding}.json")
                 if entry["kind"] in SDK_TYPES and self.adapter.status() == "unknown":
                     raise Unavailable("Native SDK is disconnected; inspect the original input before recovery.")
                 if current["phase"] == "stopping":
+                    if self.stop_request is None:
+                        self.stop_request = {"id": self.binding, "session": self.adapter.session,
+                                             "checkpoint": current["checkpoint"], "controller": self.controller}
+                    if any(current.get(key) != value for key, value in self.stop_request.items()):
+                        raise Conflict("The original stop request changed during observation.")
                     bridges.stop_all()
-                    self.status(state="handoff_waiting_idle", session=self.adapter.session)
-                    if self.adapter.status() == "idle":
+                    # A closed managed writer cannot execute again. Closing a
+                    # Desktop control connection leaves the chat alive, so read
+                    # its current state again before retrying a preflight read.
+                    if isinstance(self.adapter, Desktop) and self.adapter_closed:
+                        self.adapter = Desktop(self.root, config, self.stop_request["session"], read_only=True)
+                        self.adapter_closed = False
+                    native_closed = self.adapter_closed and not isinstance(self.adapter, Desktop)
+                    native_state = "idle" if native_closed else self.adapter.status()
+                    self.status(state="handoff_waiting_idle" if native_state in ("idle", "busy") else "stop_observation_unknown",
+                                session=self.adapter.session, native_state=native_state)
+                    if native_state == "idle":
                         if isinstance(self.adapter, Desktop):
                             self._complete_inputs(stopping_checkpoint=current["checkpoint"])
                         # Desktop retains its idle chat; its platform authority is released below.
@@ -619,7 +810,17 @@ class Runner:
                         if not isinstance(self.adapter, Desktop):
                             self._complete_inputs(stopping_checkpoint=current["checkpoint"])
                         persist_completion(self.root, current)
-                        result = app.finish_stop(workspace, aid, self.binding, observed_idle=True)
+                        try:
+                            result = app.finish_stop(workspace, aid, self.binding, observed_idle=True,
+                                expected_controller=self.stop_request["controller"], expected_checkpoint=self.stop_request["checkpoint"],
+                                expected_session=self.stop_request["session"])
+                        except RetryableRead as exc:
+                            # Core only raises this before a publication can
+                            # happen. Reobserve the fixed request; Uncertain is
+                            # deliberately left outside this recovery path.
+                            read_failures += 1
+                            self._wait_shared_read("stop_preflight", exc, read_failures)
+                            continue
                         self.status(state="released", handoff=result["id"])
                         break
                     continue
@@ -627,28 +828,41 @@ class Runner:
                     self.status(state="monitor_stopped", entry_still_owned=True)
                     break
                 try:
+                    stage = "bridge_poll"
                     handoff_requested = read_json(self.root / ".aw-local/control.json", {}).get("handoff") == self.binding
                     if handoff_requested:
                         bridges.stop_all()
                     else:
                         bridges.tick()
                     records = self._read_inputs()
+                    stage = "input_completion"
                     self._complete_inputs(records)
                     persist_completion(self.root, current)
+                    stage = "input_dispatch"
                     self._inputs(records)
                     setting = read_json(self.root / ".aw-local/watch.json", {"enabled": False})
                     if not handoff_requested and setting.get("enabled") and setting.get("binding") == self.binding and time.monotonic() >= next_poll:
+                        stage = "watch_poll"
                         result = Messages(app).poll(workspace, aid, self.binding, adapter=self.adapter, directory=str(self.root))
                         self.status(state="running", kind=entry["kind"], session=self.adapter.session, poll=result)
                         next_poll = time.monotonic() + setting.get("interval", 5)
                     failures = 0
+                    if read_failures:
+                        self.status(state="running", kind=entry["kind"], session=self.adapter.session,
+                                    recovered_read_failures=read_failures)
+                        read_failures = 0
+                except RetryableRead as exc:
+                    # Return to a fresh ownership read and durable queue records.
+                    # Adapter setup is not repeated; submitted/unknown inputs keep
+                    # their original IDs and are never reset to queued.
+                    read_failures += 1
+                    self._wait_shared_read(stage, exc, read_failures)
                 except Conflict:
                     # Only an observed ownership transition is a reason to continue the loop.
-                    latest = app.store(workspace).snapshot()
-                    owner = app.agent(workspace, aid, latest)
+                    latest, owner, current = self._read_state()
                     if owner["current"] != self.binding:
                         break
-                    if latest.json(f"bindings/{self.binding}.json")["phase"] == "stopping":
+                    if current["phase"] == "stopping":
                         continue
                     raise
                 except (Unavailable, OSError) as exc:
@@ -658,25 +872,89 @@ class Runner:
                         break
                     if self.stop_event.wait(min(2 **failures, 30)):
                         break
-                    latest = app.store(workspace).snapshot()
-                    owner = app.agent(workspace, aid, latest)
-                    current = latest.json(f"bindings/{self.binding}.json")
+                    latest, owner, current = self._read_state()
                     if owner["current"] != self.binding or current["phase"] != "active":
                         break
-                    self.adapter.close()
+                    self._close_adapter()
                     config = read_json(self.root / ".aw-local/runtime.json", config)
                     self.adapter = self._reconnect_desktop(config, entry["session"], failures)
+                    self.adapter_closed = False
                     if self.adapter is None:
                         break
         finally:
-            if bridges:
-                bridges.stop_all()
-            self._close_adapter()
+            self._cleanup_native(bridges)
         renew = read_json(self.root / ".aw-local/renew.json", {})
         if renew.get("requested") and renew.get("binding") == self.binding and app.agent(workspace, aid)["current"] is None:
             write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
             # The old model is no longer involved. A new local runner owns the next entry.
             self.renew_after_exit = True
+
+    def _observe_stop(self, request, config):
+        """Observe the saved Desktop request; never claim a native writer."""
+        if request["kind"] != "desktop" or not request["session"]:
+            self.status(state="stop_observation_unknown", kind=request["kind"],
+                        reason="No independent stop observer for this native entry.",
+                        entry_automatically_released=False)
+            return
+        from .transfer import persist_completion
+        self.stop_request = {key: request.get(key) for key in ("id", "session", "checkpoint", "controller")}
+        failures, read_failures = 0, 0
+        try:
+            while not self.stop_event.is_set():
+                snap, owner, current = self._read_state()
+                if current["phase"] == "released":
+                    if current["session"] != request["session"]:
+                        raise Conflict("The released entry belongs to a different native session.")
+                    result = self._shared_read("stop_result", _released_stop, snap, self.agent_id,
+                                              self.binding, current, request["checkpoint"])
+                    self.status(**result)
+                    return
+                if owner["current"] != self.binding or current["phase"] != "stopping":
+                    raise Conflict("The original stop request no longer owns this instance.")
+                for key in ("session", "checkpoint", "controller"):
+                    if current.get(key) != request.get(key):
+                        raise Conflict("The stop request or its controller changed during observation.")
+                self._shared_read("stop_checkpoint", self.app.checkpoint_show, self.workspace,
+                                  self.agent_id, current["checkpoint"])
+                try:
+                    if self.adapter is None:
+                        config = read_json(self.root / ".aw-local/runtime.json", config)
+                        if config.get("kind") != request["kind"]:
+                            raise Conflict("Configured Runtime changed during stop observation.")
+                        self.adapter = Desktop(self.root, config, request["session"], read_only=True)
+                        self.adapter_closed = False
+                    native_state = self.adapter.status()
+                except (Unavailable, OSError) as exc:
+                    failures += 1
+                    delay = min(2 ** min(failures, 5), 30)
+                    self.status(state="stop_observation_unknown", session=request["session"],
+                                reason=str(exc), attempts=failures, retry_seconds=delay)
+                    self._close_adapter()
+                    self.adapter = None
+                    if self.stop_event.wait(delay):
+                        return
+                    continue
+                if native_state == "idle":
+                    self._complete_inputs(stopping_checkpoint=current["checkpoint"])
+                    self._close_adapter()
+                    persist_completion(self.root, current)
+                    try:
+                        result = self.app.finish_stop(self.workspace, self.agent_id, self.binding, observed_idle=True,
+                            expected_controller=request.get("controller"), expected_checkpoint=request["checkpoint"],
+                            expected_session=request["session"])
+                    except RetryableRead as exc:
+                        read_failures += 1
+                        self._wait_shared_read("stop_preflight", exc, read_failures)
+                        self.adapter = None
+                        continue
+                    self.status(state="released", handoff=result["id"], session=request["session"])
+                    return
+                self.status(state="handoff_waiting_idle" if native_state == "busy" else "stop_observation_unknown",
+                            session=request["session"], native_state=native_state)
+                if self.stop_event.wait(0.5):
+                    return
+        finally:
+            self._cleanup_native()
 
     def _release_controller(self):
         if self.controller is None:
@@ -685,19 +963,24 @@ class Runner:
             self.status(state="native_stop_unconfirmed", entry_automatically_released=False)
             return
         store = self.app.store(self.workspace)
-        snap = store.snapshot()
         path = f"bindings/{self.binding}.json"
-        entry = snap.json(path)
-        if entry.get("controller") == self.controller:
-            entry.pop("controller")
-            store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Release binding runner")
-        self.controller = None
+        attempts = 0
+        while True:
+            snap, _, entry = self._read_state("controller_cleanup")
+            if entry.get("controller") == self.controller:
+                entry.pop("controller")
+                try:
+                    store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Release binding runner")
+                except RetryableRead as exc:
+                    attempts += 1
+                    self._wait_shared_read("controller_cleanup", exc, attempts)
+                    continue
+            self.controller = None
+            return
 
     def _reconnect_desktop(self, config, session, attempts):
         while attempts < 5:
-            latest = self.app.store(self.workspace).snapshot()
-            owner = self.app.agent(self.workspace, self.agent_id, latest)
-            entry = latest.json(f"bindings/{self.binding}.json")
+            latest, owner, entry = self._read_state()
             control = read_json(self.root / ".aw-local/control.json", {})
             stopped = control.get("stop") == self.binding or control.get("handoff") == self.binding
             if stopped or owner["current"] != self.binding or entry["phase"] != "active":
@@ -755,7 +1038,8 @@ class Runner:
             if stopping_checkpoint:
                 # A boot turn can itself stop. Reuse its explicit handoff snapshot;
                 # never publish a later automatic checkpoint during writer cleanup.
-                point = self.app.checkpoint_show(self.workspace, self.agent_id, stopping_checkpoint)
+                point = self._shared_read("stop_checkpoint", self.app.checkpoint_show,
+                                         self.workspace, self.agent_id, stopping_checkpoint)
             else:
                 point = self.app.checkpoint(self.workspace, self.agent_id,
                     "本会话进入轮次已结束。实际职责与资料以此快照中的文件为准。",
@@ -777,7 +1061,8 @@ class Runner:
                 return
             if self.adapter.status() == "busy" and item["delivery"] == "normal":
                 return
-            self.app.require_binding(self.workspace, self.agent_id, self.binding)
+            self._shared_read("input_qualification", self.app.require_binding,
+                              self.workspace, self.agent_id, self.binding)
             item.update(state="dispatching", attempted_at=now())
             write_json(path, item)
             try:

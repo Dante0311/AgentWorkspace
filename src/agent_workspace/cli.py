@@ -178,6 +178,7 @@ def parser():
     for sub in rt.values():
         sub.add_argument("agent_id")
         sub.add_argument("--directory")
+    rt["run"].add_argument("--stop-binding")
     bridge = actions("bridge", ["configure", "start", "stop", "status", "send"])
     for key, sub in bridge.items():
         sub.add_argument("agent_id")

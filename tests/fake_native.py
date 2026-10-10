@@ -16,10 +16,12 @@ for line in sys.stdin:
     method, params = request.get('method'), request.get('params', {})
     result = {}
     event = None
-    if mode == 'desktop':
+    if mode in ('desktop', 'desktop-readonly'):
         assert request.get('jsonrpc') == '2.0'
         if method == 'tools/list':
-            result = {'tools':[{'name':'read_thread'},{'name':'send_message_to_thread'}]}
+            result = {'tools':[{'name':'read_thread'}]}
+            if mode == 'desktop':
+                result['tools'].append({'name':'send_message_to_thread'})
         elif method == 'tools/call':
             assert params['_meta']['openai/threadId'] == 'caller'
             if params['name'] == 'read_thread':

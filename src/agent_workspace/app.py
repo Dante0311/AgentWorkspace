@@ -180,8 +180,18 @@ class App:
         root = package_files("agent_workspace") / "resources"
         result = {}
         for name in ("workspace", "work", "message", "agent", "handoff", "relay", "fork"):
-            result[f".agents/skills/{name}/SKILL.md"] = (root / "skills" / name / "SKILL.md").read_bytes()
-        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md", "capabilities.md", "desktop-projects.md"):
+            pending = [(root / "skills" / name, f".agents/skills/{name}")]
+            while pending:
+                source, prefix = pending.pop()
+                for item in source.iterdir():
+                    if item.name == "__pycache__":
+                        continue
+                    path = prefix + "/" + item.name
+                    if item.is_dir():
+                        pending.append((item, path))
+                    else:
+                        result[path] = item.read_bytes()
+        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md", "capabilities.md", "desktop-projects.md", "message-notification.json"):
             result[f".aw/prompts/{name}"] = (root / "prompts" / name).read_bytes()
         result[".aw/software.json"] = encode({"version": __version__,
             "files": {p: digest(v) for p, v in result.items()}})

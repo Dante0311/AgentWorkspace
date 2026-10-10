@@ -16,10 +16,10 @@
 | `transfer.py` | 原绑定和固定后继的持久 handoff/relay，结果未知不重新创建会话。 |
 | `shared.py`、`skills.py` | 同一共享提交的职责材料读取，以及共享 Skill 发现、安装、来源比较与受保护更新。 |
 | `desktop_projects.py` | 实例主目录匹配的原生项目发现/复用，按实际接口能力执行显式分区准备。 |
-| `messages.py` | Message/ACK、Git 发布补齐、FIFO 与当前入口通知。 |
+| `messages.py` | Message/ACK、Git 发布补齐、FIFO 与当前入口通知；通知保留完整原始 JSON，正文异常时使用可信索引。 |
 | `maintenance.py` | 作用域授权、健康观测、安装位置归属明确的巡检、有限维修和结果复查。 |
 | `bridges.py`、`wecom.py` | 可选外部渠道、文本收发与组件看护。 |
-| `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和七个 Skill。 |
+| `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和七个 Skill；内置 Skill 的 references/scripts 及固定通知模板随包分发。 |
 | `scripts/install.py`、CI | 可验证制品、空目录隔离安装、源码快照与 wheel/sdist。 |
 
 没有引入通用调度平台、模型网关、ACP 依赖或新的 Agent Loop。SDK 是按需安装的原生客户端，不是我们自研 Harness。元数据探测与实际会话共用凭据路由；Claude 握手返回模型选项，无需发送提示词，自有服务不使用内置目录。
@@ -36,6 +36,10 @@ Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试�
 
 维修动作与复查分开持久记录：动作成功而复查失败时保留动作结果，同一请求仅补复查；不把整个操作降成未知后诱发重做。损坏的本机观测记录报告异常并保留，其他实例仍可检查。普通代理不能凭自己的 active Binding 写另一实例资产，管家也须有对应目标授权；这不是 OS 级隔离。
 
+Message 通知使用一份随包 JSON 模板，附完整存储原文并保留未知字段；缺失或损坏正文改附可信索引。正文暂时读取故障在登记投递尝试前返回，FIFO、忙时等待、insert、当前入口、有限重试与并发规则继续使用原实现。
+
+message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确协议、仓库工具步骤及可选的独立 Python/Git 脚本。脚本不依赖 AW，不创建身份或入口；对原操作保留字节、条件提交、部分成功与结果未知，不将私有操作文件冒充 AW receipt。新实例获得完整 Skill 树，工具升级沿用现有资源哈希保护，用户修改或新增同路径材料时停止覆盖。
+
 ## 验证层次
 
 - 默认 CI：仅 Windows，覆盖 Python 3.11/3.13、Chromium 工作台和独立 wheel 安装；安装检查包含内置资源和三实例创建。当前不自动运行 Linux 兼容性回归。
@@ -50,6 +54,7 @@ Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试�
 | 类别 | 内容 |
 | --- | --- |
 | 已有实现，需实机验收 | 受管三种 CLI 的真实模型/账号、自己的 API、模型和强度生效；生产 Git/凭据；企业微信 Bot；隔离安装和持续运行体验。 |
+| Message 手动路径待验证环境 | 隔离本地 Git 可验证协议和辅助脚本；真实云端 GitHub 工具权限、条件更新语义及 Harness/模型按新版通知与 Skill 收件，需要在具体环境单独验证。 |
 | 接口仍需核实，不能伪装成只待验收 | Claude/WorkBuddy 原生 Desktop 自动创建、持续投递、停工观测。Codex Desktop 已接入真实控制接口，首次项目和连接仍需准备。 |
 | 当前接入未实现的能力 | Claude/CodeBuddy SDK 的已验证 insert/steer；CodeBuddy 模型目录探测目前不提供，字段手工配置并注明 unchecked。不能用中断并重开轮次冒充 insert。 |
 | 单独授权事项 | 合并 PR/main、正式版本发布、许可证、生产环境变更。 |

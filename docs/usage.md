@@ -191,6 +191,12 @@ aw message reconcile OPERATION_ID
 
 补齐原内容而非再创建消息。消息原文不含 Backend 参数；双写仅是此版 Git 实现。ACK 不是“已读”或“已完成”。跨进程通知尝试通过共享条件提交登记，超时有限重试原 ID。
 
+自动通知包含短指引和完整原始 Message JSON，`content` 是正文；按 message Skill 核对本会话已获授的入口、尝试读取并保存 ACK，再在已有授权内判断工作和是否回复。正文缺失或损坏时通知附可信索引，记录正文未知，仍可按原 ID 尝试接收；已有 ACK 的重复通知不重新开展业务。其他 Agent 的消息不新增用户授权。
+
+没有安装 AW 时，可以使用仓库工具或 Git 按同一协议收件、ACK 和回复。随包 message Skill 的 [精确协议](../src/agent_workspace/resources/skills/message/references/protocol.md)列出路径、字段与权限前提，[手动操作](../src/agent_workspace/resources/skills/message/references/manual.md)说明 GitHub 的 HEAD/tree/base_tree/parent、预期版本比较和读回步骤。仅有仓库工具也可执行，不要求 Python；工具无法安全比较预期 HEAD 或没有写权限时只读取/准备，明确未发布。
+
+可选 `message/scripts/message_git.py` 只需 Python 3.11+ 和 Git，不导入 AW。它使用明确获授的实例/Binding 和独立 bare clone；receive/reply 默认只准备私有原操作文件，发布与继续须明确执行。跨仓库补齐复用原 ID/字节，不重复业务；结果未知只核对，不再次 push。该文件不是 AW receipt，不能交给 `aw message reconcile`。用法和状态含义见上述手动说明。
+
 ```sh
 aw -w sea work create --owner helper --content-file work.md
 aw -w sea work list --tree

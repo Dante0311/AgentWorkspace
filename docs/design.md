@@ -285,10 +285,10 @@ create 不自动通知、启动模型或安排执行。deliver 不代替合并�
 ### 6.1 信封与确认
 
 ```text
-id                         --- 工具生成的唯一 ID。
+id                         --- 首次准备的唯一 ID，可显式指定稳定请求 ID。
 from                       --- 发送实例地址。
 to                         --- 接收实例地址。
-created_at                 --- 工具生成的真实时间。
+created_at                 --- 首次准备时的实际带时区时间。
 message_refs               --- 可选，实际回应或依赖的消息 ID。
 delivery                   --- 显式 normal 或 insert。
 content                    --- 非空自由 Markdown 正文。
@@ -299,6 +299,10 @@ from/to 在 V1 保留 Workspace 和实例归属，简写由工具解析。消息
 ACK 只有 `message_id`。接收方尝试读取后确认，正文读取失败也确认收到通知；通知本身须能定位消息，不依赖成功解析正文。ACK 需实际保存到 Backend 的可观察位置，打印文字、扫描发现或通知请求成功都不算。
 
 ACK 不代表已读、认可或完成，不带业务正文。回复另发 Message，是否回复由双方决定。重复通知复用已有 ACK，不重新启业务；ACK 后的实际工作由使用方和实例资料承接，不由消息层追踪完成或自动补救。
+
+通知使用随包维护的短指引，再附完整、未经改写的存储 Message JSON；`content` 是正文，其余字段说明来源、目标和关系。保留正文中的换行、引号、代码围栏、中文与合法未知字段，不以机器绝对路径或接收命令替代正文。指引要求使用 message Skill 核对、确认并按需处理和回复，也说明其他 Agent 的消息不构成新增用户授权。已有 ACK 不重新启动业务。
+
+正文确实缺失、损坏或不可读取时，通知改附可信索引并明确正文未知；仍能按原 ID 尝试 receive 和 ACK，不构造完整消息。当前快照的暂时读取故障按公共读取错误分类处理，在通知尝试登记前返回；不把暂时故障当成正文损坏，也不因此消耗一次原生投递。
 
 ### 6.2 三个不同边界
 
@@ -328,6 +332,8 @@ Message 按目标实例的当前 Binding 调用 Harness 接入能力，持续投
 
 进入对方仓库不等于已确认通知。需要真实权限和目标分支允许的提交方式，好友配置不绕过它们。不可直达时 Bridge 可选，不是必需通信基础设施。
 
+固定路径为 `messages/<id>.json`、`message-index/<id>.json` 与 `acks/<id>.json`。索引包含 `id/from/to/created_at/delivery`，独立于正文定位通知。地址中的 Workspace 使用 `workspace.json` 的 locator，不以本机别名、仓库地址或目录替代。Message 与索引的原字节首次保存后固定；跨仓库补齐不重新生成时间或序列化正文。
+
 ### 6.4 队列与有效入口
 
 normal 轮到时等待当前入口空闲；insert 轮到时不因忙碌等待。insert 不插队、不启动第二个会话。每个接收实例按序推进队头，收到 ACK 才下一条，不等业务完成；后面的 insert 不越过等待中的 normal。
@@ -352,6 +358,10 @@ send 支持直接正文或文件；回复复用 send 与 message_refs，不另�
 watch 是程序循环，不让模型定时查仓库，不对外叫 tick。启用不创建或接管实例，不重复启动同一循环；关闭不停止当前工作、不重置消息、不释放控制权、不影响其他实例。poll 已通知且等 ACK 时等待，不每轮重发，超时只有限重试原通知。
 
 自动的是发现和通知，不是接活、回复或完成判断。桥接故障看护见第 10 节，不再发明一套消息流程。
+
+AW MCP/CLI 是优先入口，不是实施协议的必要条件。随包 message Skill 提供精确字段、路径和仅有仓库工具时的操作说明，也附可选的标准库 Python/Git 辅助脚本；无 AW 或无 Python 的环境仍可按协议读取、确认和回复。手动写入只使用本会话已明确获授的实例和 Binding，在同一 HEAD 核对实例 current、Binding 归属/phase、索引目标及已有 ACK；写前重新核对，用预期 HEAD 的原子比较保护提交并读回。不得复制其他入口、修改身份记录或伪造 AW receipt。工具不能安全比较预期版本或没有写权限时只准备材料，明确未发布。
+
+手动回复是真实 from/to 的新 Message，使用新稳定 ID、实际时间和原消息引用。未知发布先核对原 ID、字节与提交；只有明确拒绝或尚未开始的缺失发布可以在重新核对资格后补齐，不盲目重放。跨仓库不是原子事务，入口撤销后本会话停止补写，保留原部分结果供获准端处理。具体步骤见随包 [Message 协议](../src/agent_workspace/resources/skills/message/references/protocol.md)和[仓库操作](../src/agent_workspace/resources/skills/message/references/manual.md)。
 
 ## 7. 检查点、原始记录与资产接续
 
@@ -575,7 +585,7 @@ V1 不另造统一聊天客户端，七个 Skill 不必成为七个一级菜单�
 | --- | --- |
 | workspace | 创建含管家小组的空间、接入、查看、产品关联与好友管理。 |
 | work | 可选工单 create/list/show/update/deliver，不规定工作方法。 |
-| message | send/list/show/receive/poll/watch 与 ACK，不让用户手动双写。 |
+| message | send/list/show/receive/poll/watch 与 ACK；优先使用 AW 工具，也指导仅有仓库工具或 Git 时按相同协议操作。 |
 | agent | 通用实例管理、Harness/模型配置与会话创建、可选定义、初始化及显式资产提升。 |
 | handoff | 当前入口准备材料并调用 stop 交出。 |
 | relay | 首次进入或接手，调用 start 并读取必要材料。 |

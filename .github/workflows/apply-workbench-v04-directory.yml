@@ -1,0 +1,65 @@
+name: Apply Workbench 0.4 directory patch
+
+on:
+  push:
+    branches:
+      - automation/workbench-v04-directory-staging-20261010
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Reconstruct and verify patch
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem .aw-staging/workbench-v04-directory/*.b64 | Sort-Object Name
+          $encoded = ($parts | ForEach-Object { Get-Content -Raw $_.FullName }) -join ''
+          $compressed = [Convert]::FromBase64String($encoded)
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\workbench.patch.xz", $compressed)
+          @'
+          from pathlib import Path
+          import hashlib, lzma, os
+          root = Path(os.environ["RUNNER_TEMP"])
+          compressed = (root / "workbench.patch.xz").read_bytes()
+          assert hashlib.sha256(compressed).hexdigest() == "29f818b8fa38035d979cb2cc19174225d43d64f5fc960bda8cd50cb0d9f54605"
+          patch = lzma.decompress(compressed)
+          assert hashlib.sha256(patch).hexdigest() == "6c01b7e832d4c57c19816e369c109b6c4cfa8eebb2a9cb4bb7f02d23fe80b0b1"
+          (root / "workbench.patch").write_bytes(patch)
+          '@ | python -
+      - name: Apply to exact base and test
+        shell: pwsh
+        run: |
+          git config user.name "Agent Workspace"
+          git config user.email "aw@localhost"
+          git config core.autocrlf false
+          git reset --hard 051f60a519250fd2c20c0453fef93f7d9ddbf310
+          git clean -fdx
+          git apply --check "$env:RUNNER_TEMP\workbench.patch"
+          git apply "$env:RUNNER_TEMP\workbench.patch"
+          git diff --check
+          python -m pip install -e ".[test]"
+          python -m pytest -q tests/test_workbench_v04.py tests/test_support_guidance.py tests/test_smoke_cleanup.py tests/test_onboarding.py tests/test_workbench_state.py
+          @'
+          from pathlib import Path
+          import re, subprocess, tempfile
+          for name in ("index.html", "setup.html"):
+              text = (Path("src/agent_workspace/resources") / name).read_text(encoding="utf-8")
+              script = re.search(r"<script>(.*)</script>", text, re.S).group(1)
+              path = Path(tempfile.gettempdir()) / (name + ".js")
+              path.write_text(script, encoding="utf-8")
+              subprocess.run(["node", "--check", str(path)], check=True)
+          '@ | python -
+          git add README.md docs/first-use.md docs/runtime-and-maintenance.md docs/usage.md docs/workbench.md src/agent_workspace/onboarding.py src/agent_workspace/resources/index.html src/agent_workspace/resources/setup.html src/agent_workspace/server.py tests/test_workbench_browser.py tests/test_workbench_v04.py
+          git commit -m "feat: implement Workbench 0.4 and instance directory selection"
+          git push origin HEAD:refs/heads/workbench/workbench-v04-directory-20261010

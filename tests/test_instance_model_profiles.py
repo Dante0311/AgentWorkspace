@@ -228,6 +228,7 @@ def test_automatic_start_and_transfer_reject_missing_profile_before_side_effects
     app = Mock()
     app.root.return_value = root
     app.agent.return_value = {"current": None}
+    (root / "AGENTS.md").write_text("Test instance responsibilities.\n", encoding="utf-8")
     write_json(root / ".aw-local/runtime.json", {"kind": "desktop"})
     rpc = Mock()
     monkeypatch.setattr(runtime, "Rpc", rpc)

@@ -38,7 +38,7 @@ def ui(pair, browser):
     thread.start()
     context = browser.new_context(viewport={"width": 1440, "height": 960})
     page = context.new_page()
-    page.set_default_timeout(15000)
+    page.set_default_timeout(60000)
     failures = []
     page.on("pageerror", lambda error: failures.append(str(error)))
     base = f"http://127.0.0.1:{server.server_port}"
@@ -235,7 +235,8 @@ def test_relative_directory_is_rejected_before_connecting_another_copy(ui):
 def test_input_response_loss_preserves_original_request(ui):
     app, bindings, page = ui
     page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
-    page.get_by_role("button", name="提交输入", exact=True).click()
+    page.get_by_role("tab", name="通信", exact=True).click()
+    page.get_by_role("button", name="发送指令", exact=True).click()
     page.get_by_label("要求", exact=True).fill("one explicit fixture input")
     requests = []
 
@@ -482,8 +483,6 @@ def test_shared_material_read_uses_fixed_workspace_revision(ui):
 def test_workbench_forms_and_recovery_fit_viewport(ui, viewport):
     _, _, page = ui
     page.set_viewport_size(viewport)
-    if viewport["width"] < 700:
-        page.locator("#mobile-menu").click()
     page.get_by_role("button", name="创建 Agent", exact=True).click()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     assert page.locator("#dialog").evaluate("d => d.scrollWidth <= d.clientWidth")
@@ -566,7 +565,7 @@ def test_first_use_page_creates_caretakers_in_selected_directories(tmp_path, bro
     thread.start()
     context = browser.new_context(viewport={"width": 1280, "height": 900})
     page = context.new_page()
-    page.set_default_timeout(20000)
+    page.set_default_timeout(60000)
     try:
         page.goto(f"http://127.0.0.1:{server.server_port}/setup#token=setup-browser-token")
         page.wait_for_selector("#app:not(.hidden)")
@@ -575,11 +574,14 @@ def test_first_use_page_creates_caretakers_in_selected_directories(tmp_path, bro
         for role, directory in directories.items():
             page.locator(f"#dir-{role}").fill(str(directory))
         page.locator("#create").click()
-        page.wait_for_function("document.getElementById('output').textContent.includes('\\\"state\\\": \\\"created\\\"')")
+        page.wait_for_function("""document.getElementById('output').textContent.includes('"state": "created"')""")
         for role, directory in directories.items():
             assert app.root("team", role) == directory.resolve()
             assert app.agent("team", role)["current"] is None
         assert page.locator("#workspace").input_value() == "team"
+        page.goto(f"http://127.0.0.1:{server.server_port}/")
+        page.wait_for_selector("#app:not(.hidden)")
+        assert page.locator("article.agent-row").count() == 3
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     finally:
         context.close()

@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_workspace import runtime
+from agent_workspace import model_profiles, runtime
 from agent_workspace.commands import execute
 from agent_workspace.gitstore import GitStore
 from agent_workspace.util import (Conflict, Error, LockBusy, RetryableRead, Uncertain,
@@ -19,7 +19,7 @@ def desktop_owner(app, monkeypatch):
     app.create("sea", "alice")
     root = app.root("sea", "alice")
     config = {"kind": "desktop", "command": [sys.executable, str(Path(__file__).with_name("fake_native.py")), "desktop"],
-              "pipe_path": "fixture", "caller_thread": "caller"}
+              "pipe_path": "fixture", "caller_thread": "caller", "model": "fixture-model", "effort": "low"}
     app.configure("sea", "alice", config)
     binding = app.reserve("sea", "alice")["binding"]
     app.bind("sea", "alice", binding, "original-chat")
@@ -29,6 +29,7 @@ def desktop_owner(app, monkeypatch):
         supports_insert = True
 
         def __init__(self, root, config, session, *, read_only=False):
+            self.root, self.read_only = root, read_only
             self.session = session
             native["attached"].append(session)
             native.setdefault("read_only", []).append(read_only)
@@ -41,6 +42,11 @@ def desktop_owner(app, monkeypatch):
 
         def completed_turns(self, identifiers):
             return {}
+
+        def model_choice(self, tool, binding=None):
+            assert not self.read_only, "Stop observation must not require a model choice"
+            return (model_profiles.adopted(self.root, binding, session=self.session),
+                    {"catalog": "protocol_fixture", "effective": "unconfirmed"})
 
         def notify(self, prompt, delivery):
             native["sent"].append((self.session, prompt, delivery))
@@ -239,6 +245,11 @@ def test_cleanup_does_not_replace_original_failure(desktop_owner, monkeypatch):
 
 def test_stopping_observer_waits_then_releases_only_original_request(desktop_owner, monkeypatch):
     app, root, binding, native = desktop_owner
+    # Existing sessions without an adopted model must still be stoppable.
+    local = read_json(root / ".aw-local/entry.json")
+    local.pop("model_profile", None)
+    write_json(root / ".aw-local/entry.json", local)
+    (root / "runtime.json").unlink()
     runtime.queue_input(app, "sea", "alice", "remain queued", request_id="untouched")
     store = app.store("sea")
     snap = store.snapshot()

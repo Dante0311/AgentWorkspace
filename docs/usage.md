@@ -12,7 +12,7 @@ aw --help
 aw serve --open
 ```
 
-或安装 wheel。安装完可以移走源码目录，`aw` 与实例中的工具资源不依赖开发仓绝对路径。用 `python -m agent_workspace` 可代替 `aw`。本机 UI 有 Agent、Workspace、消息与工单视图；它不是聊天客户端。低频操作使用同一 API 的高级操作表单或 CLI。
+或安装 wheel。安装完可以移走源码目录，`aw` 与实例中的工具资源不依赖开发仓绝对路径。用 `python -m agent_workspace` 可代替 `aw`。本机 Workbench 0.4 提供 Agent、协作、共享资料、管家、Workspace 与操作恢复视图；它不是聊天客户端。状态投影标明共享 revision 和本机观测，写操作仍调用同一公共 API。详见 [Workbench 0.4](workbench.md)。
 
 全局参数放在模块名之前：`aw --home PATH --workspace sea agent list`。环境变量 `AW_HOME`、`AW_WORKSPACE` 可代替前两项。通过 GitHub REST 访问时凭据仅从 `GITHUB_TOKEN` / `GH_TOKEN` 读取，不写进配置、仓库或返回结果。
 
@@ -53,14 +53,14 @@ aw -w sbp workspace friend add --alias sea --address /path/to/sea.git
 ## 3. 创建、接入、选定资产导入
 
 ```sh
-aw -w sea agent create helper --description "分析构建日志，修改前向我确认。"
-aw -w sea agent create ui --definition definitions/ui
+aw -w sea agent create helper --description "分析构建日志，修改前向我确认。" --directory /data/aw/sea/helper
+aw -w sea agent create ui --definition definitions/ui --directory /data/aw/sea/ui
 aw -w sea agent list
 aw -w sea agent show helper
 aw -w sea agent connect helper --directory /path/to/helper-copy
 ```
 
-实例名可为中文，未指定 ID 时工具生成安全 ID；自动化可使用 `--id helper`。默认实例目录在 `AW_HOME/instances/WORKSPACE/ID`。`connect` 可增加多个目录，目录存在不授予执行权。
+实例名可为中文，未指定 ID 时工具生成安全 ID；自动化可使用 `--id helper`。默认实例目录在 `AW_HOME/instances/WORKSPACE/ID`。工作台和 `--directory` 可选择其他本机绝对路径或另一磁盘；目录只是本机副本位置。`connect` 可增加多个目录，目录存在不授予执行权。
 
 已有外部目录的保守导入形式：
 

@@ -36,17 +36,17 @@ aw workspace init demo /path/to/demo.git
 
 ```sh
 aw call setup.check-git --arguments '{"address":"https://host/owner/workspace.git"}'
-aw call setup.create --arguments '{"name":"demo","address":"https://host/owner/workspace.git","mode":"remote"}'
+aw call setup.create --arguments '{"name":"demo","address":"https://host/owner/workspace.git","mode":"remote","directories":{"steward":"/data/agents/steward","sentinel":"/data/agents/sentinel","maintainer":"/data/agents/maintainer"}}'
 aw call setup.create --arguments '{"name":"demo","address":"https://host/owner/workspace.git","mode":"connect"}'
 ```
 
 命令示例采用 POSIX shell 引号；其他 shell 可以将 JSON 写入文件并使用 `--arguments @file.json`。
 
-新建通过普通实例创建流程建立 Steward、Sentinel、Maintainer 及各自的来源记录、目录、七个 Skill。没有创建默认 Work，没有启动模型或巡检。首次配置过程中部分成功会返回 `state=pending`，保留原位置和创建记录，修复访问问题后用完全相同的参数继续。创建记录保存在本机 `AW_HOME/setup`，不是跨机恢复协议；不要删除该目录后期待按名称猜测原操作。
+新建通过普通实例创建流程建立 Steward、Sentinel、Maintainer 及各自的来源记录、目录、七个 Skill。页面为三者预填 `AW_HOME/instances/<workspace>/<role>`，用户可改为其他本机绝对路径或另一磁盘；三者不能共用同一路径。没有创建默认 Work，没有启动模型或巡检。首次配置过程中部分成功会返回 `state=pending`，保留原位置和创建记录，修复访问问题后用完全相同的地址、方式和三条目录继续。创建记录保存在本机 `AW_HOME/setup`，不是跨机恢复协议；不要删除该目录后期待按名称猜测原操作。
 
 重复请求只复用对应请求已经创建的实例，不覆盖用户资料或配置。普通 `agent create` 仍拒绝同名实例；需要明确重试时可使用固定 `--id` 与 `--request-id`。可恢复创建暂不用于外部文件导入。实例目录先完整写入临时同级位置，再发布到目标目录，避免失败后留下半份目录。
 
-“接入已有”仅登记空间，不重建三名管家，也不自动接管已有执行权。在配置区选择已有实例并点击“在本机准备选中实例目录”，才取得本机副本。后续仍需本机 Harness 和认证，原机有有效入口时须先交接。低层 `App.workspace_init` 和旧 `workspace bootstrap-remote` 仍保留预览格式，旧 Workspace 不自动补建小组；新用户使用本页入口。
+“接入已有”仅登记空间，不重建三名管家，也不自动接管已有执行权。在配置区选择已有实例、确认本机绝对路径并点击“准备目录”，才取得本机副本。后续仍需本机 Harness 和认证，原机有有效入口时须先交接。低层 `App.workspace_init` 和旧 `workspace bootstrap-remote` 仍保留预览格式，旧 Workspace 不自动补建小组；新用户使用本页入口。
 
 ## 运行环境配置
 
@@ -60,7 +60,7 @@ aw call setup.create --arguments '{"name":"demo","address":"https://host/owner/w
 
 ## 当前边界与验收
 
-当前已有环境检测、只读 Git 探测、可补齐的三实例创建、首次配置 UI；首次向导和主工作台均支持三种受管配置；目录选项以实际已支持的原生接口为准。运行、自动交接、管家授权、程序定时巡检与受限维修的实际操作和缺口统一见 [运行与维护说明](runtime-and-maintenance.md)。
+当前已有环境检测、只读 Git 探测、可补齐的三实例创建、首次配置 UI；首次向导和主工作台均支持三种受管配置。普通实例创建、三名管家初始化和已有身份准备均可明确选择本机绝对目录；目录只决定当前安装的实例副本位置。运行、自动交接、管家授权、程序定时巡检与受限维修的实际操作和缺口统一见 [运行与维护说明](runtime-and-maintenance.md)。
 
 没有增加 ACP、模型网关、账号管理器、插件市场或通用任务调度器。安装、登录、模型调用和巡检启用仍是明确分开的步骤。已有资料和当前入口不因重新打开向导而重建或接管。
 

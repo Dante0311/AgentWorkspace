@@ -90,6 +90,43 @@ def git_address(address: str) -> tuple[str, bool]:
     return str(Path(address).expanduser().resolve()), False
 
 
+def instance_directory(app, workspace: str, agent_id: str, directory: str | None = None) -> str:
+    """Return one explicit local instance directory without changing identity state.
+
+    Empty values use the installation default. User supplied paths must be absolute so
+    a browser form cannot silently reinterpret them relative to the service process.
+    """
+    slug(workspace)
+    slug(agent_id)
+    if directory is None or (isinstance(directory, str) and not directory.strip()):
+        return str((app.home / "instances" / workspace / agent_id).resolve())
+    if not isinstance(directory, str) or any(ord(c) < 32 for c in directory):
+        raise Error("实例目录必须是有效的本机绝对路径。")
+    value = directory.strip()
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise Error("实例目录必须使用绝对路径；不会相对工作台进程解析。")
+    try:
+        return str(path.resolve())
+    except OSError as exc:
+        raise Error("无法规范化实例目录；请检查路径格式和本机权限。") from exc
+
+
+def instance_directories(app, workspace: str, directories=None) -> dict[str, str]:
+    """Normalize the three caretaker destinations and reject ambiguous reuse."""
+    if directories is None:
+        directories = {}
+    if not isinstance(directories, dict):
+        raise Error("管家实例目录必须按角色提供。")
+    unknown = set(directories) - set(ROLES)
+    if unknown:
+        raise Error("未知的管家目录角色：" + ", ".join(sorted(unknown)))
+    result = {role: instance_directory(app, workspace, role, directories.get(role)) for role in ROLES}
+    if len(set(result.values())) != len(result):
+        raise Error("三名管家不能共用同一个实例目录。")
+    return result
+
+
 def check_git(address: str):
     """A read-only probe. Neither success nor an empty repository proves write access."""
     address, remote = git_address(address)
@@ -116,7 +153,7 @@ def check_git(address: str):
             "empty": not bool(result.stdout.strip()), "remote": remote}
 
 
-def create_workspace(app, name: str, address: str, mode: str = "local"):
+def create_workspace(app, name: str, address: str, mode: str = "local", directories=None):
     """Create three ordinary instances; resume only a previously recorded setup request."""
     slug(name)
     address, remote = git_address(address)
@@ -128,17 +165,28 @@ def create_workspace(app, name: str, address: str, mode: str = "local"):
     if existing_alias and existing_alias["address"] != address:
         raise Conflict("这个简称已连接到另一地址；请使用新的简称。")
     if mode == "connect":
+        if directories:
+            raise Error("接入已有 Workspace 不重建管家；接入后再为选定实例准备本机目录。")
         try:
             result = app.workspace_connect(name, address)
         except (Error, OSError, ValueError, subprocess.TimeoutExpired):
             raise Error("接入失败：请检查 Git 访问、仓库格式和本机权限；未创建或启动实例。") from None
         return {**result, "state": "connected", "instances_created": [], "sessions_started": False,
                 "write_access": "unchecked"}
+    selected_directories = instance_directories(app, name, directories)
     receipt_path = app.home / "setup" / f"{name}.json"
     with locked(receipt_path.with_suffix(".lock"), wait=0):
         receipt = read_json(receipt_path)
         if receipt and (receipt["address"], receipt["mode"]) != (address, mode):
             raise Conflict("已有不同的创建记录；请使用原地址继续，或另选简称。")
+        if receipt:
+            saved_directories = receipt.get("directories")
+            if saved_directories is None:
+                saved_directories = instance_directories(app, name)
+                receipt["directories"] = saved_directories
+                write_json(receipt_path, receipt)
+            if saved_directories != selected_directories:
+                raise Conflict("已有创建记录采用另一组实例目录；请沿用原路径继续，不会迁移或复制已有结果。")
         if not receipt:
             if existing_alias:
                 raise Conflict("这是已接入的 Workspace，不能用初始化重建；请直接打开工作台。")
@@ -152,6 +200,7 @@ def create_workspace(app, name: str, address: str, mode: str = "local"):
                     raise Error("请先准备可读取的空 Git 仓库。读取成功不代表已获写权限。")
             definitions = files("agent_workspace") / "resources" / "definitions"
             receipt = {"id": uid("setup"), "address": address, "mode": mode, "created_at": now(),
+                       "directories": selected_directories,
                        "definitions": {role: (definitions / (role + ".md")).read_text(encoding="utf-8")
                                        for role in ROLES}}
             write_json(receipt_path, receipt)
@@ -190,27 +239,32 @@ def create_workspace(app, name: str, address: str, mode: str = "local"):
             for role in ROLES:
                 stage = "caretaker/" + role
                 item = app.create(name, role, agent_id=role, definition=f"definitions/caretaker/{role}",
-                                  revision=receipt["definition_revision"], request_id=receipt["id"] + "-" + role)
-                completed.append({"role": role, "id": item["id"], "directory": item["directory"]})
+                                  revision=receipt["definition_revision"], request_id=receipt["id"] + "-" + role,
+                                  directory=receipt["directories"][role])
+                completed.append({"role": role, "id": item["id"], "directory": item["directory"],
+                                  "revision": item["revision"]})
             receipt["completed"] = True
             write_json(receipt_path, receipt)
-            return {"name": name, "state": "created", "caretakers": completed, "sessions_started": False,
+            return {"name": name, "state": "created", "caretakers": completed,
+                    "directories": dict(receipt["directories"]), "sessions_started": False,
                     "monitoring_changed": False, "configuration": "choose_per_instance",
-                    "hint": "三份身份已建立或复用。本次没有启动模型或修改巡检状态；请查看工作台中的实际运行状态。"}
+                    "hint": "三份身份已建立或复用，并在所选本机目录准备实例资产。本次没有启动模型或修改巡检状态。"}
         except (Error, OSError, subprocess.TimeoutExpired) as exc:
             return {"name": name, "state": "pending", "stage": stage, "caretakers": completed,
+                    "directories": dict(receipt["directories"]),
                     "code": getattr(exc, "code", "operation_failed"), "sessions_started": False,
-                    "hint": "创建未全部完成，已有结果保留。检查 Git 访问或本机目录后，用相同参数继续；遇到冲突不要覆盖。"}
+                    "hint": "创建未全部完成，已有结果保留。用相同地址、方式和实例目录继续；遇到冲突不要覆盖。"}
 
 
 def init_workspace(app, name, directory):
     return create_workspace(app, name, directory, mode="local")
 
 
-def prepare_instance(app, workspace, agent_id):
+def prepare_instance(app, workspace, agent_id, directory=None):
     """Explicitly materialize a selected existing identity without taking execution rights."""
     slug(workspace)
     slug(agent_id)
     locations = app.local()["workspaces"][workspace].get("instances", {}).get(agent_id, [])
-    directory = locations[0] if locations else str(app.home / "instances" / workspace / agent_id)
-    return {**app.connect_agent(workspace, agent_id, directory), "sessions_started": False}
+    selected = instance_directory(app, workspace, agent_id, directory) if directory else (
+        locations[0] if locations else instance_directory(app, workspace, agent_id))
+    return {**app.connect_agent(workspace, agent_id, selected), "sessions_started": False}

@@ -22,7 +22,7 @@ python install.py git_native_agent_workspace-0.1.0a1-py3-none-any.whl --destinat
 
 ## 2. 配置和进入真实会话
 
-管家与普通实例共用相同配置入口。首次向导支持创建本地/空远端空间和准备已有实例的本机目录；主工作台的“配置”支持三种受管入口。安装对应 extra 和用户指定的原生程序后，可以使用：
+管家与普通实例共用相同配置入口。首次向导支持为三名管家分别选择本机绝对目录，也支持为已有身份准备明确目录；主工作台创建普通实例时同样先确定目录。“配置”支持三种受管入口。工作台状态与恢复语义见 [Workbench 0.4](workbench.md)。安装对应 extra 和用户指定的原生程序后，可以使用：
 
 ```sh
 aw -w demo agent configure-codex helper --model MODEL_ID --effort low --base-url https://gateway.example/v1 --env-key MY_MODEL_API_KEY

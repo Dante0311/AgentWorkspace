@@ -80,4 +80,4 @@ aw -w sea agent desktop-prepare reviewer --request-id prepare-reviewer-001 --pro
 
 同一请求读回原结果，不重复创建或搬回用户后来的布局。分区创建结果未知时保留原请求及按名称的创建记录，新请求也不能另造重复分区。无法确定结果时先通过只读发现核对；不要删回执、换请求 ID 盲目重发。项目准备与原生会话的创建/交接分别验收。
 
-统一复测见 [本批验收说明](shared-materials-acceptance.md)。
+统一复测见 [本批验收说明](https://github.com/Dante0311/AW-Workspace/blob/5ec6e5e99dcc68b8ec58e701a7ff9d7b119974e8/development/archive/2026-10-10-unified-57446de/docs/shared-materials-acceptance.md)。

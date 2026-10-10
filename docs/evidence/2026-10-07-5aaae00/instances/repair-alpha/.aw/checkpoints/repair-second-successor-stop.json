@@ -1,8 +1,0 @@
-{
-  "id": "repair-second-successor-stop",
-  "created_at": "2026-10-07T12:37:06.371863+00:00",
-  "summary": "第二后继收尾：已通过 asset.read 读取 notes/source.md，并将完整原文写入 notes/verify-second.md。当前 binding 为 ba21c526be5c24387927df1e2897c7949；未访问 .aw-local，未启动新会话。",
-  "content": "",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

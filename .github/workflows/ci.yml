@@ -21,17 +21,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {os: ubuntu-latest, python: '3.11', shard: '1/1'}
-          - {os: ubuntu-latest, python: '3.13', shard: '1/1'}
-          - {os: windows-latest, python: '3.11', shard: '1/4'}
-          - {os: windows-latest, python: '3.11', shard: '2/4'}
-          - {os: windows-latest, python: '3.11', shard: '3/4'}
-          - {os: windows-latest, python: '3.11', shard: '4/4'}
-          - {os: windows-latest, python: '3.13', shard: '1/4'}
-          - {os: windows-latest, python: '3.13', shard: '2/4'}
-          - {os: windows-latest, python: '3.13', shard: '3/4'}
-          - {os: windows-latest, python: '3.13', shard: '4/4'}
+        os: [windows-latest]
+        python: ['3.11', '3.13']
+        shard: ['1/4', '2/4', '3/4', '4/4']
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -52,7 +44,7 @@ jobs:
 
   package:
     name: Build and isolated wheel install
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -65,13 +57,21 @@ jobs:
         run: python -m pip install build
       - name: Build sdist and wheel
         run: python -m build
-      - name: Test wheel outside checkout
-        run: python scripts/smoke_wheel.py dist
+      - name: Test wheel outside checkout and preserve cleanup evidence
+        run: |
+          python scripts/smoke_wheel.py dist 2>&1 | Tee-Object -FilePath smoke-windows.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: windows-installation
+          path: smoke-windows.log
+          retention-days: 7
       - name: Preserve exact checkout for reproducible acceptance
         run: git archive --format=tar.gz --output=dist/source-checkout.tar.gz HEAD
       - name: Add isolated installer and checksums
         run: |
-          cp scripts/install.py dist/install.py
+          Copy-Item -LiteralPath scripts/install.py -Destination dist/install.py
           python -c "from pathlib import Path; import hashlib; d=Path('dist'); d.joinpath('SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(d.iterdir()) if p.is_file() and p.name!='SHA256SUMS'))"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -82,7 +82,7 @@ jobs:
 
   browser:
     name: Workbench / real HTTP and Chromium
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -94,32 +94,8 @@ jobs:
       - name: Install test-only browser dependencies
         run: |
           python -m pip install -e ".[test]" playwright==1.57.0
-          python -m playwright install --with-deps chromium
+          python -m playwright install chromium
       - name: Test real workbench with isolated Git data
         env:
           AW_BROWSER_TESTS: '1'
         run: python -m pytest tests/test_workbench_browser.py -q
-
-  windows-package:
-    name: Windows isolated installation and orderly cleanup
-    runs-on: windows-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.13'
-      - run: python -m pip install build
-      - run: python -m build
-      - name: Installed service restart and cleanup
-        run: |
-          python scripts/smoke_wheel.py dist 2>&1 | Tee-Object -FilePath smoke-windows.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: windows-installation
-          path: smoke-windows.log
-          retention-days: 7

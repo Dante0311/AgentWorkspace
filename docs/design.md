@@ -1,6 +1,6 @@
 # Agent Workspace：V1 设计基线
 
-状态：**CURRENT DIRECTION / 已确认，待实现与验收**。本次于 2026-10-02 整合管家小组、通用 Harness/模型配置和 V1 自动会话闭环的产品决定。现有 `0.1.0a1` 是开发预览，不代表下述新增目标已经实现；具体实现范围与证据见 [implementation.md](implementation.md) 和 [validation.md](validation.md)。
+状态：**CURRENT DIRECTION / 已确认，待实现与验收**。本次于 2026-10-02 整合管家小组、通用 Harness/模型配置和 V1 自动会话闭环的产品决定。现有 `0.1.0a1` 是开发预览，不代表下述新增目标已经实现；具体实现范围与证据见 [implementation.md](implementation.md) 和 [validation.md](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/validation.md)。
 
 本文件是本项目唯一当前产品设计。由 Playbook 的[已落档基线 f803dc64](https://github.com/Dante0311/Playbook/blob/f803dc64f82885999efde707e3d252815012c9c1/drafts/git-native-agent-workspace/README.md)整合迁入，并纳入其后确认的最小开机、状态展示、连接看护与版本差异提示。旧版只通过 Git 历史追溯，不保留平行活动设计。
 
@@ -631,4 +631,4 @@ Agent Link 提供 Message/ACK、登记和历史 Desktop 经验；Sea Work、Agen
 
 NRCHome 来自用户提供的目录和运行参考；不复制其完整源码、凭据、私密配置、原始用户会话或附件。原 HTML 审核页和往次目录草图仅为历史参考，不是第二份活动规格。
 
-本项目已在用户建立的 [Dante0311/AgentWorkspace](https://github.com/Dante0311/AgentWorkspace) 独立维护。源码、Skill、设计和运行事实均以本仓为准；Playbook 仅保留入口和来源关系，不维护另一份活动设计。迁仓来源和范围见 [迁仓记录](migration.md)。迁仓不等于外部 Runtime 已验收、软件已发布或数据已迁移到 V2。
+本项目已在用户建立的 [Dante0311/AgentWorkspace](https://github.com/Dante0311/AgentWorkspace) 独立维护。产品源码、随包 Skill、设计和当前能力说明以本仓为准；任务、调查和详细验证记录以 [AW-Workspace 开发仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md) 中的确定版本为准；Playbook 仅保留入口和来源关系，不维护另一份活动设计。迁仓来源和范围见 [迁仓记录](migration.md)。迁仓不等于外部 Runtime 已验收、软件已发布或数据已迁移到 V2。

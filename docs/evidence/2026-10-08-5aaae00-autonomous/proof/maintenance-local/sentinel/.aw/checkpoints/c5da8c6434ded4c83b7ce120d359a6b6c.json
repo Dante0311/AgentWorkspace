@@ -1,8 +1,0 @@
-{
-  "id": "c5da8c6434ded4c83b7ce120d359a6b6c",
-  "created_at": "2026-10-08T05:00:29.331644+00:00",
-  "summary": "验收记录已写入 notes/maintenance-verification.md。收到 aw-maint-result-001 并确认 ACK 已发布；独立读取 aw-maint-fault-001 为 published，新的 workspace.doctor 为 healthy 且 issues 为空。仍有 steward 一条未确认通知，不据此声称已送达或处理。",
-  "content": "",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

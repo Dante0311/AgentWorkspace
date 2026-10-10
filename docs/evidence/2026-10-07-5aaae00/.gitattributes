@@ -1,2 +1,0 @@
-# Preserve archived bytes, including original CRLF and blank lines at EOF.
-* -text whitespace=cr-at-eol,-blank-at-eof

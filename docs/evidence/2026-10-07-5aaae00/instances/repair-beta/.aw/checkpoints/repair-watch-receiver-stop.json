@@ -1,8 +1,0 @@
-{
-  "id": "repair-watch-receiver-stop",
-  "created_at": "2026-10-07T12:49:37.705735+00:00",
-  "summary": "已按顺序接收并ACK repair-watch-001与repair-watch-002；notes/watch-order.md记录两条通知ID、引用和随机标识。",
-  "content": "",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

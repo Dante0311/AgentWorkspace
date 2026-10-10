@@ -10,7 +10,7 @@ Codex Desktop 已增加在已有本地项目中的自动创建、真实会话绑
 
 ## 本批新增：共同职责与共享 Skill
 
-共同职责可通过 AGENTS.md 的 `@workspace-read` 指引，从所属 Workspace 同一 Git 提交读取；共享 `skills/` 可在创建时选择、后续安装更新，Definition 自带 Skill 保留并保护私人修改。Codex 准备入口发现/复用真实项目，分区仅在实际接口 schema 相符时执行，项目创建及文件夹编辑仍明确手动降级。[使用说明](docs/shared-materials.md)和[统一验收](docs/shared-materials-acceptance.md)区分开发回归、原生协议与待执行实机验证。
+共同职责可通过 AGENTS.md 的 `@workspace-read` 指引，从所属 Workspace 同一 Git 提交读取；共享 `skills/` 可在创建时选择、后续安装更新，Definition 自带 Skill 保留并保护私人修改。Codex 准备入口发现/复用真实项目，分区仅在实际接口 schema 相符时执行，项目创建及文件夹编辑仍明确手动降级。[使用说明](docs/shared-materials.md)和[统一验收](https://github.com/Dante0311/AW-Workspace/blob/5ec6e5e99dcc68b8ec58e701a7ff9d7b119974e8/development/archive/2026-10-10-unified-57446de/docs/shared-materials-acceptance.md)区分开发回归、原生协议与待执行实机验证。
 
 ## 普通会话与桌面项目
 
@@ -86,11 +86,11 @@ AgentWorkspace 软件安装
 | [运行与维护](docs/runtime-and-maintenance.md) | 当前操作入口、支持矩阵、限制和实机验收。 |
 | [基础使用](docs/usage.md) | 基础 CLI、消息、资产、Work 与旧入口说明。 |
 | [实现状态](docs/implementation.md) | 当前模块、验证层次和剩余缺口。 |
-| [开发检查点](docs/development-checkpoint.md) | 实际提交、恢复位置、验证证据和接续事项。 |
+| [开发协作仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md) | 团队问题、调查、试验代码、交接与详细验证证据。 |
 | [开发说明](CONTRIBUTING.md) | 源码安装、测试、打包。 |
 | [开发规则](AGENTS.md) | 开发本软件的约定，不是用户实例的职责文件。 |
 
-历史验证保留在 [validation.md](docs/validation.md) 和 [validation-migration.md](docs/validation-migration.md)，不拿旧测试结论代替当前提交验证。源码和设计仅在本仓维护，Playbook 保留来源关系，见 [迁仓记录](docs/migration.md)。
+历史验证和开发过程材料统一保存在 [AW-Workspace 归档](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/README.md)，不拿旧测试结论代替当前提交验证。产品源码、正式测试、CI、安装打包、随包 Skill、设计和使用文档在本仓维护；团队任务、调查、试验与验收脚本、报告和日志在开发协作仓维护。Playbook 保留来源关系，见 [迁仓记录](docs/migration.md)。
 
 ## 许可证与发布
 

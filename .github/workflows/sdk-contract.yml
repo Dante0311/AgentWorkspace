@@ -1,6 +1,5 @@
 name: Native SDK contracts
 on:
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read

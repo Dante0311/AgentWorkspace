@@ -1,9 +1,0 @@
-{
-  "workspace": "workspace:setupc43bab4966e34765851333d07122cdfd",
-  "agent": "e2e-q-fork",
-  "forked_from": {
-    "agent": "e2e-beta",
-    "checkpoint": "c3788071b0e70473aa054a218b12688eb",
-    "revision": "36da4bc44cc714f5c442925d57814f3c46af60b3"
-  }
-}

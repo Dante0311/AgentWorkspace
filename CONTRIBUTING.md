@@ -2,6 +2,8 @@
 
 先阅读 [AGENTS.md](AGENTS.md) 和 [当前实现状态](docs/implementation.md)。产品行为以 [docs/design.md](docs/design.md) 为准，命令用法以 [docs/usage.md](docs/usage.md) 为准；发现不一致应修正或明确记录，不让文档和代码各自定义一套合同。
 
+团队的问题、调查、交接和详细验收材料见 [AW-Workspace 开发入口](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md)。本机开发工作树放在该仓的 `.local/worktrees/`；产品功能、正式测试与构建变更仍提交本产品仓。
+
 ## 本地环境
 
 需要 Python 3.11+ 与 Git。在仓库根创建虚拟环境，激活后安装开发依赖：
@@ -29,7 +31,7 @@ python scripts/smoke_wheel.py dist
 
 安装检查会在临时目录创建新的虚拟环境，以无依赖模式安装 wheel，再在源码之外运行 CLI、创建隔离 Workspace 和实例，并核对七个 Skill 与提示词资源。它不是 Desktop、模型、GitHub 或企微的实机验收。
 
-CI 配置在 `.github/workflows/ci.yml`：Linux/Windows、Python 3.11/3.13 的本地测试，以及 wheel 构建和脱离源码安装。配置存在不代表远端作业已通过，应以对应 commit 的 Actions 结果为准。不向 CI 注入用户模型或 Bot 凭据，不自动发布。
+CI 配置在 `.github/workflows/ci.yml`：当前只自动验证 Windows，包括 Python 3.11/3.13 的本地测试、Chromium 工作台测试，以及 wheel 构建和脱离源码安装。Linux 原生 SDK 工作流只保留手动入口，不随 PR 自动运行；当前不安排 Linux 兼容性回归。配置存在不代表远端作业已通过，应以对应 commit 的 Actions 结果为准。不向 CI 注入用户模型或 Bot 凭据，不自动发布。
 
 ## 变更范围
 

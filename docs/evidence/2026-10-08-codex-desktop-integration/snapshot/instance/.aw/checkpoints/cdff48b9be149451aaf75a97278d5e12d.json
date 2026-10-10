@@ -1,8 +1,0 @@
-{
-  "id": "cdff48b9be149451aaf75a97278d5e12d",
-  "created_at": "2026-10-08T07:38:15.218867+00:00",
-  "summary": "Message/ACK 隔离验收：已接收测试消息并保存线程标记。",
-  "content": "通过平台 message.receive 读取 desktop-watch-9f84a3c1，平台 ACK ack-desktop-watch-9f84a3c1 状态 published。按消息要求通过 asset.write 保存 notes/desktop-message.txt，内容包含 DESKTOP_MESSAGE_9f84a3c1 与本轮 CODEX_THREAD_ID 01a11a6e-2e37-7860-a43a-5fa7fe6230df；资产 revision=8d76a2f4292bb7c882b1a89d4e3054f4a97a1a3db641246750cd8e35f58679c3，saved=local。本轮无产品工作。",
-  "record_refs": [],
-  "scope": "Saved instance files; external/runtime-unavailable state is not implied."
-}

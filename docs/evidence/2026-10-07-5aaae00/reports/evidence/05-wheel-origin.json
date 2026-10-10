@@ -1,9 +1,0 @@
-{
-  "commit": "5aaae00520374b022e0c38fa21f312f8e08629ba",
-  "wheel": "<E2E_ROOT>\\dist\\git_native_agent_workspace-0.1.0a1-py3-none-any.whl",
-  "sha256": "e9bcff1a015358643bafbc800d1beb7453dd36cbb8bd1c34a10e68d68ca309f7",
-  "installer_sha256": "f91d38d94031acc9d390c15bd709688b7ccf7b3578b6f7565fe23d31077d509d",
-  "version": "0.1.0a1",
-  "build_source": "<E2E_ROOT>\\source",
-  "global_install_changed": false
-}

@@ -1,9 +1,0 @@
-{
-  "reason": "Receiver interpreted wait-for-second as in-turn sleep/poll, keeping first notification busy and blocking second normal notification",
-  "management_action": "formal agent.input delivery=insert steer once; clarification only, no business/message replay",
-  "control_input": "repair-watch-clarify-first-end-001",
-  "normal_messages_preserved": true,
-  "product_or_ledger_changed": false,
-  "unassisted_natural_receiver_flow_pass": false,
-  "native_sleep_original_records_preserved": true
-}

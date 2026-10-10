@@ -11,7 +11,7 @@ import tempfile
 
 from . import __version__
 from .gitstore import GitStore, GitHubStore, open_store
-from .util import Conflict, Error, Uncertain, digest, encode, inside, locked, now, read_json, relpath, slug, uid, write_bytes, write_json
+from .util import Conflict, Error, RetryableRead, Uncertain, digest, encode, inside, locked, now, read_json, relpath, slug, uid, write_bytes, write_json
 
 
 DEFAULT_EXCLUDES = [".git", ".aw-local", ".local", "__pycache__", ".env", ".env.*", "secrets"]
@@ -648,8 +648,12 @@ class App:
                 latest = store.snapshot()
             except (Error, OSError, ValueError) as exc:
                 raise Uncertain(f"{failure}\nCould not confirm the original stop publication: {exc}") from exc
-            released = self._released_handoff(latest, agent_id, binding,
-                                              entry.get("controller"), entry["checkpoint"], entry.get("session"))
+            # A snapshot lists versions; reading its result content can still fail remotely.
+            try:
+                released = self._released_handoff(latest, agent_id, binding,
+                                                  entry.get("controller"), entry["checkpoint"], entry.get("session"))
+            except RetryableRead as exc:
+                raise Uncertain(f"{failure}\nCould not confirm the original stop result content: {exc}") from exc
             if released is not None:
                 return released
             raise

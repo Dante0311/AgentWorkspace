@@ -159,6 +159,37 @@ def test_failed_result_lookup_is_unknown_not_retryable(stopping, monkeypatch):
     assert_still_owned(stopping)
 
 
+@pytest.mark.parametrize("result_record", ["binding", "handoff"])
+def test_failed_result_blob_read_is_unknown_not_retryable(stopping, monkeypatch, result_record):
+    app, binding, _ = stopping
+    path = f"bindings/{binding}.json" if result_record == "binding" else f"handoffs/h{binding[1:]}.json"
+    publish, snapshot, blob = GitStore.publish, GitStore.snapshot, GitStore.blob
+    attempts, unreadable = [], []
+
+    def lose_reply(store, branch, commit, expected):
+        attempts.append(commit)
+        publish(store, branch, commit, expected)
+        unreadable.append(snapshot(store).entries[path])
+        raise Uncertain("fixture reply lost after actual local Git publication")
+
+    def unavailable(store, sha):
+        if sha in unreadable:
+            raise RetryableRead("fixture published result content unavailable")
+        return blob(store, sha)
+
+    with monkeypatch.context() as fault:
+        fault.setattr(GitStore, "publish", lose_reply)
+        fault.setattr(GitStore, "blob", unavailable)
+        with pytest.raises(Uncertain):
+            finish(stopping)
+
+    assert len(attempts) == 1
+    snap = app.store("sea").snapshot()
+    assert snap.json("agents/alice.json")["current"] is None
+    assert snap.json(f"bindings/{binding}.json")["phase"] == "released"
+    assert len([p for p in snap.entries if p.startswith("handoffs/")]) == 1
+
+
 def test_concurrent_observers_publish_one_handoff(stopping, monkeypatch):
     app, binding, _ = stopping
     read_checkpoint = app._read_checkpoint

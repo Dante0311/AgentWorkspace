@@ -112,6 +112,14 @@ aw -w demo maintenance status
 
 健康报告基于共享登记和当前机器可观察的状态；其他机器的进程列为未观察范围。异常通知经稳定请求 ID 进入已运行的 Sentinel 会话，同一异常不每次巡检重复通知。没有可用 Sentinel 会话时保留待通知，不自动新增模型会话。Sentinel 可将诊断交给 Maintainer；业务判断和修复只能使用已授权工具。
 
+`workspace doctor` 的 `local_observations` 分别列出当前 Binding、入口阶段、是否观察到本机 Runner、该入口最近的运行状态以及 Watch 配置。Watch 的 `not_configured`、`disabled`、`enabled` 和 `binding_mismatch` 分别表示没有配置、已关闭、为当前入口开启和配置仍指向其他入口；`enabled` 不证明通知已经送达。`runtime=null` 表示没有当前入口的运行记录。主动停止监视器不会抹去已经记录的故障；已进入 `stopping` 却没有本机观察进程时报告 `stop_confirmation_not_observed`，保留原 Binding 和 checkpoint 供核对，正常等待繁忙会话结束不会仅因等待被判为失效。
+
+运行器报告 `shared_read_backoff` 时，诊断列出 `runtime_shared_read_backoff`；停止观察返回未知时列出 `stop_observation_unknown`。最近记录中的退避次数、等待秒数和原因保留在 `local_observations`，不会因程序仍在运行而显示健康。状态记录的时间也要一并查看，较早的网络失败记录不证明当前网络仍然故障。
+
+报告中的 `maintenance` 和 `maintenance.status` 区分计划未配置、已停用、由其他安装执行、本机 worker 未观察到和 worker 已观察到。只有本机拥有的启用计划缺少 worker 时才报告 `maintenance_worker_not_observed`；其他安装的计划列为 `not_owned`，本机报告不据此声称整个 Workspace 健康。`worker_observed` 只证明本机程序存在，实际检查结果仍查看 `local_run`。
+
+`maintenance.status.local_run.notice.state=queued` 是通知排队记录。另一个字段 `input_state` 只读回同一通知 ID、Binding 和用途对应的原输入状态；`completed` 只表示记录中的原生轮次结束，不证明维修或业务完成，`outcome_unknown` 仍须核对原输入。原记录缺失或不属于该入口时显示 `not_observed`，无法读取时显示 `unavailable`。查看状态不重新排队、不生成 ACK、不覆盖已保存的通知事实。
+
 ```sh
 aw -w demo maintenance schedule --no-enabled
 aw -w demo maintenance grant maintainer
@@ -119,19 +127,23 @@ aw -w demo maintenance grant maintainer
 
 禁用后不再安排新巡检；无法撤回已经执行的模型/外部动作。下次启用不会补发休眠期间每一个错过的轮次。
 
-维修工具只提供三类动作：
+维修工具提供以下限定动作：
 
 | 动作 | 前提与行为 |
 | --- | --- |
 | `publication-reconcile` | 指定原 operation ID，核对本 Workspace 和实例归属，仅追认/补齐原 Git 协议记录。 |
 | `bridge-retry` | 提供当前 Binding 和刚读取的 generation，桥接必须仍启用，且未主动停止或交接；不重发未知外部消息。 |
 | `sync-idle` | 实例没有有效入口，取得本机运行器锁后同步；保留文件版本冲突检查。 |
+| `continue-stop` | 指定原 `expected_binding` 和 `expected_checkpoint`，在当前目标授权内复用 Runtime 的停止确认入口。只继续原请求，不创建会话或后继；Runtime 重新核对原会话、checkpoint、controller 及本机归属。 |
 
 ```sh
 aw -w demo maintenance repair helper --repair-action sync-idle --request-id repair-001
+aw -w demo maintenance repair helper --repair-action continue-stop --expected-binding ORIGINAL_BINDING --expected-checkpoint ORIGINAL_CHECKPOINT --request-id stop-repair-001
 ```
 
 维修先保存动作结果，再独立复查。同一请求重试只补缺失/失败的复查，不能因为复查失败重做动作。`applied` 仅表示动作返回，必须查看 `result` 和 `verification`，不能据此宣称 Workspace 全部健康。`attempting`/`outcome_unknown` 保留原记录，不自动再执行。损坏记录会报告异常，不当缓存删除；一个实例的 JSON 读取失败不隐去其他实例的巡检结果。
+
+`continue-stop` 的 `result` 保存首次继续请求的返回值，`starting_stop_observer` 或 `runner_present` 表示确认过程已请求或已存在；原入口是否释放要看 `verification.stop.state`。重复同一维修请求只读回固定旧 Binding 的状态、checkpoint 和 session，不重新启动观察进程，也不会跟随新的 Binding；checkpoint 与原请求不符时报告 `request_changed`。即使首次动作结果未知，复查也保留该动作的未知状态；看到旧 Binding 已 `released` 不会擅自启动后继。真实 Desktop 的忙碌、空闲和未知判断仍由 Runtime 的原生观察负责，维护工具不直接调用 `finish_stop`。
 
 ## 5. 当前能力与验收边界
 

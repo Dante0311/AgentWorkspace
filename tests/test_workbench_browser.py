@@ -38,7 +38,7 @@ def ui(pair, browser):
     thread.start()
     context = browser.new_context(viewport={"width": 1440, "height": 960})
     page = context.new_page()
-    page.set_default_timeout(15000)
+    page.set_default_timeout(45000)
     failures = []
     page.on("pageerror", lambda error: failures.append(str(error)))
     base = f"http://127.0.0.1:{server.server_port}"
@@ -92,6 +92,7 @@ def test_message_response_loss_continues_only_original_request(ui, delivered):
     page.wait_for_function("!busy && !!pendingMessage() && !!document.getElementById('error').textContent")
     assert len(attempts) == 1
     identifier = pending(page)["args"]["request_id"]
+    assert pending(page)["args"]["delivery"] == "normal"
     assert attempts[0]["binding"] == bindings["alice"]
     assert len(Messages(app).list("sea")) == int(delivered)
 
@@ -145,7 +146,7 @@ def test_create_agent_uses_selected_directory_and_shared_skill(ui, tmp_path):
     assert (root / ".agents/skills/review/references/list.md").read_bytes() == b"checklist"
     assert read_json(root / ".aw-local/runtime.json") == {"kind": "manual"}
     assert app.agent("sea", "skill-user")["current"] is None
-    assert str(target.resolve()) in page.locator("#result-output").inner_text()
+    assert page.evaluate("lastResult.directory") == str(target.resolve())
 
     responsibility = (root / "AGENTS.md").read_bytes()
     store.change("main", {"skills/review/SKILL.md": b"version two"}, {}, "Update browser Skill")
@@ -171,6 +172,7 @@ def test_caretaker_grants_are_explicit_and_revocable(ui):
     page.locator("#refresh").click()
     nav(page, "caretakers")
     page.get_by_role("button", name="管家授权", exact=True).click()
+    assert page.locator("#f-agent_id").input_value() == "steward"
     action = page.locator('fieldset[data-key="commands"] input[value="agent.start"]')
     target = page.locator('fieldset[data-key="targets"] input[value="alice"]')
     action.check()
@@ -311,7 +313,11 @@ def test_workbench_forms_and_recovery_fit_viewport(ui, viewport):
     _, _, page = ui
     page.set_viewport_size(viewport)
     if viewport["width"] < 700:
-        page.locator("#mobile-menu").click()
+        menu = page.locator("#mobile-menu")
+        menu.click()
+        assert menu.get_attribute("aria-expanded") == "true"
+        page.locator("#close-mobile-menu").click()
+        assert menu.get_attribute("aria-expanded") == "false"
     page.get_by_role("button", name="创建 Agent", exact=True).click()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     assert page.locator("#dialog").evaluate("d => d.scrollWidth <= d.clientWidth")

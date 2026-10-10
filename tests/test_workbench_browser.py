@@ -10,7 +10,7 @@ import threading
 
 import pytest
 
-from agent_workspace import maintenance
+from agent_workspace import maintenance, runtime
 from agent_workspace.messages import Messages
 from agent_workspace.server import make_server
 from agent_workspace.util import encode, read_json, write_json
@@ -133,6 +133,11 @@ def test_create_agent_uses_selected_directory_and_shared_skill(ui, tmp_path):
     page.get_by_role("button", name="创建 Agent", exact=True).click()
     page.get_by_label("名称", exact=True).fill("skill-user")
     page.get_by_label("实例 ID", exact=True).fill("skill-user")
+    page.get_by_label("运行入口", exact=True).select_option("manual")
+    page.get_by_label("本机实例目录", exact=True).fill("relative/skill-user")
+    page.locator("#dialog-submit").click()
+    page.wait_for_function("document.getElementById('dialog-description').textContent.includes('绝对路径')")
+    assert not any(item["id"] == "skill-user" for item in app.agents("sea"))
     target = tmp_path / "separate-volume" / "skill-user"
     page.get_by_label("本机实例目录", exact=True).fill(str(target))
     page.get_by_label("运行入口", exact=True).select_option("manual")
@@ -210,6 +215,66 @@ def test_health_report_prefills_bounded_repair_and_rejects_changed_generation(ui
     page.wait_for_function("document.getElementById('dialog-description').textContent.includes('changed')")
     assert read_json(config)["generation"] == "changed"
     assert not list((maintenance.folder(app, "sea") / "repairs").glob("*.json"))
+
+
+def test_relative_directory_is_rejected_before_connecting_another_copy(ui):
+    app, _, page = ui
+    original = app.root("sea", "alice")
+    page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
+    page.get_by_role("button", name="准备另一份副本", exact=True).click()
+    page.get_by_label("绝对路径", exact=True).fill("relative/another-copy")
+    page.locator("#dialog-submit").click()
+    page.wait_for_function("document.getElementById('dialog-description').textContent.includes('绝对路径')")
+    assert app.root("sea", "alice") == original
+    assert page.locator("#dialog").is_visible()
+
+
+def test_stop_repair_retries_original_binding_checkpoint_and_request(ui, monkeypatch):
+    app, _, page = ui
+    app.create("sea", "stopper")
+    app.configure("sea", "stopper", {"kind": "codex", "command": [sys.executable],
+                                    "model": "fixture-model", "effort": "low"})
+    binding = app.reserve("sea", "stopper")["binding"]
+    app.bind("sea", "stopper", binding, "original-native-session")
+    checkpoint = app.checkpoint("sea", "stopper", "Explicit stop", binding=binding)["id"]
+    app.stop("sea", "stopper", binding, checkpoint)
+    observed = []
+
+    def continue_original(app, workspace, agent_id, old_binding, *, expected_checkpoint):
+        observed.append((workspace, agent_id, old_binding, expected_checkpoint))
+        return {"state": "awaiting_native_idle", "binding": old_binding, "checkpoint": expected_checkpoint}
+
+    monkeypatch.setattr(runtime, "continue_stop", continue_original)
+    nav(page, "workspace")
+    page.get_by_role("button", name="健康检查", exact=True).click()
+    page.wait_for_function("document.getElementById('content').textContent.includes('stop_confirmation_not_observed')")
+    page.locator('[data-action="doctor-repair"][data-code="stop_confirmation_not_observed"]').click()
+    assert page.locator("#f-action").input_value() == "continue-stop"
+    assert page.locator("#f-expected_binding").input_value() == binding
+    assert page.locator("#f-expected_checkpoint").input_value() == checkpoint
+    requests = []
+
+    def lose_first_response(route):
+        body = route.request.post_data_json
+        if body["command"] == "maintenance.repair":
+            requests.append(body["arguments"])
+            if len(requests) == 1:
+                assert route.fetch().json()["ok"]
+                route.abort()
+                return
+        route.continue_()
+
+    page.route("**/api/execute", lose_first_response)
+    page.locator("#dialog-submit").click()
+    page.wait_for_function("!busy && !!document.getElementById('error').textContent")
+    page.locator("#dialog-submit").click()
+    page.wait_for_function("!document.getElementById('dialog').open && !busy")
+    assert len(requests) == 2 and requests[0] == requests[1]
+    assert observed == [("sea", "stopper", binding, checkpoint)]
+    assert app.show("sea", "stopper")["binding"]["phase"] == "stopping"
+    result = json.loads(page.locator("#result-output").inner_text())
+    assert result["result"]["state"] == "awaiting_native_idle"
+    assert result["verification"]["stop"]["state"] == "stopping"
 
 
 def test_damaged_observation_keeps_other_instances_and_diagnostics_usable(ui):

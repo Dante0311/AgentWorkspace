@@ -135,6 +135,30 @@ def test_successor_commit_can_confirm_a_lost_original_reply(store, monkeypatch):
     assert store.snapshot().bytes("asset") == b"new"
 
 
+@pytest.mark.parametrize("detail", [b"schannel: SEC_E_INVALID_TOKEN", b"unrecognized push reply"])
+@pytest.mark.parametrize("accepted", [False, True])
+def test_ambiguous_push_errors_check_the_original_result(store, monkeypatch, detail, accepted):
+    base = store.branch("main", {"asset": b"old"})
+    original = store.commit(base, {"asset": b"new"}, "original")
+    git = store.git
+    attempts = []
+    def lose_reply(*args, **kwargs):
+        if args[0] != "push":
+            return git(*args, **kwargs)
+        attempts.append(args)
+        if accepted:
+            git(*args, **kwargs)
+        return subprocess.CompletedProcess(["git", "push"], 128, b"", detail)
+    monkeypatch.setattr(store, "git", lose_reply)
+    if accepted:
+        store.publish("main", original, base)
+    else:
+        with pytest.raises(Uncertain):
+            store.publish("main", original, base)
+    assert len(attempts) == 1
+    assert store.head("main") == (original if accepted else base)
+
+
 @pytest.mark.parametrize("read_fails", [False, True])
 def test_unconfirmed_push_never_repeats_change(store, monkeypatch, read_fails):
     store.branch("main", {"asset": b"old"})

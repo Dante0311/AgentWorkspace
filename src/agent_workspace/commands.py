@@ -206,6 +206,9 @@ def execute(app, command, arguments, *, actor=None):
     if not isinstance(arguments, dict):
         raise Error("Operation arguments must be a JSON object.")
     args = dict(arguments)
+    # Snapshot objects are in-process read contexts, not command input.
+    if "snapshot" in args:
+        raise Error(f"Invalid arguments for {command}: unsupported snapshot argument.")
     if actor:
         workspace, aid, binding = actor
         # Signatures supply defaults, never authorization. A new agent's ID is a target.

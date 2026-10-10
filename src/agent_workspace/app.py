@@ -86,8 +86,8 @@ class App:
     def workspace_list(self):
         return [{"alias": k, **v} for k, v in self.local()["workspaces"].items()]
 
-    def workspace_show(self, workspace):
-        snap = self.store(workspace).snapshot()
+    def workspace_show(self, workspace, *, snapshot=None):
+        snap = snapshot or self.store(workspace).snapshot()
         return {**snap.json("workspace.json"), "revision": snap.revision,
                 "access": self.local()["workspaces"][workspace]}
 
@@ -157,8 +157,8 @@ class App:
             raise Error(f"Unknown agent {agent_id} in {workspace}.")
         return item
 
-    def agents(self, workspace, archived=None):
-        snap = self.store(workspace).snapshot()
+    def agents(self, workspace, archived=None, *, snapshot=None):
+        snap = snapshot or self.store(workspace).snapshot()
         items = [snap.json(p) for p in snap.entries if p.startswith("agents/") and p.endswith(".json")]
         return [a for a in items if archived is None or a["archived"] == archived]
 
@@ -475,9 +475,9 @@ class App:
         write_json(root / ".aw-local/runtime.json", value)
         return {"configured": True, "entry_changed": False}
 
-    def show(self, workspace, agent_id, directory=None):
+    def show(self, workspace, agent_id, directory=None, *, snapshot=None):
         store = self.store(workspace)
-        snap = store.snapshot()
+        snap = snapshot or store.snapshot()
         item = self.agent(workspace, agent_id, snap)
         binding = snap.json(f"bindings/{item['current']}.json") if item["current"] else None
         locations = self.local()["workspaces"][workspace].get("instances", {}).get(agent_id, [])

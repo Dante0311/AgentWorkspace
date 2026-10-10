@@ -151,6 +151,7 @@ def test_create_agent_uses_selected_directory_and_shared_skill(ui, tmp_path):
     assert read_json(root / ".aw-local/runtime.json") == {"kind": "manual"}
     assert app.agent("sea", "skill-user")["current"] is None
     assert json.loads(page.locator("#result-output").inner_text())["directory"] == str(target.resolve())
+    page.locator("#close-result").click()
 
     responsibility = (root / "AGENTS.md").read_bytes()
     store.change("main", {"skills/review/SKILL.md": b"version two"}, {}, "Update browser Skill")
@@ -185,6 +186,7 @@ def test_caretaker_grants_are_explicit_and_revocable(ui):
     page.wait_for_function("!document.getElementById('dialog').open && !busy")
     grant = maintenance.status(app, "sea")["grants"]["steward"]
     assert grant["commands"] == ["agent.start"] and grant["targets"] == ["alice"]
+    page.locator("#close-result").click()
 
     page.get_by_role("button", name="管家授权", exact=True).click()
     assert action.is_checked() and target.is_checked()
@@ -205,6 +207,7 @@ def test_health_report_prefills_bounded_repair_and_rejects_changed_generation(ui
     nav(page, "workspace")
     page.get_by_role("button", name="健康检查", exact=True).click()
     page.wait_for_function("document.getElementById('content').textContent.includes('bridge_fault')")
+    page.locator("#close-result").click()
     page.get_by_role("button", name="处理", exact=True).click()
     assert page.locator("#f-agent_id").input_value() == "alice"
     assert page.locator("#f-expected_binding").input_value() == bindings["alice"]
@@ -307,6 +310,7 @@ def test_stop_repair_retries_original_binding_checkpoint_and_request(ui, monkeyp
     nav(page, "workspace")
     page.get_by_role("button", name="健康检查", exact=True).click()
     page.wait_for_function("document.getElementById('content').textContent.includes('stop_confirmation_not_observed')")
+    page.locator("#close-result").click()
     page.locator('[data-action="doctor-repair"][data-code="stop_confirmation_not_observed"]').click()
     assert page.locator("#f-action").input_value() == "continue-stop"
     assert page.locator("#f-expected_binding").input_value() == binding
@@ -407,6 +411,7 @@ def test_desktop_project_form_preserves_local_reference_only(ui, tmp_path):
     assert value["project"]["section_name"] == "My Existing Section"
     assert value["native_project_verified"] is False
     assert app.store("sea").head("main") == before and not list(product.iterdir())
+    page.locator("#close-result").click()
 
     page.get_by_role("button", name="目录与桌面组织", exact=True).click()
     assert page.locator("#f-project_name").input_value() == "My Existing Project"

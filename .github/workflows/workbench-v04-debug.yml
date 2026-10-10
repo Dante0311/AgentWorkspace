@@ -26,14 +26,14 @@ jobs:
           path = Path('tests/test_workbench_browser.py')
           text = path.read_text(encoding='utf-8')
           old = '    page.wait_for_function("!busy && !pendingMessage()")\n'
-          new = '''    try:\n        page.wait_for_function("!busy && !pendingMessage()", timeout=10000)\n    except Exception:\n        print("MESSAGE_DIAG", page.evaluate("({busy, pending: pendingMessage(), error: document.getElementById('error').textContent, lastResult, view, installation: state.installation_id})"))\n        raise\n'''
+          new = '''    try:\n        page.wait_for_function("!busy && !pendingMessage()", timeout=10000)\n    except Exception:\n        print("MESSAGE_PAGE", json.dumps(page.evaluate("({busy, pending: pendingMessage(), error: document.getElementById('error').textContent, lastResult, view, installation: state.installation_id})"), ensure_ascii=True))\n        print("MESSAGE_SERVER", json.dumps(Messages(app).operation("sea", identifier), ensure_ascii=True))\n        raise\n'''
           if text.count(old) != 1:
               raise SystemExit(f'message wait matches: {text.count(old)}')
           text = text.replace(old, new, 1)
-          old = '    page.wait_for_function("!document.getElementById(\'dialog\').open && !busy")\n'
-          new = '''    try:\n        page.wait_for_function("!document.getElementById('dialog').open && !busy", timeout=10000)\n    except Exception:\n        print("GRANT_DIAG", page.evaluate("({busy, open: document.getElementById('dialog').open, description: document.getElementById('dialog-description').textContent, error: document.getElementById('error').textContent, lastResult, selected: document.getElementById('f-agent_id')?.value})"))\n        raise\n'''
-          if text.count(old) < 1:
-              raise SystemExit('grant wait not found')
+          old = '''    page.locator("#dialog-submit").click()\n    page.wait_for_function("!document.getElementById('dialog').open && !busy")\n    grant = maintenance.status(app, "sea")["grants"]["steward"]\n'''
+          new = '''    page.locator("#dialog-submit").click()\n    try:\n        page.wait_for_function("!document.getElementById('dialog').open && !busy", timeout=10000)\n    except Exception:\n        print("GRANT_PAGE", json.dumps(page.evaluate("({busy, open: document.getElementById('dialog').open, description: document.getElementById('dialog-description').textContent, error: document.getElementById('error').textContent, lastResult, selected: document.getElementById('f-agent_id')?.value})"), ensure_ascii=True))\n        print("GRANT_SERVER", json.dumps(maintenance.status(app, "sea"), ensure_ascii=True))\n        raise\n    grant = maintenance.status(app, "sea")["grants"]["steward"]\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'grant block matches: {text.count(old)}')
           text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8', newline='\n')
       - name: Install Chromium test dependencies
@@ -43,4 +43,5 @@ jobs:
       - name: Run only the two failing scenarios
         env:
           AW_BROWSER_TESTS: '1'
+          PYTHONIOENCODING: utf-8
         run: python -m pytest tests/test_workbench_browser.py::test_message_response_loss_continues_only_original_request tests/test_workbench_browser.py::test_caretaker_grants_are_explicit_and_revocable -vv -s

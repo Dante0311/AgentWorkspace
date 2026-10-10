@@ -39,7 +39,8 @@ def build_state(app):
         alias = access["alias"]
         workspace = {**access, "observed_at": observed_at}
         try:
-            shared = app.workspace_show(alias)
+            shared_snapshot = app.store(alias).snapshot()
+            shared = app.workspace_show(alias, snapshot=shared_snapshot)
             workspace.update(
                 snapshot_revision=shared["revision"],
                 locator=shared.get("locator", access.get("locator")),
@@ -54,13 +55,13 @@ def build_state(app):
             continue
         result["workspaces"].append(workspace)
         try:
-            agents = app.agents(alias)
+            agents = app.agents(alias, snapshot=shared_snapshot)
         except (Error, ValueError, OSError, KeyError) as exc:
             result["errors"].append({"workspace": alias, "error": str(exc)})
             continue
         for agent in agents:
             try:
-                detail = app.show(alias, agent["id"])
+                detail = app.show(alias, agent["id"], snapshot=shared_snapshot)
                 directories = list(detail.get("directories", []))
                 detail.update(
                     directory=directories[0] if directories else None,

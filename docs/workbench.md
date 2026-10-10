@@ -25,6 +25,10 @@
 - 可读时的真实 Binding、runtime 和 watch 记录；
 - 不可读时的具体 `unknown_reason`，而不是伪造“离线”。
 
+同一 Workspace 响应中的共享元数据、Agent 和 Binding 使用同一份 Git 快照，`snapshot_revision` 标记这份共享快照；Agent 的 `revision` 仍是其记录的对象版本。每次刷新重新取得快照，不把前一响应当作当前状态。本机目录、runtime 和 watch 在查询时另行观察，不声称与 Git 提交属于同一个原子时刻。
+
+App 查询在进程内部复用 Snapshot 对象；公开 CLI、HTTP 和 MCP 命令参数不增加 `snapshot`，请求提供该参数仍会被拒绝。
+
 所有写操作继续通过公共 command map，后端重新核对 Binding、revision、授权和请求 ID。页面按钮和成功提示不能覆盖平台事实。
 
 ## 实例目录

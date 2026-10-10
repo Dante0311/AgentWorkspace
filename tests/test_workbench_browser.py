@@ -10,7 +10,7 @@ import threading
 
 import pytest
 
-from agent_workspace import maintenance, runtime
+from agent_workspace import maintenance, runtime, skills
 from agent_workspace.messages import Messages
 from agent_workspace.server import make_server
 from agent_workspace.util import encode, read_json, write_json
@@ -150,7 +150,7 @@ def test_create_agent_uses_selected_directory_and_shared_skill(ui, tmp_path):
     assert (root / ".agents/skills/review/references/list.md").read_bytes() == b"checklist"
     assert read_json(root / ".aw-local/runtime.json") == {"kind": "manual"}
     assert app.agent("sea", "skill-user")["current"] is None
-    assert str(target.resolve()) in page.locator("#result-output").inner_text()
+    assert json.loads(page.locator("#result-output").inner_text())["directory"] == str(target.resolve())
 
     responsibility = (root / "AGENTS.md").read_bytes()
     store.change("main", {"skills/review/SKILL.md": b"version two"}, {}, "Update browser Skill")
@@ -227,6 +227,65 @@ def test_relative_directory_is_rejected_before_connecting_another_copy(ui):
     page.wait_for_function("document.getElementById('dialog-description').textContent.includes('绝对路径')")
     assert app.root("sea", "alice") == original
     assert page.locator("#dialog").is_visible()
+
+
+def test_input_response_loss_preserves_original_request(ui):
+    app, bindings, page = ui
+    page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
+    page.get_by_role("button", name="提交输入", exact=True).click()
+    page.get_by_label("要求", exact=True).fill("one explicit fixture input")
+    requests = []
+
+    def lose_first_response(route):
+        body = route.request.post_data_json
+        if body["command"] == "agent.input":
+            requests.append(body["arguments"])
+            if len(requests) == 1:
+                assert route.fetch().json()["ok"]
+                route.abort()
+                return
+        route.continue_()
+
+    page.route("**/api/execute", lose_first_response)
+    page.locator("#dialog-submit").click()
+    page.wait_for_function("!busy && !!document.getElementById('error').textContent")
+    page.locator("#dialog-submit").click()
+    page.wait_for_function("!document.getElementById('dialog').open && !busy")
+    assert len(requests) == 2 and requests[0] == requests[1]
+    files = list((app.root("sea", "alice") / ".aw-local/inputs").glob("*.json"))
+    assert len(files) == 1
+    assert read_json(files[0])["binding"] == bindings["alice"]
+    assert read_json(files[0])["text"] == "one explicit fixture input"
+
+
+def test_pending_skill_recovers_original_version_after_upstream_changes(ui, monkeypatch):
+    app, _, page = ui
+    store = app.store("sea")
+    store.change("main", {"skills/review/SKILL.md": b"first"}, {}, "Fixture Skill")
+    app.create("sea", "skill-recovery", skills=["review"])
+    root = app.root("sea", "skill-recovery")
+    responsibility = (root / "AGENTS.md").read_bytes()
+    store.change("main", {"skills/review/SKILL.md": b"second"}, {}, "Original update")
+    write_manifest = skills.write_json
+
+    def fail_manifest(path, value):
+        if path == root / skills.MANIFEST:
+            raise OSError("fixture disk interruption")
+        return write_manifest(path, value)
+
+    with monkeypatch.context() as fault:
+        fault.setattr(skills, "write_json", fail_manifest)
+        with pytest.raises(OSError, match="fixture disk interruption"):
+            skills.apply(app, "update", "sea", "skill-recovery", "review")
+    store.change("main", {"skills/review/SKILL.md": b"third"}, {}, "Later upstream update")
+    page.locator("#refresh").click()
+    page.locator("article.agent-row").filter(has_text="skill-recovery").locator(".agent-name").click()
+    page.get_by_role("button", name="管理 Skill", exact=True).click()
+    page.get_by_role("button", name="继续原 Skill 更新", exact=True).click()
+    page.wait_for_function("!document.getElementById('dialog').open && !busy")
+    assert not (root / ".aw-local/skill-install").exists()
+    assert (root / ".agents/skills/review/SKILL.md").read_bytes() == b"second"
+    assert (root / "AGENTS.md").read_bytes() == responsibility
 
 
 def test_stop_repair_retries_original_binding_checkpoint_and_request(ui, monkeypatch):
@@ -354,6 +413,49 @@ def test_desktop_project_form_preserves_local_reference_only(ui, tmp_path):
     page.locator("#f-harness").select_option("workbuddy")
     page.wait_for_function("document.getElementById('f-section_name').disabled")
     assert page.locator("#f-section_name").input_value() == ""
+
+
+def test_desktop_project_discovery_can_adopt_the_selected_project(ui, monkeypatch):
+    app, _, page = ui
+    app.create("sea", "desktop-prep")
+    root = app.root("sea", "desktop-prep")
+    app.configure("sea", "desktop-prep", {"kind": "desktop", "command": ["fixture"],
+                                         "pipe_path": "fixture", "caller_thread": "fixture",
+                                         "model": "fixture-model", "effort": "low"})
+    calls = []
+
+    class Catalog:
+        tools = {"list_projects"}
+        tool_schemas = {}
+
+        def __init__(self, *args):
+            pass
+
+        def close(self):
+            pass
+
+        def call(self, name, arguments):
+            calls.append(name)
+            assert name == "list_projects"
+            return {"projects": [{"projectId": "matching-project", "label": "User's project",
+                                   "projectKind": "local", "hostId": "local", "path": str(root)}]}
+
+    monkeypatch.setattr(runtime, "Desktop", Catalog)
+    page.locator("#refresh").click()
+    page.locator("article.agent-row").filter(has_text="desktop-prep").get_by_role("button", name="更多", exact=True).click()
+    page.get_by_role("button", name="目录与桌面组织", exact=True).click()
+    page.get_by_role("button", name="发现并复用 Codex 项目", exact=True).click()
+    page.get_by_role("button", name="确认复用", exact=True).wait_for()
+    assert page.locator("#f-project_id").input_value() == "matching-project"
+    assert page.locator("#f-section_id").input_value() == ""
+    page.locator("#dialog-submit").click()
+    page.wait_for_function("!document.getElementById('dialog').open && !busy")
+    result = json.loads(page.locator("#result-output").inner_text())
+    assert result["native_project_id"] == "matching-project"
+    assert result["native_project_verified"] and not result["session_created"]
+    assert read_json(root / ".aw-local/runtime.json")["project_id"] == "matching-project"
+    assert calls == ["list_projects", "list_projects"]
+    assert app.agent("sea", "desktop-prep")["current"] is None
 
 
 def test_shared_material_read_uses_fixed_workspace_revision(ui):

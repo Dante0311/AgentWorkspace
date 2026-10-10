@@ -313,6 +313,8 @@ def test_stop_repair_retries_original_binding_checkpoint_and_request(ui, monkeyp
     page.wait_for_function("document.getElementById('content').textContent.includes('stop_confirmation_not_observed')")
     page.locator("#close-result").click()
     page.locator('[data-action="doctor-repair"][data-code="stop_confirmation_not_observed"]').click()
+    # The health report can find an instance created after the page loaded.
+    assert page.locator("#f-agent_id").input_value() == "stopper"
     assert page.locator("#f-action").input_value() == "continue-stop"
     assert page.locator("#f-expected_binding").input_value() == binding
     assert page.locator("#f-expected_checkpoint").input_value() == checkpoint
@@ -578,6 +580,7 @@ def test_first_use_page_creates_caretakers_in_selected_directories(tmp_path, bro
         for role, directory in directories.items():
             assert app.root("team", role) == directory.resolve()
             assert app.agent("team", role)["current"] is None
+        page.wait_for_function("!busy && document.getElementById('workspace').value === 'team'")
         assert page.locator("#workspace").input_value() == "team"
         page.goto(f"http://127.0.0.1:{server.server_port}/")
         page.wait_for_selector("#app:not(.hidden)")

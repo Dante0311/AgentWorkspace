@@ -127,19 +127,23 @@ aw -w demo maintenance grant maintainer
 
 禁用后不再安排新巡检；无法撤回已经执行的模型/外部动作。下次启用不会补发休眠期间每一个错过的轮次。
 
-维修工具只提供三类动作：
+维修工具提供以下限定动作：
 
 | 动作 | 前提与行为 |
 | --- | --- |
 | `publication-reconcile` | 指定原 operation ID，核对本 Workspace 和实例归属，仅追认/补齐原 Git 协议记录。 |
 | `bridge-retry` | 提供当前 Binding 和刚读取的 generation，桥接必须仍启用，且未主动停止或交接；不重发未知外部消息。 |
 | `sync-idle` | 实例没有有效入口，取得本机运行器锁后同步；保留文件版本冲突检查。 |
+| `continue-stop` | 指定原 `expected_binding` 和 `expected_checkpoint`，在当前目标授权内复用 Runtime 的停止确认入口。只继续原请求，不创建会话或后继；Runtime 重新核对原会话、checkpoint、controller 及本机归属。 |
 
 ```sh
 aw -w demo maintenance repair helper --repair-action sync-idle --request-id repair-001
+aw -w demo maintenance repair helper --repair-action continue-stop --expected-binding ORIGINAL_BINDING --expected-checkpoint ORIGINAL_CHECKPOINT --request-id stop-repair-001
 ```
 
 维修先保存动作结果，再独立复查。同一请求重试只补缺失/失败的复查，不能因为复查失败重做动作。`applied` 仅表示动作返回，必须查看 `result` 和 `verification`，不能据此宣称 Workspace 全部健康。`attempting`/`outcome_unknown` 保留原记录，不自动再执行。损坏记录会报告异常，不当缓存删除；一个实例的 JSON 读取失败不隐去其他实例的巡检结果。
+
+`continue-stop` 的 `result` 保存首次继续请求的返回值，`starting_stop_observer` 或 `runner_present` 表示确认过程已请求或已存在；原入口是否释放要看 `verification.stop.state`。重复同一维修请求只读回固定旧 Binding 的状态、checkpoint 和 session，不重新启动观察进程，也不会跟随新的 Binding；checkpoint 与原请求不符时报告 `request_changed`。即使首次动作结果未知，复查也保留该动作的未知状态；看到旧 Binding 已 `released` 不会擅自启动后继。真实 Desktop 的忙碌、空闲和未知判断仍由 Runtime 的原生观察负责，维护工具不直接调用 `finish_stop`。
 
 ## 5. 当前能力与验收边界
 

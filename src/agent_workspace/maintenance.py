@@ -206,18 +206,22 @@ def doctor(app, workspace):
 
 
 def repair(app, workspace, agent_id, action, request_id, operation_id=None, bridge=None,
-           expected_binding=None, expected_generation=None):
+           expected_binding=None, expected_generation=None, expected_checkpoint=None):
     """No arbitrary shell, no automatic reset of a native writer or uncertain send."""
-    if action not in ("publication-reconcile", "bridge-retry", "sync-idle"):
-        raise Error("Only publication-reconcile, bridge-retry and sync-idle are repair operations.")
+    if action not in ("publication-reconcile", "bridge-retry", "sync-idle", "continue-stop"):
+        raise Error("Only publication-reconcile, bridge-retry, sync-idle and continue-stop are repair operations.")
     if action == "publication-reconcile" and not operation_id:
         raise Error("Publication repair requires the original operation_id.")
     if action == "bridge-retry" and not (bridge and expected_binding and expected_generation):
         raise Error("Bridge repair requires bridge, expected_binding and expected_generation.")
+    if action == "continue-stop" and not (expected_binding and expected_checkpoint):
+        raise Error("Stop continuation requires the original expected_binding and expected_checkpoint.")
     root = app.root(workspace, agent_id)
     path = folder(app, workspace) / "repairs" / (slug(request_id) + ".json")
     payload = {"agent_id": agent_id, "action": action, "operation_id": operation_id, "bridge": bridge,
                "expected_binding": expected_binding, "expected_generation": expected_generation}
+    if action == "continue-stop":
+        payload["expected_checkpoint"] = expected_checkpoint
     with locked(path.with_suffix(".lock")):
         receipt = read_json(path)
         if receipt:
@@ -237,7 +241,7 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
             config = read_json(root / ".aw-local/bridges" / (slug(bridge) + ".json"))
             if not config or not config.get("enabled") or config["generation"] != expected_generation:
                 raise Conflict("Bridge configuration changed or was disabled; inspect it again.")
-        elif app.agent(workspace, agent_id)["current"]:
+        elif action == "sync-idle" and app.agent(workspace, agent_id)["current"]:
             raise Conflict("Sync repair only runs without an active entry; handoff first.")
         write_json(path, receipt)
         try:
@@ -247,6 +251,10 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
             elif action == "bridge-retry":
                 from .bridges import configure
                 result = configure(app, workspace, agent_id, bridge, config, expected_generation=expected_generation)
+            elif action == "continue-stop":
+                from .runtime import continue_stop
+                result = continue_stop(app, workspace, agent_id, expected_binding,
+                                       expected_checkpoint=expected_checkpoint)
             else:
                 # Prevent a local managed writer from entering during the file update.
                 with locked(root / ".aw-local/runner.lock", wait=0):
@@ -264,15 +272,27 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
 
 
 def _verify_repair(app, workspace, path, receipt):
-    if (receipt["state"] != "applied"
+    stop_repair = receipt["request"]["action"] == "continue-stop"
+    if not stop_repair and (receipt["state"] != "applied"
             or receipt.get("verification", {}).get("state") not in (None, "unavailable")):
         return receipt
     try:
         receipt["verification"] = doctor(app, workspace)
+        if stop_repair:
+            # Observe the fixed request, even after a successor owns the instance.
+            binding = receipt["request"]["expected_binding"]
+            snap = app.store(workspace).snapshot()
+            entry = snap.json(f"bindings/{binding}.json")
+            stop = {"binding": binding, "state": "not_observed", "observed_at": now()}
+            if entry and entry["agent"] == receipt["request"]["agent_id"]:
+                stop.update(state=entry["phase"], checkpoint=entry.get("checkpoint"), session=entry.get("session"))
+                if entry.get("checkpoint") != receipt["request"]["expected_checkpoint"]:
+                    stop.update(state="request_changed", phase=entry["phase"])
+            receipt["verification"]["stop"] = stop
     except (Error, OSError, ValueError, KeyError) as exc:
         receipt["verification"] = {"state": "unavailable", "observed_at": now(),
                                    "error_type": type(exc).__name__}
-    # "Applied" is not "healthy"; retry only this observation, never the saved effect.
+    # Observe separately; never repeat the saved effect.
     write_json(path, receipt)
     return receipt
 

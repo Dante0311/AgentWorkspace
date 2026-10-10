@@ -43,7 +43,7 @@ aw setup --open
 | 能力 | 实现范围 |
 | --- | --- |
 | 持久实例 | 独立工作根、AGENTS.md、七个 Skill 和检查点；用户实例不强制 Definition 或 Work。 |
-| 首次配置 | Git/Harness 发现、只读 Git 检查、可补齐的初始化；新空间建立 Steward、Sentinel、Maintainer 三个真实实例，不隐式启动。 |
+| 首次配置 | Git/Harness 发现、只读 Git 检查、可补齐的初始化；新空间为 Steward、Sentinel、Maintainer 分别选择本机实例目录，不隐式启动。 |
 | 模型与会话 | Codex App Server、Claude/CodeBuddy 原生 SDK；实例独立的服务地址、凭据引用、模型/强度配置，持续会话与原生事件。 |
 | 通信与交接 | 不可变 Message/ACK、当前 Binding 路由、固定后继的跨 Harness 自动交接；原生客户端对回环 API 的工具与接手测试。 |
 | 管家维护 | 明确作用域的委托、健康检查、持久巡检、去重通知、有限维修及独立复查；不强制接管或重放未知业务。 |
@@ -84,6 +84,7 @@ AgentWorkspace 软件安装
 | [产品设计](docs/design.md) | 唯一产品合同，V1 目标及 V2/V3 边界。 |
 | [首次配置](docs/first-use.md) | 新机器准备、本机/远端 Git、三实例初始化。 |
 | [运行与维护](docs/runtime-and-maintenance.md) | 当前操作入口、支持矩阵、限制和实机验收。 |
+| [Workbench 0.4](docs/workbench.md) | 工作台信息架构、状态依据、目录选择、部分成功与恢复语义。 |
 | [基础使用](docs/usage.md) | 基础 CLI、消息、资产、Work 与旧入口说明。 |
 | [实现状态](docs/implementation.md) | 当前模块、验证层次和剩余缺口。 |
 | [开发协作仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md) | 团队问题、调查、试验代码、交接与详细验证证据。 |

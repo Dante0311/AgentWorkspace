@@ -29,13 +29,16 @@ def git_env(env=None):
 
 
 
+TLS_FAILURES = ("schannel", "sec_e_", "ssl", "tls")
+
+
 def permanent_git_failure(detail: str) -> bool:
     # A partial transfer can mention both a network symptom and invalid data.
     # Do not let the network wording hide an explicit access or integrity failure.
     return any(word in detail.lower() for word in ("permission denied", "access denied", "authentication failed",
             "repository not found", "not a git repository", "certificate", "host key verification failed",
             "could not read username", "terminal prompts disabled", "corrupt", "bad object",
-            "invalid object", "protocol error", "schannel", "sec_e_", "ssl", "tls",
+            "invalid object", "protocol error", *TLS_FAILURES,
             "the requested url returned error: 401",
             "the requested url returned error: 403"))
 
@@ -188,8 +191,13 @@ class GitStore:
         else:
             if result.returncode == 0:
                 return
-            detail = command_detail(result.stdout + result.stderr) or f"Git push exited {result.returncode}"
-            failure = Uncertain(detail) if temporary_transport_failure((result.stdout + result.stderr).decode("utf-8", errors="replace")) else Error(detail)
+            output = result.stdout + result.stderr
+            detail = command_detail(output) or f"Git push exited {result.returncode}"
+            full_detail = output.decode("utf-8", errors="replace")
+            # TLS or an unrecognized push failure may occur after the ref was updated.
+            # This is a write with an unknown outcome, never a retryable read.
+            known_failure = permanent_git_failure(full_detail) and not any(word in full_detail.lower() for word in TLS_FAILURES)
+            failure = Error(detail) if known_failure else Uncertain(detail)
             rejected = any(reason in result.stdout.decode("utf-8", errors="replace") for reason in (
                 "[rejected] (non-fast-forward)", "[rejected] (fetch first)", "[rejected] (stale info)",
                 "[remote rejected] (incorrect old value provided)"))

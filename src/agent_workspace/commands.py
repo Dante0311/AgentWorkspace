@@ -72,6 +72,9 @@ def stop_entry(app, workspace, agent_id, binding, checkpoint, directory=None, co
             raise Error("Desktop/CLI stop must be observed by its adapter, not overridden by a flag.")
         result = app.finish_stop(workspace, agent_id, binding, observed_idle=True)
         result["confirmation"] = "explicit_current_owner_attestation; not OS isolation"
+    else:
+        result["observation"] = runtime.continue_stop(app, workspace, agent_id, binding, directory,
+                                                     expected_checkpoint=checkpoint)
     return result
 
 
@@ -84,6 +87,11 @@ def runtime_stop(app, workspace, agent_id, directory=None):
 
 def runtime_launch(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
+    snap = app.store(workspace).snapshot()
+    binding = app.agent(workspace, agent_id, snap)["current"]
+    if binding and snap.json(f"bindings/{binding}.json")["phase"] == "stopping":
+        return runtime.continue_stop(app, workspace, agent_id, binding, directory,
+                                     expected_checkpoint=snap.json(f"bindings/{binding}.json")["checkpoint"])
     write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": None})
     return runtime.spawn_runner(app, workspace, agent_id, directory)
 

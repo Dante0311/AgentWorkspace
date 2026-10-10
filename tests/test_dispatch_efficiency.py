@@ -2,6 +2,7 @@
 from collections import Counter
 from functools import partial
 import inspect
+import json
 import queue
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -269,6 +270,13 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
     snap = SimpleNamespace(entries={"agents/alice.json": "agent-sha", "bindings/b-current.json": "binding-sha"},
                            json=lambda path: dict(entry))
     local_app.store.return_value.snapshot.return_value = snap
+
+    def change(branch, changes, *args):
+        value = json.loads(changes["bindings/b-current.json"])
+        entry.clear()
+        entry.update(value)
+
+    local_app.store.return_value.change.side_effect = change
     write_json(local_app.root() / ".aw-local/entry.json", {"binding": ACTOR[2], "config": {"kind": "codex"}})
     adapter = Mock(session="existing")
     adapter.status.return_value = "idle"
@@ -278,7 +286,13 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
     runner.stop_event = Mock()
     runner.stop_event.wait.side_effect = [False, False, True]
     runner._complete_inputs = Mock()
-    local_app.finish_stop.return_value = {"id": "handoff"}
+
+    def finish_stop(*args, **kwargs):
+        entry["phase"] = "released"
+        local_app.agent.return_value = {"current": None}
+        return {"id": "handoff"}
+
+    local_app.finish_stop.side_effect = finish_stop
     failure = Conflict("persistent input conflict")
 
     def fail(records):

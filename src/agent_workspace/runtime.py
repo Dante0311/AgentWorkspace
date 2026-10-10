@@ -690,7 +690,9 @@ class Runner:
                     failure.add_note("Stop observation continuation failed: " + str(exc))
                     self.cleanup_errors.append(str(exc))
         if failure is not None:
-            self.status(state="failed", reason=str(failure), error_code=getattr(failure, "code", None),
+            state = ("native_stop_unconfirmed" if self.controller is not None and self.adapter is not None
+                     and not self.adapter_closed else "failed")
+            self.status(state=state, reason=str(failure), error_code=getattr(failure, "code", None),
                         cleanup_errors=self.cleanup_errors, stop_observation=pending_stop,
                         entry_automatically_released=False)
             raise failure

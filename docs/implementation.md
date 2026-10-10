@@ -62,7 +62,7 @@ Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试�
 
 Codex 项目准备按可靠 ID 和实例主目录发现、复用已有项目，分区只在实际控制接口支持时显式处理并读回。原生项目创建、文件夹编辑仍需手动准备，不把保存引用或协议夹具当成桌面操作通过。
 
-Windows 测试按文件分四片，保留选择清单与 JUnit。安装检查请求正常服务停机并等待本进程的 HTTP/巡检线程；清理仅对已确认的普通只读文件恢复写位并重试一次。原 WinError 145 尚不能仅由此断言根因或关闭，集成版本的结果须单独验证。
+Windows 测试按文件分四片，保留选择清单与 JUnit。安装检查请求正常服务停机并等待本进程的 HTTP/巡检线程；清理仅对已确认的普通只读文件恢复写位并重试一次。AW 自有的裸仓库初始化明确禁用不需要的符号链接能力探测，修复本机系统临时目录中可复现的探测残留。该条件下的独立安装与清理已通过，但不据此推定所有历史 WinError 145 的根因。
 
 原包 `57446de` 的开发结果和失败证据见 [归档报告](https://github.com/Dante0311/AW-Workspace/blob/5ec6e5e99dcc68b8ec58e701a7ff9d7b119974e8/development/archive/2026-10-10-unified-57446de/docs/evidence/2026-10-09-shared-materials/README.md)。这些结果只对应原包；当前候选的 Windows、浏览器、原生 Desktop 和真实模型效果分别报告。
 
@@ -76,13 +76,15 @@ Windows Codex Desktop 的限定实测覆盖自动创建、目录和身份绑定�
 
 ## 已知异常恢复问题
 
-日常使用另确认了共享仓库读取失败可能令运行器退出，以及运行器退出后 `stopping` 缺少继续确认交出的路径。两项仍为已登记、待修复与待复验的问题；正常路径的历史通过结果不能覆盖它们。具体原因、修复范围和验收要求只在开发仓的 [AW-RUNTIME-001 / AW-RUNTIME-002 登记](https://github.com/Dante0311/AW-Workspace/blob/main/development/issues.md)维护。
+日常使用曾确认共享仓库读取失败令运行器退出，以及运行器退出后 `stopping` 缺少继续确认交出的路径。当前代码已合入这两项的 Core、Runtime 和维护入口修复，并完成隔离故障与组合开发回归；原 Desktop 入口的恢复和后继接手仍待独立实机复验。正常路径的历史通过结果不替代异常路径复验。具体原因、修复范围和验收要求只在开发仓的 [AW-RUNTIME-001 / AW-RUNTIME-002 登记](https://github.com/Dante0311/AW-Workspace/blob/main/development/issues.md)维护。
 
-本分支已补公共存储和停止条件。`RetryableRead` 只表示当前 Git 读取可重试，不能据此重跑投递或整个业务操作；缓存锁忙与普通运行锁冲突分开，权限、TLS、损坏和未知错误不默认重试。Git push 超时按原提交只读核对，确认原提交或其后继包含该提交才成功，否则保留 `outcome_unknown`。GitHub GET 的明确暂时故障采用同一分类，写入及其核对失败不会降成读取重试。
+当前公共存储已区分读取故障，并补齐停止条件。`RetryableRead` 只表示当前 Git 读取可重试，不能据此重跑投递或整个业务操作；缓存锁忙与普通运行锁冲突分开，权限、TLS、损坏和未知错误不默认重试。Git push 超时按原提交只读核对，确认原提交或其后继包含该提交才成功，否则保留 `outcome_unknown`。GitHub GET 的明确暂时故障采用同一分类，写入及其核对失败不会降成读取重试。
 
-`finish_stop` 可接收 `expected_controller`、`expected_checkpoint` 和 `expected_session`。受管调用方应传入实际停止观测所对应的值，核心在同一共享快照中核对入口、检查点归属和材料，并将相关版本纳入条件提交。重复 stop 不改变原检查点，重复或并发确认只返回匹配的既有 handoff；原入口的已发布结果读回不会改变后继入口。发布结果核对包含快照及 Binding/handoff 内容读取；发布可能发生后的内容读取暂时失败保留 `outcome_unknown`，不能作为停止前读取重试。兼容旧调用方省略观测字段，但不把这一兼容路径当作实际原生观测证明。本分支不包含运行循环退避或独立停止 observer，两项问题仍需集成相应实现并做真实 Desktop 复验。
+`finish_stop` 可接收 `expected_controller`、`expected_checkpoint` 和 `expected_session`。受管调用方应传入实际停止观测所对应的值，核心在同一共享快照中核对入口、检查点归属和材料，并将相关版本纳入条件提交。重复 stop 不改变原检查点，重复或并发确认只返回匹配的既有 handoff；原入口的已发布结果读回不会改变后继入口。发布结果核对包含快照及 Binding/handoff 内容读取；发布可能发生后的内容读取暂时失败保留 `outcome_unknown`，不能作为停止前读取重试。兼容旧调用方省略观测字段，但不把这一兼容路径当作实际原生观测证明。运行循环已对可恢复读取故障退避并保留原输入进度。独立停止观察过程只继续既有请求；正常启动、`agent.stop`、维护 `continue-stop` 与工作台均可复用该入口，仍须由真实 Harness 确认忙碌、空闲或未知，不以协议夹具代替 Desktop 实测。
 
-创建时目录选择与 Workbench 0.4 仍在同一问题页跟踪；实例模型配置、共享资料和项目准备的实现范围见上文。本文不把待办或其他分支实现写成当前版本已验证能力。
+[Workbench 0.4](workbench.md) 已接入真实公共操作，支持普通实例与首次三个管家的目录选择、原请求恢复和现有 Codex 项目复用。同一次状态响应的共享元数据、Agent 与 Binding 使用同一 Git 快照；本机观察另行标注。Windows 实际跨 C/D 盘创建、页面操作及独立安装检查已通过，真实账号、模型效果和长期运行仍在独立验收范围。
+
+本批候选、逐次失败及开发验证见[固定版本集成报告](https://github.com/Dante0311/AW-Workspace/blob/a0a1ef18d27d4647ceb8b0807b65541487ebd01b/development/evidence/2026-10-10-unified-integration/README.md)。日常安装未随源码合并而升级。
 
 ## 历史验证与追溯
 

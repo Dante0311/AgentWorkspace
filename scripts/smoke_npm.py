@@ -6,6 +6,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
+import urllib.request
 
 from smoke_wheel import running_workbench, smoke_directory
 
@@ -66,6 +68,19 @@ for name in ('index.html', 'setup.html', 'sessions.html'):
     assert root.joinpath(name).read_text(encoding='utf-8')
 """)
         args = (aw, "--home", home)
+
+        def backend(command, *options):
+            return json.loads(run(*args, "backend", command, *options))["result"]
+
+        def wait_backend(predicate):
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                observation = backend("status")
+                if predicate(observation):
+                    return observation
+                time.sleep(0.2)
+            raise RuntimeError("Installed backend did not reach the expected state.")
+
         assert json.loads(run(*args, "workspace", "init", "smoke", root / "shared.git"))["ok"]
         assert json.loads(run(*args, "-w", "smoke", "agent", "create", "helper", "--id", "helper"))["ok"]
         agents = json.loads(run(*args, "-w", "smoke", "agent", "list"))["result"]
@@ -75,6 +90,29 @@ for name in ('index.html', 'setup.html', 'sessions.html'):
         registry = (home / "registry.json").read_bytes()
         with running_workbench(aw, home, root, env) as request:
             assert request()["workspaces"]
+
+        # Use the installed launcher to control a detached backend as a user would.
+        assert backend("status")["state"] == "stopped"
+        try:
+            backend("start", "--port", "0")
+            started = wait_backend(lambda item: item["ready"])
+            repeated = backend("start")
+            assert repeated["pid"] == started["pid"] and not repeated["start_requested"]
+            connection = json.loads((home / "backend/connection.json").read_text(encoding="utf-8"))
+            request = urllib.request.Request(started["url"] + "api/state",
+                      headers={"Authorization": "Bearer " + connection["token"]})
+            with urllib.request.urlopen(request, timeout=10) as response:
+                assert json.load(response)["result"]["workspaces"]
+            log = backend("log", "--lines", "20")
+            assert log["source"]["kind"] == "backend" and connection["token"] not in log["content"]
+            backend("restart")
+            restarted = wait_backend(lambda item: item["ready"] and item["pid"] != started["pid"])
+            assert restarted["home"] == started["home"]
+            separate = json.loads(run(aw, "--home", root / "separate-data", "backend", "status"))["result"]
+            assert separate["state"] == "stopped"
+        finally:
+            backend("stop")
+            wait_backend(lambda item: item["state"] == "stopped")
 
         # Replace the actual installed package, then reuse the same data home.
         run(npm, "uninstall", "--global", "--prefix", prefix, "--ignore-scripts",
@@ -89,7 +127,8 @@ for name in ('index.html', 'setup.html', 'sessions.html'):
                           "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
                           "npm_version": build["version"], "program_version": version,
                           "checks": ["offline npm install", "bundled runtime", "seven Skills and web resources",
-                                     "CLI and HTTP", "package replacement preserves user data", "orderly shutdown"]}))
+                                     "CLI and HTTP", "backend singleton, restart, logs and separate home",
+                                     "package replacement preserves user data", "orderly shutdown"]}))
 
 
 if __name__ == "__main__":

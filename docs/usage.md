@@ -1,18 +1,18 @@
 # 0.1.0a1 使用说明
 
-首次安装见 [新机器配置](first-use.md)；当前受管 Codex/Claude/CodeBuddy、跨 Harness 自动交接、管家授权、巡检与维修见 [运行与维护说明](runtime-and-maintenance.md)。本页保留基础命令与旧入口说明，支持边界以上述当前能力矩阵为准。
+首次安装见 [新机器配置](first-use.md)；后台启停、既有高级运行接口与管家维护见 [运行与维护说明](runtime-and-maintenance.md)。近期优先 Codex Desktop 与手动接入的 ChatGPT Web。本页保留基础命令，实际能力与未验证事项见 [当前实现](implementation.md)。
 
 本文件描述实际代码，不替代 [产品合同](design.md)。这是开发预览版本，先使用隔离 Workspace；真实外部 Runtime 和渠道的验收范围见 [验证记录](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/validation.md)。
 
 ## 1. 安装、路径与本机工作台
 
-```sh
-python -m pip install .
+```powershell
+npm install --global .\git-native-agent-workspace-0.1.0-alpha.1.tgz
 aw --help
-aw serve --open
+aw backend start --open
 ```
 
-或安装 wheel。安装完可以移走源码目录，`aw` 与实例中的工具资源不依赖开发仓绝对路径。用 `python -m agent_workspace` 可代替 `aw`。本机 Workbench 0.4 提供 Agent、协作、共享资料、管家、Workspace 与操作恢复视图；它不是聊天客户端。状态投影标明共享 revision 和本机观测，写操作仍调用同一公共 API。详见 [Workbench 0.4](workbench.md)。
+Windows x64 的 npm 预览包需要 Node.js 22+，已包含 Python 运行时、网页与七个 Skills，无需保留源码。获取和升级方法见[安装和依赖](runtime-and-maintenance.md#1-安装和依赖)。工作台提供 Agent 与环境、消息历史、本机后台三项；创建、配置和交接继续使用下列 CLI 与 Skills。共享事实和本机观察分别标明，详见[工作台说明](workbench.md)。
 
 全局参数放在模块名之前：`aw --home PATH --workspace sea agent list`。环境变量 `AW_HOME`、`AW_WORKSPACE` 可代替前两项。通过 GitHub REST 访问时凭据仅从 `GITHUB_TOKEN` / `GH_TOKEN` 读取，不写进配置、仓库或返回结果。
 
@@ -60,7 +60,7 @@ aw -w sea agent show helper
 aw -w sea agent connect helper --directory /path/to/helper-copy
 ```
 
-实例名可为中文，未指定 ID 时工具生成安全 ID；自动化可使用 `--id helper`。默认实例目录在 `AW_HOME/instances/WORKSPACE/ID`。工作台和 `--directory` 可选择其他本机绝对路径或另一磁盘；目录只是本机副本位置。`connect` 可增加多个目录，目录存在不授予执行权。
+实例名可为中文，未指定 ID 时工具生成安全 ID；自动化可使用 `--id helper`。默认实例目录在 `AW_HOME/instances/WORKSPACE/ID`。`--directory` 可选择其他本机绝对路径或另一磁盘；目录只是本机副本位置。`connect` 可增加多个目录，目录存在不授予执行权。
 
 已有外部目录的保守导入形式：
 
@@ -105,7 +105,7 @@ aw -w sea agent capture-desktop helper --command '["node","ACTUAL_INSTALLED_CODE
 
 这里路径由安装环境确定，不是仓库提供的文件。命令读取该会话真实的 `CODEX_APP_TOOLS_PIPE_PATH` 和 `CODEX_THREAD_ID`，只保存到 `.aw-local/runtime.json`。不能从外部终端编造这两个值。
 
-回到工作台或用户终端，保存模型选择并启动：
+回到用户终端，保存模型选择并启动：
 
 ```sh
 aw -w sea agent configure-desktop helper --model MODEL_ID --effort low
@@ -117,7 +117,7 @@ aw -w sea message watch helper start --interval 5
 
 运行器通过 `create_thread` 在该项目创建真实新聊天，读取实际 ID 与 `cwd` 后才绑定。第一轮仅建立连接；正式进入材料随后作为输入交付。桌面 Agent 使用提示中的 `aw call --desktop-agent` 命令前缀，由真实 `CODEX_THREAD_ID` 约束平台身份，不继承管理权限。输入先通过 `runtime.receive-input` 关联当前原生轮次；只有该轮明确完成才记录完成并为初次进入发布检查点，发送回执或 idle 本身不算业务完成。
 
-工作台“换新会话”或 `agent renew` 在旧会话保存检查点、stop 并被观察到 idle 后，自动在同一项目创建新聊天。未知创建结果保留原回执，不自动重试开第二个聊天。自动 transfer 也接受含真实控制连接的 `desktop` 配置；其他入口不会暗中替代 Desktop。
+`agent renew` 在旧会话保存检查点、stop 并被观察到 idle 后，自动在同一项目创建新聊天。未知创建结果保留原回执，不自动重试开第二个聊天。自动 transfer 也接受含真实控制连接的 `desktop` 配置；其他入口不会暗中替代 Desktop。
 
 只配置 `kind=desktop` 而未捕获控制连接时，仍保留原手动提示词/深链和真实 ID 绑定路径。深链打开不是自动创建成功。适配器只启动桌面附带 MCP 客户端，不启动第二个 app-server，不通过 exec resume 抢 writer。
 
@@ -137,11 +137,11 @@ aw -w sea message watch helper start --interval 5
 
 Windows npm `.cmd` 启动器有单独的 argv 处理；未在真实 Windows/Codex 环境完成验收。CLI 成功不等于 Desktop 成功。
 
-首次新会话若尚未发出创建请求，原 start 可以重试并复用已预留绑定。创建原生线程的结果已经不明时，不重复创建；查看原始记录和本地 launch/status 后处理。当前没有强制接管命令。
+首次新会话若尚未发出创建请求，原 start 可以重试并复用已预留绑定。创建原生线程的结果已经不明时，不重复创建；查看原始记录和本地 launch/status 后处理。用户显式强制接手见下节，它不用于自动重试未知创建。
 
 ## 5. 交出、换会话与 Fork
 
-通常让当前会话按 `handoff` Skill 准备材料。工作台的“交出 / 换新会话”或下列操作发送明确请求：
+通常让当前会话按 `handoff` Skill 准备材料，也可用下列操作发送明确请求：
 
 ```sh
 aw -w sea agent handoff helper
@@ -164,11 +164,36 @@ aw -w sea agent start helper
 aw -w sea agent fork helper --checkpoint CHECKPOINT_ID --name explorer
 ```
 
-start 总是为新入口建立新原生会话；fork 从确定检查点创建新实例，不删除原历史，不复制执行权，不自动创建 Work。检查点读取：`checkpoint list/show`。
+start 为新入口建立新原生会话；fork 从确定检查点创建新 Agent，不删除原历史，不复制执行权，不自动创建 Work。检查点读取：`checkpoint list/show`。需要保留可继续的明确目标时，在首次 Fork 指定 `--new-id`。
 
-`runtime stop helper` 只停止本机监视进程，**不释放实例资格**；不是 handoff。已有归档/解除归档不启动会话。跨目录运行器还要在共享 binding 上条件登记 controller，不能只靠同机 PID。硬崩溃留下未释放 controller 时保持阻塞，不自动接管。
+Fork 已保存目标分支但登记或目录准备未完成时，用原来源 Agent、检查点、名称和目标 ID 加 `--resume` 继续：
+
+```sh
+aw -w sea agent fork helper --checkpoint CHECKPOINT_ID --name explorer --new-id explorer --resume
+```
+
+程序核对原目标的 `.aw/fork.json` 和资料版本，只补缺失步骤；已登记目标只准备或复用本地副本，已有用户修改保留。原发表结果未知时先读回原分支和登记，不重发。换机器或 `AW_HOME` 前，先在原环境核实尚未确认的发表；新环境没有本机凭据不能证明原操作未发生。旧 Fork 没有该来源记录时不支持这条继续路径；已经登记的旧目标仍可使用 `agent connect`。
+
+`runtime stop helper` 只停止本机监视任务，**不释放实例资格**；不是 handoff。已有归档/解除归档不启动会话。跨目录运行器还要在共享 binding 上条件登记 controller，不能只靠同机 PID。硬崩溃留下未释放 controller 时保持阻塞，不自动接管。
+
+### 5.1 用户显式强制接手
+
+先用 `agent show` / `agent history` 核对当前入口，用 `checkpoint list/show` 选择已保存资料。用户决定撤销旧资格时，在没有 Agent 调用身份的管理终端执行：
+
+```sh
+aw -w sea agent takeover helper --binding CURRENT_BINDING --checkpoint SAVED_CHECKPOINT --confirm
+aw -w sea agent start helper
+```
+
+第一条只撤销旧入口的 AW 资格并保存同一 Agent 的交接点；第二条才按正常启动流程取得新入口。旧原生聊天可能仍在运行，旧副本中的未保存资料不会迁移。返回值分别说明 AW 资格已撤销、原生停工未观察和没有自动启动新会话。Agent 与管家不能调用此管理操作，额度耗尽或断线也不会自动触发。
+
+重复指定同一旧入口和检查点只读取原交接结果，不撤销已经启动的后继。写入结果未知时保留原记录并核对，不重新创建身份、不重放旧业务。
 
 ## 6. 消息和可选 Work
+
+每次发送和回复先按 [message Skill](../src/agent_workspace/resources/skills/message/SKILL.md) 核对自己和对方的当前入口。只有当次 `runtime.desktop-observe` 确认双方都是可寻址的本机 Codex 会话时，才使用原生直发；首次发送前无法确认同机，或跨 Harness、跨机器、云端时，使用正式 AW Message。原生发送已经尝试而结果未知，只核对原目标与原发送，不换路重发。
+
+原生直发可以通过 `direct-message.record` 保存独立记录，`direct-message.list/show` 只读回这些记录。记录或可选回执失败不改变交流结果，不会生成正式 ACK，也不进入自动投递。记录只保存在调用方 Workspace，不自动双写收件方空间，详见[独立直发记录](../src/agent_workspace/resources/skills/message/references/direct.md)。下面是正式 Message 的操作：
 
 ```sh
 aw -w sea message send helper --binding BINDING --to other --delivery normal --content "请查看资料"
@@ -270,7 +295,7 @@ aw -w sea bridge send helper --binding BINDING --name wecom --target CHAT_ID --t
 | 桌面断线 | 在原有效入口内有限重连；需新管道时重新 capture，不转为 CLI。 |
 | 原生新线程创建结果不明 | 保留记录并阻止重复创建，不虚构失败回滚。 |
 | 原入口正在 handoff | 不自动拉起桥接；不允许另一个新入口抢占。 |
-| 原运行器硬崩溃且 controller 未释放 | 保留阻塞和全部资料；此版不提供强制接管。 |
+| 原运行器硬崩溃且 controller 未释放 | 保留原资料与阻塞；用户核对当前入口及保存检查点后，可明确执行 `agent takeover --confirm`，原生聊天是否停止另行确认。 |
 | UI 旧状态文件显示 running | 同时检测本机进程锁并标注是否仍活着，不仅信任 PID 文件。 |
 | 本地和来源同文件都改动 | 保留现场、显示差异，等待明确处理。 |
 

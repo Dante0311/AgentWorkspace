@@ -4,15 +4,15 @@
 
 ## 打开
 
-安装本项目 wheel 后，不需要保留开发仓。已有安装可运行：
+按[安装说明](runtime-and-maintenance.md#1-安装和依赖)安装 npm 包后，不需要 Python 或开发仓。已有安装可运行：
 
 ```sh
-aw setup --open
+aw backend start --open
 ```
 
-`aw serve --open` 在尚未登记 Workspace 时也显示首次配置页；已有空间可通过 `/setup` 打开。两者复用本机服务、控制 Token 和操作分发，不启动另一套 Web 服务。地址中的控制 Token 不要分享。
+工作台查看 Agent 与环境、消息历史和本机后台。创建、配置及进入会话使用 CLI、Skills 和原生客户端；下文保留旧 `/setup` 页的高级操作说明，它不再是主工作台的必经步骤。地址中的控制 Token 不要分享。
 
-本仓仍是开发预览，已有 CI wheel 制品与隔离安装脚本，尚未发布正式 Release 或 PyPI 包。[安装步骤](runtime-and-maintenance.md#1-安装和依赖)不要求 clone 源码；构建方式见 [开发说明](../CONTRIBUTING.md)。操作数据应放在开发仓和产品仓之外。
+本仓仍是开发预览，npm `.tgz` 从对应提交的 CI 制品获取，尚未发布 npm Registry 或正式 Release。构建方式见[开发说明](../CONTRIBUTING.md)。操作数据应放在开发仓和产品仓之外。
 
 ## 依赖和认证
 
@@ -26,7 +26,7 @@ Git 是新配置流程的前置条件，需用户自行安装。选择本机目�
 
 ## 创建与接入
 
-创建本机 Workspace 可以使用页面，或：
+创建本机 Workspace：
 
 ```sh
 aw workspace init demo /path/to/demo.git
@@ -48,19 +48,19 @@ aw call setup.create --arguments '{"name":"demo","address":"https://host/owner/w
 
 “接入已有”仅登记空间，不重建三名管家，也不自动接管已有执行权。在配置区选择已有实例、确认本机绝对路径并点击“准备目录”，才取得本机副本。后续仍需本机 Harness 和认证，原机有有效入口时须先交接。低层 `App.workspace_init` 和旧 `workspace bootstrap-remote` 仍保留预览格式，旧 Workspace 不自动补建小组；新用户使用本页入口。
 
-## 运行环境配置
+## 保留的高级配置入口
 
 配置区用于管家和普通实例，可选择 Codex、Claude 或 CodeBuddy 受管入口；后两者需要对应 SDK extra。模型服务保持为原生 Harness 配置，不增加网关。每个实例可以单独选择模型、推理强度、自有 URL 和凭据环境变量名。对新建空间可选择将相同配置分别保存到登记的三名管家，失败会报告已完成项。
 
-自有服务需要满足对应 Harness 的协议：Codex 使用 Responses，Claude 使用 Messages，CodeBuddy 使用原生或兼容服务。URL 不是协议转换器。HTTP 仅允许回环地址，其余使用 HTTPS。API 密钥由用户在启动工作台的环境中准备，页面只保存环境变量名。Codex 使用进程 `-c` 参数，Claude/CodeBuddy 使用独立 SDK 选项和环境变量；不修改全局配置，不影响其他实例。依赖原生默认值的字段留空即可。
+自有服务需要满足对应 Harness 的协议：Codex 使用 Responses，Claude 使用 Messages，CodeBuddy 使用原生或兼容服务。URL 不是协议转换器。默认接受 HTTPS 和回环 HTTP；其他 HTTP 地址需要用户对当前配置明确允许，见[内网 HTTP 说明](session-projects.md#1-内网-http-模型服务)。API 密钥由用户在启动工作台的环境中准备，页面只保存环境变量名。Codex 使用进程 `-c` 参数，Claude/CodeBuddy 使用独立 SDK 选项和环境变量；不修改全局配置，不影响其他实例。Codex 模型与推理强度应明确选择，具体要求见[实例模型配置](instance-model-profiles.md)。
 
 “查询元数据”是用户明确发起的探测：Codex 调用 `account/read`、`model/list`；Claude 读取原生 SDK 初始化握手的模型与强度选项，不发送提示词或登录。CodeBuddy 尚无已验证的目录接口时，直接报告不支持，不启动探测客户端。只展示过滤后的元数据，不返回账号详情或密钥；认证配置存在不等于实际模型调用成功。自有端点不采用 Harness 内置目录冒充服务发现，需要按服务说明填写原生模型 ID 和强度。改变入口、端点或凭据引用后清除旧候选。
 
-保存配置不会启动会话，当前实例已有入口时拒绝改写，需先交接。进入原工作台后可以明确调用现有“进入新会话”。程序实际返回的 starting、awaiting_new_session_bind、active 等状态仍须区别，不能仅因子进程启动便认定初始化完成。
+保存配置不会启动会话，当前实例已有入口时拒绝改写，需先交接。通过 CLI 或 Skill 明确进入新会话。程序实际返回的 starting、awaiting_new_session_bind、active 等状态仍须区别，不能仅因子进程启动便认定初始化完成。
 
 ## 当前边界与验收
 
-当前已有环境检测、只读 Git 探测、可补齐的三实例创建、首次配置 UI；首次向导和主工作台均支持三种受管配置。普通实例创建、三名管家初始化和已有身份准备均可明确选择本机绝对目录；目录只决定当前安装的实例副本位置。运行、自动交接、管家授权、程序定时巡检与受限维修的实际操作和缺口统一见 [运行与维护说明](runtime-and-maintenance.md)。
+旧首次配置页仍有环境检测、只读 Git 探测、可补齐的三实例创建和三种受管配置。近期主工作台不再展开这些配置表单，npm 包也不包含全部可选 SDK。普通实例创建、三名管家初始化和已有身份准备均可明确选择本机绝对目录；目录只决定当前安装的实例副本位置。运行、交接和维护的实际接口与限制见[运行与维护说明](runtime-and-maintenance.md)。
 
 没有增加 ACP、模型网关、账号管理器、插件市场或通用任务调度器。安装、登录、模型调用和巡检启用仍是明确分开的步骤。已有资料和当前入口不因重新打开向导而重建或接管。
 

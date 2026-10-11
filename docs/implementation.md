@@ -4,33 +4,45 @@
 
 团队的问题登记、调查、验收脚本和详细报告在 [AW-Workspace 开发仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md)维护。历史结果只证明对应提交和测试范围，不替代当前版本的验收。
 
+近期优先用户自己的 Codex Desktop 与 ChatGPT Web。Web 当前使用手动 Message 协议，浏览器插件另行开发；tclaude 待实际验证。已有 CLI/SDK、模型配置和企业微信接口继续保留，但不作为本轮扩展目标。工作台集中显示 Agent 与环境、消息历史和本机后台；创建、配置和交接通过 CLI、Skills 与原生客户端操作。
+
 ## 模块
 
 | 文件 | 当前职责 |
 | --- | --- |
-| `app.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding、Work 和 Git 访问。 |
+| `app.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding 历史、本地副本观察、Work 和 Git 访问。 |
 | `onboarding.py` | 只发现和引导的首次使用、只读 Git 检查、三份管家定义/实例和本机准备。 |
 | `harness_config.py` | Codex/Claude 原生模型选项查询、三种受管入口的实例独立模型配置；凭据只保存引用。 |
 | `model_profiles.py` | 实例根 Codex 模型选择、本机旧配置迁移、每入口采用快照、适用目录与请求事实。 |
 | `runtime.py`、`rpc.py`、`native_sdk.py` | 实际原生入口、持续事件、工具边界、初始接入、独占 Runner 与停工观测。 |
+| `backend.py` | 每个 AW_HOME 的本机服务、现有 Runner 线程和维护线程，以及启停、重启和限定日志读取。 |
 | `transfer.py` | 原绑定和固定后继的持久 handoff/relay，结果未知不重新创建会话。 |
 | `shared.py`、`skills.py` | 同一共享提交的职责材料读取，以及共享 Skill 发现、安装、来源比较与受保护更新。 |
 | `desktop_projects.py` | 实例主目录匹配的原生项目发现/复用，按实际接口能力执行显式分区准备。 |
 | `messages.py` | Message/ACK、Git 发布补齐、FIFO 与当前入口通知；通知保留完整原始 JSON，正文异常时使用可信索引。 |
+| `direct_messages.py` | 可选原生直发记录的保存、读取及补充缺失回执；不执行原生发送，不接入正式 Message 投递。 |
 | `maintenance.py` | 作用域授权、健康观测、安装位置归属明确的巡检、有限维修和结果复查。 |
 | `bridges.py`、`wecom.py` | 可选外部渠道、文本收发与组件看护。 |
 | `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和七个 Skill；内置 Skill 的 references/scripts 及固定通知模板随包分发。 |
-| `scripts/install.py`、CI | 可验证制品、空目录隔离安装、源码快照与 wheel/sdist。 |
+| `npm/`、`scripts/build_npm.py`、CI | 自带 Python 运行时的 Windows x64 npm 包、实际包安装与替换检查；wheel/sdist 和旧安装器保留为底层构建及开发工具。 |
 
 没有引入通用调度平台、模型网关、ACP 依赖或新的 Agent Loop。SDK 是按需安装的原生客户端，不是我们自研 Harness。元数据探测与实际会话共用凭据路由；Claude 握手返回模型选项，无需发送提示词，自有服务不使用内置目录。
 
 ## 已实现的工作流程
 
-创建/接入 Workspace → 选择并保存运行配置 → 为实例建立真实受管会话 → 平台 MCP/动态工具与持续通信 → 保存检查点、确认原端停妥 → 固定后继在同一实例目录接手 → 后续 Message 到达新入口。
+安装 npm 包并启动本机后台 → 创建/接入 Workspace 与 Agent → 通过原生客户端和 Skills 进入真实会话 → 协作并查看历史 → 保存检查点、确认正常交出 → 后继继续同一 Agent。
+
+本机后台按 AW_HOME 持有唯一服务锁，在同一进程内管理现有 Runner 与维护线程。重启只恢复能核对原 Binding、执行位置和原生会话的观察；缺少来源、旧 controller 未释放或创建结果未知时保留原因，不重建聊天或重发输入。后台停止请求与实际进程退出分别显示，停止后台不等于 Agent 已交出，也不证明原生聊天停止。
+
+Agent 身份、执行会话、运行环境与本地副本分开表示。`agent.show` 保留所有已登记副本的本机观察，顶层当前观察必须匹配同一 Binding、原生会话和已知执行位置；旧副本不会覆盖当前会话。`agent.history` 返回同一共享快照中的 Binding 历史。新 Binding 保存实际安装位置与目录，旧记录缺失的来源保持未知；这些本机位置记录本身不证明两个聊天同机。
+
+`agent.takeover` 是用户管理操作，必须指定当前 Binding、保存检查点并显式确认。它通过条件提交撤销旧资格并保存 forced handoff，后继复用 `agent.start`；不停止原生聊天，不自动启动后继，不搬迁未保存资料。重复原请求只读取原结果，普通 Agent 和管家不得调用。隔离 Git 用例覆盖旧入口失权、重复请求不影响后继和原写入未知；真实 Desktop 与跨机器效果仍须单独验收。
+
+`agent.fork --resume` 核对原来源、检查点、名称和目标 ID，复用已保存的目标分支与登记，只补目录等缺失步骤，不覆盖已有用户修改。原分支 `.aw/fork.json` 保存来源，本机原发表凭据阻止未知写入被重放；它不是另一份 Agent 身份登记。隔离 Git 已验证分支、登记和目录阶段的失败继续。旧 Fork 未包含来源记录时不支持新 resume，已登记的旧目标仍可 `agent connect`，本轮不自动迁移历史分支。
 
 Codex Desktop 和受管 CLI 使用[实例模型配置](instance-model-profiles.md)，创建、恢复与 normal 输入显式带模型和推理强度；实例文件的后续编辑不改变当前入口的采用值。缺项与已知不兼容值拒绝，未知能力记录未确认。这项参数合同由 Windows 的配置、Git 与协议测试验证；真实 Desktop 设置效果仍需受控复验，未升级日常安装。
 
-Codex、Claude 和 CodeBuddy 的原生可执行程序已参与回环 API 测试，实际创建 Git 检查点；Claude/CodeBuddy 在同会话第二轮接收 Message 并生成 ACK。本轮还让原生 Codex 通过工具执行 checkpoint/stop，由真实 Runner 自动创建原生 Claude 后继，并验证 `Message.poll` 向后继投递。模型决策由协议夹具指定，不是付费模型质量测试。
+历史开发验证中，Codex、Claude 和 CodeBuddy 的原生可执行程序参与回环 API 测试并实际创建 Git 检查点；Claude/CodeBuddy 在同会话第二轮接收 Message 并生成 ACK。原生 Codex 也曾通过工具执行 checkpoint/stop，由真实 Runner 自动创建原生 Claude 后继，并验证 `Message.poll` 向后继投递。模型决策由协议夹具指定，不是付费模型质量测试，也不代替当前源码的回归。
 
 三个管家共用普通实例与运行能力。Steward 处理 Workspace 请求，Sentinel 管理用户授权的巡检计划，程序计时和采集事实，Maintainer 只能执行被允许的维修。没有对应执行环境时，创建身份不会假装已启用巡检。
 
@@ -40,12 +52,14 @@ Message 通知使用一份随包 JSON 模板，附完整存储原文并保留未
 
 message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确协议、仓库工具步骤及可选的独立 Python/Git 脚本。脚本不依赖 AW，不创建身份或入口；对原操作保留字节、条件提交、部分成功与结果未知，不将私有操作文件冒充 AW receipt。新实例获得完整 Skill 树，工具升级沿用现有资源哈希保护，用户修改或新增同路径材料时停止覆盖。
 
+每次发送与回复由 Skill 核对双方当前有效入口和当次本机 Codex 观察，再选择原生直发或正式 Message。`direct-message.record/list/show` 将可选直发历史单独保存在调用方 Workspace 的 `direct-messages/`，不双写收件方空间，不进入正式索引、ACK、FIFO 或重试。保存失败不影响交流；原生发送结果未知只核对原发送。保存和读取接口已有隔离 Git 验证，真实客户端中的发送及模型遵循新版 Skill 仍需按最终版本实测。
+
 ## 验证层次
 
-- 默认 CI：仅 Windows，覆盖 Python 3.11/3.13、Chromium 工作台和独立 wheel 安装；安装检查包含内置资源和三实例创建。当前不自动运行 Linux 兼容性回归。
+- 默认 CI：仅 Windows，配置 Python 3.11/3.13、Chromium 工作台、独立 npm 与 wheel 安装检查；npm 检查使用包内运行时并移除 PATH 中的系统 Python，覆盖资源、CLI/HTTP 和替换程序后保留原数据。当前不自动运行 Linux 兼容性回归；配置了检查不等于该提交已通过 CI。
 - `Native SDK contracts`：Linux 手动工作流，固定 SDK 版本、原生客户端回环 API、平台工具与自动交接；不随 PR 自动运行。实际测试范围以该提交的工作流和日志为准。
 - 本机定向回归：恢复、并发前提、未知结果、撤销授权、重复调度、HTTP/CLI 和原生工具副作用。
-- 用户实机：已安装 Desktop、真实登录、自有模型服务的实际能力、生产 Git 权限、企业微信、长期在线和新机器体验。
+- 近期用户实机：真实 Codex Desktop、ChatGPT Web 手动收件、生产 Git 权限、跨机器、长期在线和新机器体验。其他 Harness、自有模型服务和企业微信保留各自历史范围，不由本轮代验收。
 
 被跳过的原生测试不计为通过；分组有交叉时不累加数量；当前源码不能沿用旧提交的绿色 CI。源码制品只用于准确恢复，长期成果保存在 Git 提交中。
 
@@ -53,13 +67,14 @@ message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确�
 
 | 类别 | 内容 |
 | --- | --- |
-| 已有实现，需实机验收 | 受管三种 CLI 的真实模型/账号、自己的 API、模型和强度生效；生产 Git/凭据；企业微信 Bot；隔离安装和持续运行体验。 |
+| 近期需实机验收 | 当前产物的 Codex Desktop 同机协作、正常与异常交接、Web 手动收件、真实跨机器、生产 Git/凭据及持续运行体验。 |
+| 保留的高级接口 | 受管三种 CLI、自己的 API、模型/强度、企业微信 Bot；已有开发测试不证明具体账号和服务可用，暂缓继续扩展。 |
 | Message 手动路径待验证环境 | 隔离本地 Git 可验证协议和辅助脚本；真实云端 GitHub 工具权限、条件更新语义及 Harness/模型按新版通知与 Skill 收件，需要在具体环境单独验证。 |
 | 接口仍需核实，不能伪装成只待验收 | Claude/WorkBuddy 原生 Desktop 自动创建、持续投递、停工观测。Codex Desktop 已接入真实控制接口，首次项目和连接仍需准备。 |
 | 当前接入未实现的能力 | Claude/CodeBuddy SDK 的已验证 insert/steer；CodeBuddy 模型目录探测目前不提供，字段手工配置并注明 unchecked。不能用中断并重开轮次冒充 insert。 |
 | 单独授权事项 | 合并 PR/main、正式版本发布、许可证、生产环境变更。 |
 
-设计目标保留，当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制交付，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。获得可靠接口后再按同一执行权合同增加支持。不静默改用后台 CLI、不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份、强制接管和通用迁移仍未实现。
+当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制说明，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。这不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。后续如获授权并取得可靠接口，再按同一执行权规则增加支持。不静默改用后台 CLI，不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份和通用迁移仍留待后续。
 
 ## 共同职责、共享 Skill 与桌面准备
 
@@ -87,9 +102,9 @@ Windows Codex Desktop 的限定实测覆盖自动创建、目录和身份绑定�
 
 `finish_stop` 可接收 `expected_controller`、`expected_checkpoint` 和 `expected_session`。受管调用方应传入实际停止观测所对应的值，核心在同一共享快照中核对入口、检查点归属和材料，并将相关版本纳入条件提交。重复 stop 不改变原检查点，重复或并发确认只返回匹配的既有 handoff；原入口的已发布结果读回不会改变后继入口。发布结果核对包含快照及 Binding/handoff 内容读取；发布可能发生后的内容读取暂时失败保留 `outcome_unknown`，不能作为停止前读取重试。兼容旧调用方省略观测字段，但不把这一兼容路径当作实际原生观测证明。运行循环已对可恢复读取故障退避并保留原输入进度。独立停止观察过程只继续既有请求；正常启动、`agent.stop`、维护 `continue-stop` 与工作台均可复用该入口，仍须由真实 Harness 确认忙碌、空闲或未知，不以协议夹具代替 Desktop 实测。
 
-[Workbench 0.4](workbench.md) 已接入真实公共操作，支持普通实例与首次三个管家的目录选择、原请求恢复和现有 Codex 项目复用。同一次状态响应的共享元数据、Agent 与 Binding 使用同一 Git 快照；本机观察另行标注。Windows 实际跨 C/D 盘创建、页面操作及独立安装检查已通过，真实账号、模型效果和长期运行仍在独立验收范围。
+[工作台](workbench.md) 的共享元数据、Agent 与 Binding 使用同一次 Git 快照，本机观察另行标注。精简后的主界面保留原请求读取与已有服务能力，具体界面范围以该说明为准。旧 Workbench 0.4 的 Windows 跨 C/D 盘创建、页面操作和独立安装曾通过限定检查，不能据此把当前界面或新增后台判为已验收。
 
-本批候选、逐次失败及开发验证见[固定版本集成报告](https://github.com/Dante0311/AW-Workspace/blob/a0a1ef18d27d4647ceb8b0807b65541487ebd01b/development/evidence/2026-10-10-unified-integration/README.md)。日常安装未随源码合并而升级。
+上一批候选、逐次失败及开发验证见[固定版本集成报告](https://github.com/Dante0311/AW-Workspace/blob/a0a1ef18d27d4647ceb8b0807b65541487ebd01b/development/evidence/2026-10-10-unified-integration/README.md)。日常安装未随源码合并而升级。
 
 ## 历史验证与追溯
 

@@ -19,6 +19,6 @@ aw -w sea agent stop helper --binding BINDING --checkpoint CHECKPOINT_ID
 ```
 
 manual 入口仅由当前使用者明确确认已停止后，加 --confirm-stopped；这不是平台观测到原生进程退出的证明，他人不能代替当前使用者作停工确认。
-单独 handoff 不启动新入口。工作台换新会话是显式组合，后半段由运行器负责。
+单独 handoff 不启动新入口。用户通过 CLI、Skills 或原生客户端明确请求换新会话时，才组合交出与接续，后半段由运行器负责。
 
 用户强制接手另用 agent takeover，明确选择当前 Binding 和已保存检查点并确认撤销执行资格，不能冒充正常停工。只有用户管理入口可以执行；它保留原生状态未观测、旧聊天可能仍运行的事实，也不迁移未保存资料或自动启动下一端。后续进入仍是同一持久 Agent 的新会话，原聊天与本地副本保留在历史中。

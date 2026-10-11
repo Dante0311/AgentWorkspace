@@ -50,4 +50,4 @@ aw -w sea agent takeover helper --binding CURRENT_BINDING --checkpoint SAVED_CHE
 
 Agent 的桌面项目准备先用 `agent.desktop-project`（当前身份可省略 workspace/agent_id）读取本机名称、主目录和随包手动步骤。桌面项目按 Agent 复用，Codex 分区按 Workspace 组织。用户可用 agent.desktop-discover 发现主目录匹配的真实项目，再用 agent.desktop-prepare 保存可靠 ID；分区仅在实际接口 schema 相符时执行并读回验证，否则手动。原生项目创建/文件夹编辑仍手动，不把保存引用说成已创建。准备不创建会话或 Binding，重复请求读回原结果，未知结果不新建或重发。修改名称/产品目录由用户使用 `agent.desktop-project-save`，不改变身份或权限。不要把产品 AGENTS.md 复制为自己的职责。
 
-无 Workspace 的普通会话由用户从工作台“新建普通会话”进入；它没有持久身份、平台 Message/ACK 或 handoff/relay 保证，不能借普通会话绕过当前 Binding。用户的会话要求不写进共享项目规则。
+无 Workspace 的普通会话由用户通过保留的 `/sessions` 独立页面或 `aw session` 命令进入；主工作台不再提供创建表单。它没有持久身份、平台 Message/ACK 或 handoff/relay 保证，不能借普通会话绕过当前 Binding。用户的会话要求不写进共享项目规则。

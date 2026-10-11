@@ -228,6 +228,8 @@ def execute(app, command, arguments, *, actor=None):
     # Snapshot objects are in-process read contexts, not command input.
     if "snapshot" in args:
         raise Error(f"Invalid arguments for {command}: unsupported snapshot argument.")
+    if command == "agent.start" and "expected_handoff" in args:
+        raise Error("expected_handoff is an internal automatic-continuation condition, not command input.")
     if actor:
         workspace, aid, binding = actor
         if command == "agent.takeover":

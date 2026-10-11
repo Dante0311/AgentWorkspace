@@ -561,13 +561,15 @@ def continue_stop(app, workspace, agent_id, binding, directory=None, *, expected
         return {**request, **result, "state": "starting_stop_observer"}
 
 
-def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None):
+def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None, *, expected_handoff=None):
     root = app.root(workspace, agent_id, directory)
     if (root / ".aw-local/skill-install/operation.json").exists():
         raise Conflict("Recover the pending Skill update before starting a session.")
     requirements(app, workspace, root)  # Fail before reserving an entry or opening a native session.
     config = model_profiles.migrate(root)
     item = app.agent(workspace, agent_id)
+    if expected_handoff is not None and item["current"]:
+        raise Conflict("Another entry already owns this Agent; the original automatic continuation was refused.")
     profile = None
     if config.get("kind") in model_profiles.CODEX_KINDS:
         profile = model_profiles.adopted(root, item["current"]) if item["current"] else model_profiles.selected(root)
@@ -603,7 +605,7 @@ def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=N
         result = {"agent": agent_id, "binding": item["current"], "phase": "starting", "kind": entry["kind"]}
     else:
         app.sync_agent(workspace, agent_id, str(root))
-        result = app.reserve(workspace, agent_id, str(root), binding_id=binding_id)
+        result = app.reserve(workspace, agent_id, str(root), binding_id=binding_id, expected_handoff=expected_handoff)
     binding = result["binding"]
     prompt = entry_prompt(app, workspace, agent_id, binding, root)
     bind_args = ["aw", "--home", str(app.home), "--workspace", workspace, "agent", "bind", agent_id,
@@ -851,23 +853,25 @@ class Runner:
         transfer = read_json(self.root / ".aw-local/transfer.json")
         if not (transfer and transfer["old_binding"] == self.binding) and not self.renew_after_exit:
             return
-        if not self._normal_handoff_ready():
+        handoff = self._normal_handoff_ready()
+        if not handoff:
             return
         if transfer and transfer["old_binding"] == self.binding:
             from .transfer import advance
             advance(self.app, self.workspace, self.agent_id, str(self.root))
         elif self.renew_after_exit:
             renew = read_json(self.root / ".aw-local/renew.json")
-            write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
-            result = start(self.app, self.workspace, self.agent_id, str(self.root), open_app=self.runtime_kind == "desktop")
+            result = start(self.app, self.workspace, self.agent_id, str(self.root),
+                           open_app=self.runtime_kind == "desktop", expected_handoff=handoff)
             write_json(self.root / ".aw-local/renew-result.json", result)
+            write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
 
     def _normal_handoff_ready(self):
         snap, owner, entry = self._read_state("successor_qualification")
         if owner["current"] is not None or entry["phase"] != "released" or not owner["handoff"]:
             return False
         result = self._shared_read("successor_handoff", _released_stop, snap, self.agent_id, self.binding, entry)
-        return owner["handoff"] == result["handoff"]
+        return result["handoff"] if owner["handoff"] == result["handoff"] else None
 
     def _run_owned(self):
         app, workspace, aid = self.app, self.workspace, self.agent_id

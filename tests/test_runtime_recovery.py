@@ -432,11 +432,28 @@ def test_normal_released_handoff_still_allows_requested_continuation(desktop_own
     assert not native["sent"]
     if continuation == "renew":
         start.assert_called_once()
+        assert start.call_args.kwargs["expected_handoff"] == "h" + binding[1:]
         advance.assert_not_called()
         assert not read_json(root / ".aw-local/renew.json")["requested"]
     else:
         advance.assert_called_once()
         start.assert_not_called()
+
+
+def test_automatic_continuation_cannot_reuse_another_starting_binding(app):
+    app.create("sea", "alice")
+    first = app.reserve("sea", "alice")["binding"]
+    app.bind("sea", "alice", first, "first-native")
+    point = app.checkpoint("sea", "alice", "normal handoff", binding=first)
+    app.stop("sea", "alice", first, point["id"])
+    released = app.finish_stop("sea", "alice", first, observed_idle=True)
+    current = app.reserve("sea", "alice")["binding"]
+    with pytest.raises(Conflict, match="automatic continuation"):
+        runtime.start(app, "sea", "alice", expected_handoff=released["id"])
+    assert app.agent("sea", "alice")["current"] == current
+    assert not read_json(app.root("sea", "alice") / ".aw-local/launch.json", {}).get("attempted")
+    with pytest.raises(Error, match="internal"):
+        execute(app, "agent.start", {"workspace": "sea", "agent_id": "alice", "expected_handoff": released["id"]})
 
 
 @pytest.mark.parametrize("field", ["checkpoint", "session", "controller"])

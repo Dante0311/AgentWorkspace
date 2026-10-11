@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_workspace import model_profiles, runtime
+from agent_workspace import backend, model_profiles, runtime
 from agent_workspace.commands import execute
 from agent_workspace.gitstore import GitStore
 from agent_workspace.util import (Conflict, Error, LockBusy, RetryableRead, Uncertain,
@@ -752,17 +752,33 @@ def test_stop_command_real_windows_process_and_git_protocol_peer(app, monkeypatc
     app.bind("sea", "alice", binding, "original-protocol-chat")
     point = app.checkpoint("sea", "alice", "real child stop observer", binding=binding)
     monkeypatch.setenv("PYTHONPATH", str(Path(runtime.__file__).parents[1]))
-    result = execute(app, "agent.stop", {"workspace": "sea", "agent_id": "alice", "binding": binding,
-                                        "checkpoint": point["id"]}, actor=("sea", "alice", binding))
-    assert result["observation"]["state"] == "starting_stop_observer"
-    deadline = time.monotonic() + 30
-    status = {}
-    while time.monotonic() < deadline:
-        status = read_json(root / ".aw-local/status.json", {})
-        if status.get("state") in ("released", "failed"):
-            break
-        time.sleep(.1)
-    assert status.get("state") == "released", (status, (root / ".aw-local/runner.log").read_text(encoding="utf-8"))
-    assert status["session"] == "original-protocol-chat"
-    assert app.agent("sea", "alice")["current"] is None
-    assert not list((root / ".aw-local/inputs").glob("*.json"))
+    # This fixture provides observation tools only, so startup must not resume execution.
+    write_json(root / ".aw-local/control.json", {"stop": binding})
+    backend.start(app, port=0)
+    try:
+        deadline = time.monotonic() + 90
+        while backend.status(app).get("restoring") and time.monotonic() < deadline:
+            time.sleep(.1)
+        assert not backend.status(app).get("restoring")
+        write_json(root / ".aw-local/control.json", {"stop": None})
+        result = execute(app, "agent.stop", {"workspace": "sea", "agent_id": "alice", "binding": binding,
+                                            "checkpoint": point["id"]}, actor=("sea", "alice", binding))
+        assert result["observation"]["state"] == "starting_stop_observer"
+        deadline = time.monotonic() + 90
+        status = {}
+        while time.monotonic() < deadline:
+            status = read_json(root / ".aw-local/status.json", {})
+            if status.get("state") in ("released", "failed"):
+                break
+            time.sleep(.1)
+        assert status.get("state") == "released", (status, backend.log(app, "sea", "alice"))
+        assert status["session"] == "original-protocol-chat"
+        assert status["pid"] == backend.status(app)["pid"]
+        assert app.agent("sea", "alice")["current"] is None
+        assert not list((root / ".aw-local/inputs").glob("*.json"))
+    finally:
+        backend.stop(app)
+        deadline = time.monotonic() + 90
+        while backend.status(app)["running"] and time.monotonic() < deadline:
+            time.sleep(.1)
+        assert not backend.status(app)["running"]

@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills
+from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills
 from .messages import Messages
 from .direct_messages import DirectMessages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
@@ -14,13 +14,13 @@ READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "ag
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
              "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project"}
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log"}
 
 USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
-                   "maintenance.grant", "maintenance.schedule", "maintenance.repair"}
+                   "maintenance.grant", "maintenance.schedule", "maintenance.repair", "backend.start", "backend.stop", "backend.restart", "backend.attach", "backend.cancel"}
 CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile", "direct-message.record"}
 
 
@@ -84,7 +84,8 @@ def runtime_stop(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
     binding = app.agent(workspace, agent_id)["current"]
     write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": binding})
-    return {"monitor_stop_requested": True, "binding": binding, "execution_right_released": False}
+    signal = backend.cancel(app, workspace, agent_id, str(root), expected_binding=binding)
+    return {"monitor_stop_requested": True, "binding": binding, "execution_right_released": False, **signal}
 
 
 def runtime_launch(app, workspace, agent_id, directory=None):
@@ -148,6 +149,10 @@ def command_map(app):
     messages = Messages(app)
     direct_messages = DirectMessages(app)
     return {
+        "backend.start": partial(backend.start, app), "backend.status": partial(backend.status, app),
+        "backend.stop": partial(backend.stop, app), "backend.restart": partial(backend.restart, app),
+        "backend.log": partial(backend.log, app), "backend.attach": partial(backend.attach, app),
+        "backend.cancel": partial(backend.cancel, app),
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
         "agent.desktop-project": partial(desktop_projects.plan, app),

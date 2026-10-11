@@ -1,0 +1,382 @@
+"""One local AW home owns the HTTP service, maintenance and Runner threads."""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import threading
+import time
+import traceback
+import urllib.error
+import urllib.request
+import webbrowser
+
+from .maintenance import installation_id
+from .util import Conflict, Error, LockBusy, Unavailable, Uncertain, locked, now, read_json, write_json
+
+
+def _lock_held(app):
+    try:
+        with locked(app.home / "backend/service.lock", wait=0):
+            return False
+    except LockBusy:
+        return True
+
+
+def _request(app, command, arguments=None):
+    connection = read_json(app.home / "backend/connection.json")
+    if not connection:
+        raise Unavailable("The local backend is not ready; use backend start.")
+    url = f"http://127.0.0.1:{connection['port']}/api/execute"
+    request = urllib.request.Request(url, data=json.dumps({"command": command, "arguments": arguments or {}}).encode(),
+        headers={"Authorization": "Bearer " + connection["token"], "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=30 if command == "backend.attach" else 5) as response:
+            return json.load(response)["result"]
+    except urllib.error.HTTPError as exc:
+        reply = json.load(exc)
+        kind = Uncertain if reply.get("code") == "outcome_unknown" else Conflict if exc.code == 409 else Error
+        raise kind(reply.get("error", "The local backend rejected the request.")) from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        if command in ("backend.status", "backend.log"):
+            raise Unavailable("The local backend could not be observed.") from exc
+        raise Uncertain("Backend request result unknown; inspect this home and the original Binding before retrying.") from exc
+
+
+class Backend:
+    def __init__(self, app, http):
+        self.app, self.http = app, http
+        self.stop_event = threading.Event()
+        self.lock = threading.RLock()
+        self.runners = {}
+        self.threads = []
+        self.resume_notes = []
+        self.restart_requested = False
+        self.open_after_restart = False
+        self.maintenance = threading.Thread(target=self._maintenance, name="aw-maintenance")
+        self.restore = threading.Thread(target=self._restore, name="aw-restore")
+
+    def _maintenance(self):
+        from .maintenance import run
+        run(self.app, self.stop_event)
+
+    def start(self):
+        self.maintenance.start()
+        self.restore.start()
+
+    def _restore(self):
+        for access in self.app.workspace_list():
+            if self.stop_event.is_set():
+                return
+            workspace = access["alias"]
+            try:
+                snap = self.app.store(workspace).snapshot()
+            except (Error, OSError, ValueError) as exc:
+                self.resume_notes.append({"workspace": workspace, "reason": str(exc), "observed_at": now()})
+                continue
+            copies = self.app.local()["workspaces"][workspace].get("instances", {})
+            for agent_id in copies:
+                if self.stop_event.is_set():
+                    return
+                try:
+                    agent = self.app.agent(workspace, agent_id, snap)
+                    binding = agent.get("current")
+                    if not binding:
+                        continue
+                    entry = snap.json(f"bindings/{binding}.json")
+                    execution = entry.get("execution")
+                    if not execution:
+                        self.resume_notes.append({"workspace": workspace, "agent_id": agent_id, "binding": binding,
+                            "reason": "Execution source is missing; a local directory does not establish ownership.", "observed_at": now()})
+                        continue
+                    if execution["installation_id"] != installation_id(self.app):
+                        continue
+                    root = self.app.root(workspace, agent["id"], execution["directory"])
+                    local = read_json(root / ".aw-local/entry.json", {})
+                    control = read_json(root / ".aw-local/control.json", {})
+                    if not isinstance(local, dict) or not isinstance(control, dict):
+                        raise Error("Local entry or control record is invalid; inspect this original copy.")
+                    if local.get("binding") != binding or control.get("stop") == binding:
+                        continue
+                    if entry["kind"] == "manual" or not entry.get("session"):
+                        self.resume_notes.append({"workspace": workspace, "agent_id": agent["id"], "binding": binding,
+                            "reason": "No confirmed native session; no creation or model input was repeated.", "observed_at": now()})
+                        continue
+                    if entry["phase"] != "stopping" and entry.get("controller"):
+                        self.resume_notes.append({"workspace": workspace, "agent_id": agent["id"], "binding": binding,
+                            "reason": "Original controller remains; explicit takeover is required.", "observed_at": now()})
+                        continue
+                    self.attach(workspace, agent["id"], str(root), stop_binding=binding if entry["phase"] == "stopping" else None)
+                except (Error, OSError, ValueError, KeyError) as exc:
+                    self.resume_notes.append({"workspace": workspace, "agent_id": agent_id, "reason": str(exc), "observed_at": now()})
+
+    def attach(self, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None):
+        from .runtime import Runner, _released_stop
+        root = self.app.root(workspace, agent_id, directory)
+        snap = self.app.store(workspace).snapshot()
+        if stop_binding:
+            original = snap.json(f"bindings/{stop_binding}.json")
+            if original and original["phase"] == "released":
+                return _released_stop(snap, agent_id, stop_binding, original)
+        local = read_json(root / ".aw-local/entry.json", {})
+        binding = local.get("binding")
+        if not binding:
+            raise Error("No local entry; use agent start before starting its Runner.")
+        if expected_binding and binding != expected_binding:
+            raise Conflict("The original Binding changed before its backend request arrived.")
+        owner = self.app.agent(workspace, agent_id, snap)
+        entry = snap.json(f"bindings/{binding}.json")
+        if owner["current"] != binding or owner["archived"] or entry["phase"] not in ("starting", "active", "stopping"):
+            raise Conflict("Only the current starting, active or stopping Binding can have a Runner.")
+        if stop_binding and (stop_binding != binding or entry["phase"] != "stopping"):
+            raise Conflict("Only the original stopping request can be observed.")
+        if entry["phase"] == "starting" and not entry.get("session"):
+            launch = read_json(root / ".aw-local/launch.json", {})
+            if launch.get("binding") == binding and launch.get("attempted"):
+                raise Conflict("The original native creation is unresolved; inspect and reconcile its launch receipt.")
+        execution = entry.get("execution")
+        if execution and (execution["installation_id"] != installation_id(self.app)
+                          or Path(execution["directory"]).resolve() != root):
+            raise Conflict("This Binding belongs to another execution environment or local copy.")
+        with self.lock:
+            if self.stop_event.is_set():
+                raise Conflict("The backend is stopping; no Runner was started.")
+            previous = self.runners.get(root)
+            if previous and previous["thread"].is_alive() and previous["thread"] is not threading.current_thread():
+                if previous["binding"] != binding:
+                    raise Conflict("The original Runner is still exiting; inspect it before starting a successor.")
+                return {"pid": os.getpid(), "binding": binding, "state": "runner_present"}
+            runner = Runner(self.app, workspace, agent_id, str(root), stop_binding=stop_binding, expected_binding=binding)
+            task = {"runner": runner, "workspace": workspace, "agent_id": agent_id, "binding": binding}
+            thread = threading.Thread(target=self._run_runner, args=(task,), name="aw-runner-" + agent_id)
+            task["thread"] = thread
+            self.runners[root] = task
+            self.threads = [item for item in self.threads if item["thread"].is_alive()]
+            self.threads.append(task)
+            thread.start()
+            return {"pid": os.getpid(), "binding": binding, "state": "starting_runner"}
+
+    def _run_runner(self, task):
+        runner = task["runner"]
+        try:
+            runner.run()
+        except Exception:
+            # A task failure belongs to this Runner; it must not terminate other Agents.
+            log_path = runner.root / ".aw-local/runner.log"
+            with log_path.open("a", encoding="utf-8") as log:
+                log.write(now() + "\n" + traceback.format_exc() + "\n")
+        else:
+            if runner.stop_event.is_set():
+                runner.status(state="monitor_stopped", entry_automatically_released=False)
+
+    def cancel(self, root, binding):
+        with self.lock:
+            task = self.runners.get(root)
+            if task and task["binding"] == binding and task["thread"].is_alive():
+                task["runner"].stop_event.set()
+                return True
+        return False
+
+    def status(self):
+        with self.lock:
+            tasks = list(self.runners.items())
+        runners = []
+        for root, task in tasks:
+            try:
+                observation = read_json(root / ".aw-local/status.json", {})
+                if not isinstance(observation, dict):
+                    raise ValueError("Runtime observation is not an object.")
+            except (OSError, ValueError) as exc:
+                observation = {"state": "unknown", "binding": task["binding"],
+                               "unknown_reason": "runtime_observation_failed", "error_type": type(exc).__name__}
+            if observation.get("binding") != task["binding"]:
+                observation = {"state": "unknown", "reason": "No observation for this Binding yet."}
+            runners.append({"workspace": task["workspace"], "agent_id": task["agent_id"], "directory": str(root),
+                            "binding": task["binding"], "runner_alive": task["thread"].is_alive(), "runtime": observation})
+        return {"state": "stopping" if self.stop_event.is_set() else "running", "running": True,
+                "ready": not self.stop_event.is_set(), "pid": os.getpid(), "home": str(self.app.home),
+                "url": f"http://127.0.0.1:{self.http.server_port}/", "observed_at": now(),
+                "maintenance_alive": self.maintenance.is_alive(), "restoring": self.restore.is_alive(),
+                "runners": runners, "resume_notes": list(self.resume_notes)}
+
+    def request_stop(self, restart=False, open_app=False):
+        with self.lock:
+            self.restart_requested = self.restart_requested or restart
+            self.open_after_restart = self.open_after_restart or open_app
+            self.stop_event.set()
+            for task in self.threads:
+                task["runner"].stop_event.set()
+        self.http.stopping.set()
+        threading.Thread(target=self.http.shutdown, name="aw-http-stop", daemon=True).start()
+        return {"stop_requested": True, "restart_requested": self.restart_requested,
+                "running": True, "ready": False, "agent_bindings_released": False,
+                "native_chat_shutdown_requested": False}
+
+    def close(self):
+        self.stop_event.set()
+        with self.lock:
+            for task in self.threads:
+                task["runner"].stop_event.set()
+        if self.maintenance.ident is not None:
+            self.maintenance.join()
+        if self.restore.ident is not None:
+            self.restore.join()
+        for task in self.threads:
+            task["thread"].join()
+
+
+def status(app):
+    manager = getattr(app, "backend", None)
+    if manager:
+        return manager.status()
+    if not _lock_held(app):
+        return {"state": "stopped", "running": False, "ready": False, "home": str(app.home), "observed_at": now()}
+    try:
+        return _request(app, "backend.status")
+    except (Unavailable, Error, ValueError):
+        return {"state": "unknown", "running": True, "ready": False, "home": str(app.home),
+                "unknown_reason": "Backend lock is held but its control endpoint could not be read.", "observed_at": now()}
+
+
+def start(app, port=None, open_app=False):
+    manager = getattr(app, "backend", None)
+    if manager:
+        return {**manager.status(), "start_requested": False}
+    with locked(app.home / "backend/start.lock"):
+        if _lock_held(app):
+            result = status(app)
+            if open_app and result["ready"]:
+                connection = read_json(app.home / "backend/connection.json")
+                webbrowser.open(result["url"] + "#token=" + connection["token"])
+            return {**result, "start_requested": False}
+        connection = read_json(app.home / "backend/connection.json", {})
+        port = port if port is not None else connection.get("port", 8765)
+        args = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "backend", "run", "--port", str(port)]
+        if open_app:
+            args.append("--open")
+        env = {key: value for key, value in os.environ.items()
+               if key not in ("AW_HOME", "AW_WORKSPACE", "AW_AGENT", "AW_BINDING", "CODEX_THREAD_ID")}
+        options = {"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}
+        with (app.home / "backend/backend.log").open("ab") as log:
+            process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log, env=env, **options)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise Error("Backend exited during startup; inspect backend log.")
+            result = status(app)
+            if result["ready"]:
+                return {**result, "start_requested": True}
+            time.sleep(0.1)
+        return {"state": "starting", "running": None, "ready": False, "pid": process.pid,
+                "home": str(app.home), "start_requested": True, "observed_at": now()}
+
+
+def stop(app):
+    manager = getattr(app, "backend", None)
+    if manager:
+        return manager.request_stop()
+    if not _lock_held(app):
+        return {**status(app), "stop_requested": False, "agent_bindings_released": False}
+    return _request(app, "backend.stop")
+
+
+def restart(app, port=None, open_app=False):
+    manager = getattr(app, "backend", None)
+    if manager:
+        if port is not None and port != manager.http.server_port:
+            raise Error("Restart keeps the current port; stop then start to change it.")
+        return manager.request_stop(restart=True, open_app=open_app)
+    if not _lock_held(app):
+        return {**start(app, port, open_app), "restart_requested": True}
+    return _request(app, "backend.restart", {"port": port, "open_app": open_app})
+
+
+def attach(app, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None):
+    root = app.root(workspace, agent_id, directory)
+    expected_binding = expected_binding or stop_binding or read_json(root / ".aw-local/entry.json", {}).get("binding")
+    manager = getattr(app, "backend", None)
+    if manager:
+        return manager.attach(workspace, agent_id, str(root), stop_binding, expected_binding)
+    start(app)
+    return _request(app, "backend.attach", {"workspace": workspace, "agent_id": agent_id,
+        "directory": str(root), "stop_binding": stop_binding, "expected_binding": expected_binding})
+
+
+def cancel(app, workspace, agent_id, directory=None, expected_binding=None):
+    root = app.root(workspace, agent_id, directory)
+    manager = getattr(app, "backend", None)
+    if manager:
+        return {"observer_signalled": manager.cancel(root, expected_binding)}
+    if not _lock_held(app):
+        return {"observer_signalled": False}
+    return _request(app, "backend.cancel", {"workspace": workspace, "agent_id": agent_id,
+        "directory": str(root), "expected_binding": expected_binding})
+
+
+def log(app, workspace=None, agent_id=None, directory=None, lines=100):
+    if not isinstance(lines, int) or not 1 <= lines <= 500:
+        raise Error("Read 1–500 log lines.")
+    if agent_id:
+        if not workspace:
+            raise Error("Choose the Runner's workspace.")
+        root = app.root(workspace, agent_id, directory)
+        path = root / ".aw-local/runner.log"
+        source = {"kind": "runner", "workspace": workspace, "agent_id": agent_id, "directory": str(root)}
+    else:
+        if directory:
+            raise Error("Select an Agent before choosing its local copy.")
+        path = app.home / "backend/backend.log"
+        source = {"kind": "backend", "home": str(app.home)}
+    content, truncated = "", False
+    if path.exists():
+        with path.open("rb") as stream:
+            size = stream.seek(0, os.SEEK_END)
+            offset = max(0, size - 65536)
+            stream.seek(offset)
+            content = stream.read().decode("utf-8", errors="replace")
+            if offset:
+                content = content.partition("\n")[2]
+        content_lines = content.splitlines()
+        truncated = bool(offset) or len(content_lines) > lines
+        content = "\n".join(content_lines[-lines:])
+    connection = read_json(app.home / "backend/connection.json", {})
+    if connection.get("token"):
+        content = content.replace(connection["token"], "[redacted]")
+    content = re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", content)
+    content = re.sub(r"(?i)(Bearer\s+|[?&#]token=)[^\s&]+", r"\1[redacted]", content)
+    return {"source": source, "observed_at": now(), "exists": path.exists(), "truncated": truncated, "content": content}
+
+
+def run(app, port=None, open_app=False, setup=False):
+    from .server import make_server
+    with locked(app.home / "backend/service.lock", wait=0):
+        connection = read_json(app.home / "backend/connection.json", {})
+        port = port if port is not None else connection.get("port", 8765)
+        http = make_server(app, port, connection.get("token"))
+        manager = Backend(app, http)
+        app.backend = manager
+        write_json(app.home / "backend/connection.json", {"port": http.server_port, "pid": os.getpid(),
+                   "token": http.control_token, "started_at": now()})
+        url = f"http://127.0.0.1:{http.server_port}/" + ("setup" if setup else "") + "#token=" + http.control_token
+        print("本机工作台（地址包含控制凭据，请勿分享）：\n" + url, flush=True)
+        try:
+            with (app.home / "backend/backend.log").open("a", encoding="utf-8") as log_file:
+                log_file.write(f"{now()} Backend started pid={os.getpid()} port={http.server_port}\n")
+            manager.start()
+            if open_app:
+                webbrowser.open(url)
+            http.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            manager.stop_event.set()
+            http.server_close()
+            manager.close()
+            del app.backend
+            with (app.home / "backend/backend.log").open("a", encoding="utf-8") as log_file:
+                log_file.write(f"{now()} Backend stopped pid={os.getpid()} restart={manager.restart_requested}\n")
+    if manager.restart_requested:
+        start(app, http.server_port, manager.open_after_restart)

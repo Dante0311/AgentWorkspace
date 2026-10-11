@@ -495,18 +495,8 @@ class Desktop:
 
 
 def spawn_runner(app, workspace, agent_id, directory=None, *, stop_binding=None):
-    root = app.root(workspace, agent_id, directory)
-    log = root / ".aw-local/runner.log"
-    with log.open("ab") as output:
-        args = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "--workspace", workspace,
-                "runtime", "run", agent_id, "--directory", str(root)]
-        if stop_binding:
-            args += ["--stop-binding", stop_binding]
-        kwargs = {"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}
-        env = {key: value for key, value in os.environ.items()
-               if key not in ("AW_HOME", "AW_WORKSPACE", "AW_AGENT", "AW_BINDING", "CODEX_THREAD_ID")}
-        proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output, stderr=output, env=env, **kwargs)
-    return {"pid": proc.pid, "state": "starting_runner"}
+    from .backend import attach
+    return attach(app, workspace, agent_id, directory, stop_binding)
 
 
 def _released_stop(snap, agent_id, binding, entry, expected_checkpoint=None):
@@ -566,6 +556,8 @@ def continue_stop(app, workspace, agent_id, binding, directory=None, *, expected
                        "entry_automatically_released": False})
             return result
         result = spawn_runner(app, workspace, agent_id, str(root), stop_binding=binding)
+        if result.get("state") == "released":
+            return {**request, **result}
         return {**request, **result, "state": "starting_stop_observer"}
 
 
@@ -721,11 +713,12 @@ def watch(app, workspace, agent_id, operation, interval=5, directory=None):
 
 
 class Runner:
-    def __init__(self, app, workspace, agent_id, directory=None, stop_binding=None):
+    def __init__(self, app, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None):
         self.app, self.workspace, self.agent_id = app, workspace, agent_id
         self.root = app.root(workspace, agent_id, directory)
         self.adapter = None
-        self.binding = None
+        self.expected_binding = expected_binding or stop_binding
+        self.binding = self.expected_binding
         self.stop_event = threading.Event()
         self.renew_after_exit = False
         self.runtime_kind = None
@@ -881,9 +874,9 @@ class Runner:
         record = read_json(self.root / ".aw-local/entry.json")
         if not record:
             raise Error("No local entry; use relay/start before launching a runner.")
+        if self.expected_binding and record["binding"] != self.expected_binding:
+            raise Conflict("The original Binding changed before its Runner started.")
         self.binding = record["binding"]
-        if self.stop_binding and self.binding != self.stop_binding:
-            raise Conflict("The original stopping binding changed before its observer started.")
         snap, item, entry = self._read_state()
         if self.stop_binding and entry and entry["phase"] == "released":
             self.stop_only = True

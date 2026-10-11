@@ -34,6 +34,14 @@ def parser():
         sub = domains.add_parser(domain).add_subparsers(dest="action", required=True)
         return {name: sub.add_parser(name) for name in names}
 
+    service = actions("backend", ["run", "start", "status", "stop", "restart", "log"])
+    for key in ("run", "start", "restart"):
+        service[key].add_argument("--port", type=int)
+        service[key].add_argument("--open", dest="open_app", action="store_true")
+    service["log"].add_argument("--agent-id")
+    service["log"].add_argument("--directory")
+    service["log"].add_argument("--lines", type=int, default=100)
+
     session = actions("session", ["prepare", "open", "show", "run"])
     for key in ("open", "show", "run"):
         session[key].add_argument("request_id")
@@ -246,7 +254,7 @@ def main(argv=None):
             actor = desktop_directory_actor(app, operation)
         if actor and not workspace:
             workspace = actor[0]
-        if actor and (domain in ("serve", "setup") or (domain in ("maintenance", "runtime") and action == "run")):
+        if actor and (domain in ("serve", "setup") or (domain in ("maintenance", "runtime", "backend") and action == "run")):
             raise Error("Starting a server or worker is a user-management operation.")
         if domain == "session" and action == "run":
             if actor:
@@ -256,6 +264,10 @@ def main(argv=None):
         if domain == "maintenance" and action == "run":
             from .maintenance import run
             run(app)
+            return 0
+        if domain == "backend" and action == "run":
+            from .backend import run
+            run(app, **options)
             return 0
         if domain in ("serve", "setup"):
             from .server import serve
@@ -302,7 +314,11 @@ def main(argv=None):
                 command, args["renew"] = "agent.handoff", True
             if domain == "bridge" and action in ("start", "stop"):
                 command, args["enabled"] = "bridge.switch", action == "start"
-        if not command.startswith(("setup.", "session.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+        if command == "backend.log" and args.get("agent_id"):
+            if not workspace:
+                raise Error("Select the Runner's --workspace.")
+            args["workspace"] = workspace
+        if not command.startswith(("setup.", "session.", "backend.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)

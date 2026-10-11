@@ -4,7 +4,7 @@
 
 AgentWorkspace 在用户已有的 Agent 客户端之上提供协作：保存 Agent 的身份、职责、Skill、资料和历史，管理当前执行资格，并通过 Git Workspace 交换消息。它操作已有客户端的真实会话，不重写模型推理或工具循环，也不要求用户改用新的聊天客户端。Work / Delivery 按需使用。
 
-> **开发预览，近期方向于 2026-10-11 调整。** npm 包版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`。优先满足 Codex Desktop 与 ChatGPT Web；Web 当前手动收件，浏览器插件另行开发，取得真实接口后再接入。tclaude 待实际验证，其他 Harness、模型供应商与企业微信暂缓扩展。已有底层能力继续保留；本轮 npm、统一后台、工作台精简、同机直发与显式强制接手仍需按最终产物分别验收，不表示完整 V1 已完成。未发布 npm Registry 或正式 Release。
+> **开发预览，近期方向于 2026-10-11 调整。** npm 包版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`。优先满足 Codex Desktop 与 ChatGPT Web；Web 当前手动收件，浏览器插件另行开发，取得真实接口后再接入。tclaude 待实际验证，其他 Harness、模型供应商与企业微信暂缓扩展。本轮 npm、统一后台、三视图工作台、同机直发路径、显式强制接手及原操作继续已实现；已通过的开发检查与真实环境待验范围见[当前实现](docs/implementation.md)，不表示完整 V1 已完成。未发布 npm Registry 或正式 Release。
 
 Codex Desktop 已有在本地项目中的自动创建、真实会话绑定、持续投递和同 Agent 交接；需要先准备项目并从真实桌面聊天取得控制连接。历史限定实测见 [实现进展](docs/implementation.md#codex-desktop-自动接入2026-10-08)，操作和限制见 [Codex Desktop](docs/usage.md#42-codex-desktop)。这些结果不代替本轮新增功能的验收。
 
@@ -49,7 +49,7 @@ aw backend start --open
 
 上例安装时换成实际采用的新构建文件。`aw backend status`、`aw backend restart`、`aw backend log` 用于查看和控制，`aw backend run` 可前台运行；已有 `aw serve` 保留兼容。隔离测试数据不自动并入日常后台，停止 AW 后台不等于原生聊天已关闭或 Agent 已交出执行权。
 
-本轮基础 npm 包已完成离线安装、在不依赖系统 Python 的环境运行 CLI/HTTP、七个 Skills 完整性及卸载重装后原数据保留检查；这只证明基础包装，最终统一后台与新增业务行为仍须另验。首次配置和底层 CLI 操作见[新机器配置](docs/first-use.md)与[运行与维护说明](docs/runtime-and-maintenance.md)。参与开发才需要 clone 源码，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+本轮已完成隔离 npm 离线安装、使用包内 Python 运行 CLI/HTTP、七个 Skills 完整性、后台重复启动/重启/停止及卸载重装同包后原数据保留检查。工作台也已用真实浏览器和隔离后台检查启停与重连；这些结果不代替真实 Desktop、跨机器或跨数据格式升级验收。首次配置和底层 CLI 操作见[新机器配置](docs/first-use.md)与[运行与维护说明](docs/runtime-and-maintenance.md)。参与开发才需要 clone 源码，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 当前能力
 
@@ -62,7 +62,7 @@ aw backend start --open
 | 同机原生直发 | 新方向：message Skill 每次核对双方 CURRENT 入口和同机 Codex 事实，其他情况走正式 Message；最终行为需单独验证。 |
 | 管家维护 | 已有作用域委托、健康检查、持久巡检与有限维修保留；本轮统一到正式本机后台，未知业务不重放。 |
 | 资产与工作 | 明确文件导入、来源差异与更新、选定共享提升、Fork、可选 Work/Delivery。 |
-| 接口与安装 | CLI、HTTP、MCP 共用实现；npm 是本轮用户入口，基础包检查已通过，最终安装与后台仍按产物验证。 |
+| 接口与安装 | CLI、HTTP、MCP 共用实现；npm 是用户入口，包内运行时、后台与保留数据的程序替换已做隔离检查，实际交付仍以提交和制品校验值为准。 |
 
 工作台近期主入口仅为 Agent 与环境、消息历史、本机后台状态与停止/重启/日志，Workspace 仍用来选择查看范围。模型配置、创建与交接等操作通过现有 CLI/Skills 使用，复杂界面暂缓。统一聊天界面和同一身份的多事务会话仍留到 V3。
 

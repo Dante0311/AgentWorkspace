@@ -137,7 +137,19 @@ aw -w sea message watch helper start --interval 5
 
 Windows npm `.cmd` 启动器有单独的 argv 处理；未在真实 Windows/Codex 环境完成验收。CLI 成功不等于 Desktop 成功。
 
-首次新会话若尚未发出创建请求，原 start 可以重试并复用已预留绑定。创建原生线程的结果已经不明时，不重复创建；查看原始记录和本地 launch/status 后处理。用户显式强制接手见下节，它不用于自动重试未知创建。
+首次新会话若尚未发出创建请求，原 start 可以重试并复用已预留绑定。创建原生线程的结果已经不明时，不重复创建；先读取原回执：
+
+```sh
+aw -w sea runtime launch-show helper
+```
+
+仅当原回执包含真实 `threadId`，用户才可用同一个 ID 核对并认领。将下例中的 Binding 和 threadId 换成原回执的值：
+
+```sh
+aw -w sea runtime reconcile-create helper --binding ORIGINAL_BINDING --session ORIGINAL_THREAD_ID
+```
+
+核对会读取原聊天的 ID、本机目录、状态和已采用模型。确认返回 `state=session_bound` 后，再运行 `aw -w sea runtime start helper` 继续观察。认领命令本身不发原生输入，也不开始观察。只有 `clientThreadId` 或完全没有真实 ID 时仍返回 `outcome_unknown`，不能用同目录候选代替原创建证据。已有未知或已提交的 boot 输入不会重置。原 controller 未释放、来源不明、不同副本或不同安装位置时拒绝认领；用户显式强制接手见下节，它不用于自动重试未知创建。
 
 ## 5. 交出、换会话与 Fork
 

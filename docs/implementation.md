@@ -38,6 +38,10 @@ Agent 身份、执行会话、运行环境与本地副本分开表示。`agent.s
 
 `agent.takeover` 是用户管理操作，必须指定当前 Binding、保存检查点并显式确认。它通过条件提交撤销旧资格并保存 forced handoff，后继复用 `agent.start`；不停止原生聊天，不自动启动后继，不搬迁未保存资料。重复原请求只读取原结果，普通 Agent 和管家不得调用。隔离 Git 用例覆盖旧入口失权、重复请求不影响后继和原写入未知；真实 Desktop 与跨机器效果仍须单独验收。
 
+自动 renew/transfer 只能继续原正常交接：原 handoff ID 随同续接传到 Core 的条件写，不能消费其间另一次强制接手留下的新 handoff，也不能复用另一条 starting Binding。原并发失败场景已经独立复验，旧请求被拒、新 handoff 未消费，没有额外 Binding、原生创建或输入；这不等同于真实模型的自动交接验收。
+
+`runtime.launch-show` 只读展示原创建回执中的有限字段。用户可通过 `runtime.reconcile-create` 认领原回执的真实 threadId，程序只读核对原 ID、本机目录、状态和已采用模型，再登记同一会话。丢失真实 ID、原 controller 未释放或来源不明时保留未知或拒绝；不会凭同目录候选猜测，不创建或发送原生输入。原 bind 回报丢失可读回同一结果，已有 boot 输入保持原字节。成功不自动开始观察，须由用户显式 `runtime.start`。隔离 Git 和只读原生协议夹具通过，真实 Desktop 故障恢复仍待实测。
+
 `agent.fork --resume` 核对原来源、检查点、名称和目标 ID，复用已保存的目标分支与登记，只补目录等缺失步骤，不覆盖已有用户修改。原分支 `.aw/fork.json` 保存来源，本机原发表凭据阻止未知写入被重放；它不是另一份 Agent 身份登记。隔离 Git 已验证分支、登记和目录阶段的失败继续。旧 Fork 未包含来源记录时不支持新 resume，已登记的旧目标仍可 `agent connect`，本轮不自动迁移历史分支。
 
 Codex Desktop 和受管 CLI 使用[实例模型配置](instance-model-profiles.md)，创建、恢复与 normal 输入显式带模型和推理强度；实例文件的后续编辑不改变当前入口的采用值。缺项与已知不兼容值拒绝，未知能力记录未确认。这项参数合同由 Windows 的配置、Git 与协议测试验证；真实 Desktop 设置效果仍需受控复验，未升级日常安装。

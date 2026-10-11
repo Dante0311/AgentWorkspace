@@ -1,6 +1,6 @@
 # Agent Workspace：V1 设计基线
 
-状态：**CURRENT DIRECTION / 已确认，待实现与验收**。2026-10-11 调整近期范围，先满足用户自己的 Codex Desktop 与 ChatGPT Web 协作，保留已有底层能力。npm 预览版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`；版本号不证明本轮新增目标已经实现。具体实现与证据见 [implementation.md](implementation.md) 和[历史验证](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/validation.md)。
+状态：**CURRENT DIRECTION / 已确认，本轮实现进入开发验证**。2026-10-11 调整近期范围，先满足用户自己的 Codex Desktop 与 ChatGPT Web 协作，保留已有底层能力。npm 预览版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`；版本号不证明具体环境已验收。具体实现与证据见 [implementation.md](implementation.md) 和[历史验证](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/validation.md)。
 
 本文件是本项目唯一当前产品设计。由 Playbook 的[已落档基线 f803dc64](https://github.com/Dante0311/Playbook/blob/f803dc64f82885999efde707e3d252815012c9c1/drafts/git-native-agent-workspace/README.md)整合迁入，并纳入其后确认的最小开机、状态展示、连接看护与版本差异提示。旧版只通过 Git 历史追溯，不保留平行活动设计。
 

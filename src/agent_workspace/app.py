@@ -738,6 +738,77 @@ class App:
             raise
         return handoff
 
+    def _forced_handoff(self, snap, agent_id, binding, checkpoint):
+        entry = snap.json(f"bindings/{binding}.json")
+        if not entry or entry["phase"] != "revoked":
+            return None
+        handoff = snap.json(f"handoffs/h{binding[1:]}.json")
+        if (entry["id"] != binding or entry["agent"] != agent_id or not handoff
+                or not handoff.get("forced") or handoff["agent"] != agent_id or handoff["entry"] != binding):
+            raise Error("Revoked entry has no matching forced handoff.")
+        if entry.get("checkpoint") != checkpoint or handoff["checkpoint"] != checkpoint:
+            raise Conflict("This entry was taken over from another saved checkpoint.")
+        return handoff
+
+    def takeover(self, workspace, agent_id, binding, checkpoint, *, confirm=False):
+        if confirm is not True:
+            raise Error("Explicit user confirmation is required to revoke the old execution entry.")
+        slug(binding)
+        slug(checkpoint)
+        store = self.store(workspace)
+        locator = self.local()["workspaces"][workspace]["locator"]
+        operation = self.home / "takeovers" / digest(locator.encode()) / f"{binding}.json"
+        with locked(operation.with_suffix(".lock")):
+            snap = store.snapshot()
+            item = self.agent(workspace, agent_id, snap)
+            handoff = self._forced_handoff(snap, agent_id, binding, checkpoint)
+            if handoff is None:
+                if item["current"] != binding or item["archived"]:
+                    raise Conflict("The selected entry is no longer current; read the Agent before taking it over.")
+                entry = snap.json(f"bindings/{binding}.json")
+                if entry["agent"] != agent_id or entry["phase"] not in ("starting", "active", "stopping"):
+                    raise Conflict("The current execution entry cannot be taken over.")
+                point = self._read_checkpoint(store, snap, agent_id, checkpoint)
+                receipt = read_json(operation, {})
+                if receipt.get("publication_unknown"):
+                    if receipt["agent"] != agent_id or receipt["checkpoint"] != checkpoint:
+                        raise Conflict("An unresolved takeover already uses this entry and another checkpoint.")
+                    raise Uncertain("The original takeover publication remains unknown; it was not repeated.")
+                handoff_id = "h" + binding[1:]
+                handoff = {"id": handoff_id, "agent": agent_id, "entry": binding, "checkpoint": point["id"],
+                           "created_at": now(), "consumed_by": None, "forced": True,
+                           "native_stop_confirmed": False}
+                item.update(current=None, handoff=handoff_id)
+                entry.update(phase="revoked", checkpoint=point["id"], revoked_at=now(), revocation="user_takeover")
+                ap, bp = f"agents/{agent_id}.json", f"bindings/{binding}.json"
+                cp, hp = f"checkpoints/{agent_id}/{checkpoint}.json", f"handoffs/{handoff_id}.json"
+                pending = {"agent": agent_id, "checkpoint": checkpoint, "publication_unknown": True}
+                write_json(operation, pending)
+                try:
+                    store.change("main", {ap: encode(item), bp: encode(entry), hp: encode(handoff)},
+                                 {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp], hp: None},
+                                 "User takeover")
+                except (Conflict, Uncertain) as failure:
+                    if isinstance(failure, Conflict):
+                        write_json(operation, {**pending, "publication_unknown": False})
+                    try:
+                        latest = store.snapshot()
+                    except (Error, OSError, ValueError) as exc:
+                        raise Uncertain(f"{failure}\nCould not confirm the original takeover publication: {exc}") from exc
+                    try:
+                        handoff = self._forced_handoff(latest, agent_id, binding, checkpoint)
+                    except RetryableRead as exc:
+                        raise Uncertain(f"{failure}\nCould not read the original takeover result: {exc}") from exc
+                    if handoff is None:
+                        raise
+                except Error:
+                    write_json(operation, {**pending, "publication_unknown": False})
+                    raise
+                write_json(operation, {**pending, "publication_unknown": False})
+            return {"state": "execution_revoked", "previous_binding": binding, "checkpoint": checkpoint,
+                    "handoff": handoff, "execution_right_revoked": True, "native_state": "not_observed",
+                    "native_stop_confirmed": False, "starts_new_session": False}
+
     def versions(self, workspace, agent_id, directory=None):
         root = self.root(workspace, agent_id, directory)
         source = read_json(root / "source.json")

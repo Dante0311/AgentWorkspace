@@ -60,13 +60,13 @@ def parser():
     ws["skills"].add_argument("--revision")
 
     ag = actions("agent", ["create", "import", "list", "show", "history", "connect", "configure", "versions", "update",
-        "promote", "archive", "unarchive", "start", "bind", "stop", "handoff", "renew", "fork", "input",
+        "promote", "archive", "unarchive", "start", "bind", "stop", "takeover", "handoff", "renew", "fork", "input",
         "capture-desktop", "configure-desktop", "sync", "upgrade-tools", "configure-codex", "configure-sdk",
         "transfer", "transfer-profile", "transfer-continue", "transfer-status", "desktop-project", "desktop-project-save", "skills", "skill-install", "skill-update", "desktop-discover", "desktop-prepare"])
     for key, sub in ag.items():
         if key != "list":
             sub.add_argument("name" if key in ("create", "import") else "agent_id")
-            if key not in ("history", "configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save", "desktop-discover", "desktop-prepare"):
+            if key not in ("history", "takeover", "configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save", "desktop-discover", "desktop-prepare"):
                 sub.add_argument("--directory")
     for key in ("create", "import"):
         ag[key].add_argument("--id", dest="agent_id")
@@ -86,6 +86,9 @@ def parser():
     ag["stop"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
     ag["stop"].add_argument("--checkpoint", required=True)
     ag["stop"].add_argument("--confirm-stopped", action="store_true", help="Current owner attestation for manual adapters only.")
+    ag["takeover"].add_argument("--binding", required=True, help="The current entry selected by the user.")
+    ag["takeover"].add_argument("--checkpoint", required=True, help="Saved materials to continue; unsaved files are not migrated.")
+    ag["takeover"].add_argument("--confirm", action="store_true", help="Revoke AW authority; does not stop the old native chat.")
     ag["fork"].add_argument("--checkpoint", required=True)
     ag["fork"].add_argument("--name", required=True)
     ag["fork"].add_argument("--new-id")

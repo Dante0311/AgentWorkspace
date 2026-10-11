@@ -182,7 +182,7 @@ def command_map(app):
         "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show, "agent.history": app.history,
         "agent.connect": app.connect_agent, "agent.configure": app.configure,
         "agent.update": app.update, "agent.versions": app.versions, "agent.promote": app.promote,
-        "agent.archive": app.archive, "agent.fork": app.fork,
+        "agent.archive": app.archive, "agent.fork": app.fork, "agent.takeover": app.takeover,
         "checkpoint.create": app.checkpoint, "checkpoint.list": app.checkpoints, "checkpoint.show": app.checkpoint_show,
         "agent.sync": app.sync_agent,
         "agent.start": partial(runtime.start, app), "agent.bind": partial(bind_entry, app),
@@ -224,6 +224,8 @@ def execute(app, command, arguments, *, actor=None):
         raise Error(f"Invalid arguments for {command}: unsupported snapshot argument.")
     if actor:
         workspace, aid, binding = actor
+        if command == "agent.takeover":
+            raise Error("Force takeover is an explicit user operation, not an Agent or caretaker operation.")
         # Signatures supply defaults, never authorization. A new agent's ID is a target.
         if "workspace" in signature.parameters:
             args.setdefault("workspace", workspace)

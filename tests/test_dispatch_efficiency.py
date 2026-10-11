@@ -291,8 +291,16 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
     monkeypatch.setattr(runtime, "Codex", Mock(return_value=adapter))
     monkeypatch.setattr(bridges, "BridgeManager", Mock(return_value=Mock()))
     runner = runtime.Runner(local_app, *ACTOR[:2])
-    runner.stop_event = Mock()
-    runner.stop_event.wait.side_effect = [False, False, True]
+    waits = iter((False, False, True))
+
+    def wait(timeout=None):
+        if runner.stop_event.is_set():
+            return True
+        if next(waits):
+            runner.stop_event.set()
+        return runner.stop_event.is_set()
+
+    monkeypatch.setattr(runner.stop_event, "wait", wait)
     runner._complete_inputs = Mock()
 
     def finish_stop(*args, **kwargs):

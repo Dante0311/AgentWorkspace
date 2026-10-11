@@ -1,6 +1,6 @@
 # 仅有仓库工具或 Git 时的操作
 
-先读 [精确协议](protocol.md)。手动操作仍使用用户/进入材料明确授予**本会话**的实例地址与 Binding，不从仓库抄 current 冒充接手。本 Skill 不创建 Agent、预留 Binding、绑定会话、抢占或释放入口，也不默认开启 Watch。
+先按主 Skill 判断发送/回复通路，以下仅为正式 Message 的仓库操作；没有同机 Codex 真实观察能力时使用本路径。先读 [精确协议](protocol.md)。手动操作仍使用用户/进入材料明确授予**本会话**的 Agent 地址与 Binding，不从仓库抄 current 冒充接手。本 Skill 不创建 Agent、预留 Binding、绑定会话、抢占或释放入口，也不默认开启 Watch。
 
 ## GitHub 等仓库工具
 

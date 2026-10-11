@@ -6,11 +6,13 @@ import inspect
 
 from . import bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills
 from .messages import Messages
+from .direct_messages import DirectMessages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
 
 READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.history", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
+             "direct-message.list", "direct-message.show",
              "asset.list", "asset.read", "runtime.status", "bridge.status",
              "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project"}
 
@@ -19,7 +21,7 @@ USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
                    "maintenance.grant", "maintenance.schedule", "maintenance.repair"}
-CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile"}
+CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile", "direct-message.record"}
 
 
 def assets(app, operation, workspace, agent_id, path=None, content=None, revision=None, directory=None):
@@ -144,6 +146,7 @@ def bridge_status(app, workspace, agent_id, directory=None):
 
 def command_map(app):
     messages = Messages(app)
+    direct_messages = DirectMessages(app)
     return {
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
@@ -196,6 +199,8 @@ def command_map(app):
         "message.send": messages.send, "message.list": messages.list, "message.show": messages.show,
         "message.receive": messages.receive, "message.poll": partial(message_poll, app),
         "message.operation": messages.operation, "message.reconcile": messages.reconcile, "message.watch": partial(runtime.watch, app),
+        "direct-message.record": direct_messages.record, "direct-message.list": direct_messages.list,
+        "direct-message.show": direct_messages.show,
         "asset.list": partial(assets, app, "list"),
         "asset.read": partial(assets, app, "read"),
         "asset.write": partial(assets, app, "write"),

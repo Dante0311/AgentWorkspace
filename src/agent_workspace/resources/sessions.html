@@ -12,7 +12,7 @@
 <div id="app" hidden>
 <form id="form">
 <label for="kind">运行环境</label><select id="kind"><option value="codex">Codex CLI</option><option value="claude">Claude Code CLI</option><option value="codebuddy">CodeBuddy CLI（不是 WorkBuddy Desktop）</option></select>
-<label for="directory">已有项目 / 工作目录</label><input id="directory" required placeholder="例如 D:\projects\shop 或 /home/me/projects/shop"><p class="muted">不复制目录、不创建 worktree、不写入 AGENTS.md。持久 Agent 的实例目录请从 Agent 入口进入。</p>
+<label for="directory">已有项目 / 工作目录</label><input id="directory" required placeholder="例如 D:\projects\shop 或 /home/me/projects/shop"><p class="muted">不复制目录、不创建 worktree、不写入 AGENTS.md。持久 Agent 的本地副本和执行入口，请通过 CLI 或随包 Agent Skill 准备。</p>
 <div class="grid"><div><label for="model">模型 ID（可选）</label><input id="model" list="model-options"><datalist id="model-options"></datalist></div><div><label for="effort">推理强度（可选）</label><input id="effort" list="effort-options"><datalist id="effort-options"></datalist></div></div>
 <label for="base_url">模型服务地址（留空使用原生配置）</label><input id="base_url" placeholder="按服务提供的 Base URL 原样填写">
 <p class="muted">Codex 使用 Responses；Claude 使用 Messages；CodeBuddy 按其原生协议。不会转换协议或自动追加 URL 后缀。</p>

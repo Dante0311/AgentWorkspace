@@ -263,6 +263,7 @@ def test_backend_stop_acceptance_is_not_shown_as_actual_exit(ui):
     assert page.get_by_text("本机后台已就绪", exact=True).is_visible()
     assert "尚需确认实际退出" in page.locator("#content").inner_text()
     assert calls.count("backend.stop") == 1
+    assert not page.locator("#result:not(.hidden)").is_visible()
 
 
 def test_backend_restart_reads_new_process_without_repeating_control(ui):
@@ -280,6 +281,7 @@ def test_backend_restart_reads_new_process_without_repeating_control(ui):
     assert "观察到新的后台进程就绪" in page.locator("#content").inner_text()
     assert calls.count("backend.restart") == 1
     assert calls.count("backend.status") >= 2
+    assert not page.locator("#result:not(.hidden)").is_visible()
 
 
 def test_message_source_failure_does_not_claim_empty_complete_history(ui):

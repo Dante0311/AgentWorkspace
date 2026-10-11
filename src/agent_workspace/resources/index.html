@@ -279,8 +279,7 @@ async function handle(action,item){
  }
  if(action==='backend-start'||action==='backend-stop'||action==='backend-restart'){
   const previousPid=backendState?.pid;
-  let result;
-  try{result=await command(action.replace('backend-','backend.'));showResult(result)}
+  try{await command(action.replace('backend-','backend.'))}
   catch(error){backendNotice='未取得控制请求的确定结果。请核对当前后台，不重复发送同一操作。';connected=false;render();if(action==='backend-restart'){await reconnectAfterRestart(previousPid);return}throw error}
   backendNotice=action==='backend-stop'?'后台返回了停止请求结果，尚需确认实际退出。网页断开不能代替退出确认。通过本次安装的 aw backend status 查看最终状态。':action==='backend-restart'?'正在核对重启后的实际后台。':'正在读取后台的实际状态。';
   if(action==='backend-restart'){render();await reconnectAfterRestart(previousPid);return}

@@ -23,9 +23,9 @@ def test_first_use_page_and_scan_without_git(tmp_path, monkeypatch):
     thread.start()
     base = f"http://127.0.0.1:{server.server_port}"
     try:
-        for page in ("/", "/setup"):
+        for page, expected in (("/", "Agent 与运行环境"), ("/setup", "首次配置")):
             with urllib.request.urlopen(base + page) as response:
-                assert "首次配置" in response.read().decode()
+                assert expected in response.read().decode()
         with pytest.raises(urllib.error.HTTPError):
             urllib.request.urlopen(base + "/api/commands")
         request = urllib.request.Request(base + "/api/execute", data=json.dumps({

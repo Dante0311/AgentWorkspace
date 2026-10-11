@@ -192,7 +192,7 @@ def parser():
     msg["watch"].add_argument("--directory")
     msg["reconcile"].add_argument("operation_id")
 
-    rt = actions("runtime", ["run", "start", "stop", "status"])
+    rt = actions("runtime", ["run", "start", "stop", "status", "desktop-observe"])
     for sub in rt.values():
         sub.add_argument("agent_id")
         sub.add_argument("--directory")

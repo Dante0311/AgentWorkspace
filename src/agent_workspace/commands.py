@@ -13,7 +13,7 @@ from .util import Conflict, Error, digest, inside, locked, read_json, relpath, w
 READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.history", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
-             "asset.list", "asset.read", "runtime.status", "bridge.status",
+             "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "bridge.status",
              "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project"}
 
 USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
@@ -193,6 +193,7 @@ def command_map(app):
         "agent.upgrade-tools": partial(upgrade_tools, app),
         "runtime.start": partial(runtime_launch, app), "runtime.stop": partial(runtime_stop, app),
         "runtime.status": app.show,
+        "runtime.desktop-observe": partial(runtime.desktop_observe, app),
         "runtime.receive-input": partial(runtime.receive_input, app),
         "work.create": app.work_create, "work.list": app.work_list, "work.show": app.work_show,
         "work.update": app.work_update, "work.deliver": app.work_deliver,

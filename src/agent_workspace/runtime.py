@@ -281,6 +281,72 @@ class Codex:
         self.rpc.close()
 
 
+def desktop_native_state(result):
+    state = result["thread"]["status"]["type"]
+    if state == "active":
+        return "busy"
+    if state == "idle":
+        return "idle"
+    if state == "notLoaded":
+        turns = result.get("turns", result["thread"].get("turns", []))
+        if turns and turns[0].get("status") in ("completed", "interrupted"):
+            return "idle"
+    return "unknown"
+
+
+def desktop_observe(app, workspace, agent_id, directory=None):
+    """Read the current local Desktop entry; never create or submit model input."""
+    from .maintenance import installation_id
+    store = app.store(workspace)
+    snap = store.snapshot()
+    owner = app.agent(workspace, agent_id, snap)
+    binding = owner["current"]
+    entry = snap.json(f"bindings/{binding}.json") if binding else None
+    result = {"binding": binding, "phase": entry["phase"] if entry else None,
+              "session": entry.get("session") if entry else None, "observed_at": now(),
+              "native_state": "unknown", "native_host": None, "native_cwd": None,
+              "local_session_confirmed": False}
+    if not entry or entry["phase"] != "active" or entry["kind"] != "desktop":
+        return {**result, "unknown_reason": "no_active_desktop_entry"}
+    execution = entry.get("execution")
+    if not execution:
+        return {**result, "unknown_reason": "execution_source_missing"}
+    if execution["installation_id"] != installation_id(app):
+        return {**result, "unknown_reason": "different_execution_environment"}
+    if directory is not None and Path(directory).resolve() != Path(execution["directory"]).resolve():
+        return {**result, "unknown_reason": "different_local_copy"}
+    root = app.root(workspace, agent_id, execution["directory"])
+    result["directory"] = str(root)
+    if read_json(root / ".aw-local/entry.json", {}).get("binding") != binding:
+        return {**result, "unknown_reason": "local_entry_mismatch"}
+    config = read_json(root / ".aw-local/runtime.json", {})
+    if config.get("kind") != "desktop":
+        return {**result, "unknown_reason": "desktop_connection_missing"}
+    try:
+        adapter = Desktop(root, config, entry["session"], read_only=True)
+        try:
+            native = adapter.read()
+            can_send = "send_message_to_thread" in adapter.tools
+        finally:
+            adapter.close()
+    except (Error, OSError, ValueError, KeyError) as exc:
+        return {**result, "unknown_reason": "native_observation_failed", "error_code": getattr(exc, "code", None)}
+    thread = native["thread"]
+    result.update(native_state=desktop_native_state(native), native_host=thread.get("hostId"),
+                  native_cwd=thread.get("cwd"), observed_at=now())
+    if thread.get("hostId") != "local" or not thread.get("cwd") or Path(thread["cwd"]).resolve() != root:
+        return {**result, "unknown_reason": "native_local_copy_unconfirmed"}
+    if not can_send or result["native_state"] == "unknown":
+        return {**result, "unknown_reason": "native_control_unconfirmed"}
+    latest = store.snapshot()
+    current = app.agent(workspace, agent_id, latest)
+    checked = latest.json(f"bindings/{binding}.json")
+    if (current["current"] != binding or checked["phase"] != "active"
+            or checked["session"] != entry["session"] or checked.get("execution") != execution):
+        return {**result, "unknown_reason": "binding_changed_during_observation"}
+    return {**result, "local_session_confirmed": True, "snapshot_revision": latest.revision}
+
+
 class Desktop:
     supports_insert = True
 
@@ -326,17 +392,7 @@ class Desktop:
         return json.loads(result["content"][0]["text"])
 
     def status(self):
-        result = self.read()
-        state = result["thread"]["status"]["type"]
-        if state == "active":
-            return "busy"
-        if state == "idle":
-            return "idle"
-        if state == "notLoaded":
-            turns = result.get("turns", result["thread"].get("turns", []))
-            if turns and turns[0].get("status") in ("completed", "interrupted"):
-                return "idle"
-        return "unknown"
+        return desktop_native_state(self.read())
 
     def read(self, **options):
         result = self.call("read_thread", {"threadId": self.session, "turnLimit": 1,

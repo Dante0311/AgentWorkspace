@@ -347,6 +347,111 @@ def desktop_observe(app, workspace, agent_id, directory=None):
     return {**result, "local_session_confirmed": True, "snapshot_revision": latest.revision}
 
 
+def launch_show(app, workspace, agent_id, directory=None):
+    """Expose the original receipt's identifiers, without native probing or credentials."""
+    from .maintenance import installation_id
+    snap = app.store(workspace).snapshot()
+    owner = app.agent(workspace, agent_id, snap)
+    binding = owner["current"]
+    entry = snap.json(f"bindings/{binding}.json") if binding else None
+    execution = entry.get("execution") if entry else None
+    if directory is None and execution and execution["installation_id"] == installation_id(app):
+        directory = execution["directory"]
+    root = app.root(workspace, agent_id, directory)
+    launch = read_json(root / ".aw-local/launch.json", {})
+    returned = launch.get("result") or {}
+    profile = launch.get("model_profile") or {}
+    requested, reported = profile.get("requested", {}), profile.get("reported", {})
+    recovery = launch.get("reconciled") or {}
+    return {"binding": launch.get("binding"), "current_binding": binding,
+            "current_phase": entry["phase"] if entry else None, "directory": str(root), "observed_at": now(),
+            "attempted": launch.get("attempted", False), "receipt_matches_current": bool(binding and launch.get("binding") == binding),
+            "project_id": launch.get("project_id"), "has_original_session_id": bool(returned.get("threadId")),
+            "result": {key: returned[key] for key in ("threadId", "hostId", "clientThreadId") if key in returned},
+            "model_profile": {"requested": {key: requested[key] for key in ("generation", "model", "effort") if key in requested},
+                "reported": {key: reported[key] for key in ("model", "effort") if key in reported},
+                "effective": profile.get("effective", "unconfirmed"), "native_accepted": profile.get("native_accepted")},
+            "reconciled": {key: recovery[key] for key in ("binding", "session", "association", "selected_at", "observed_at",
+                "native_host", "native_cwd", "native_state") if key in recovery}}
+
+
+def reconcile_create(app, workspace, agent_id, binding, session, directory=None):
+    """Bind only a verified original launch ID; never create or execute native input."""
+    from .maintenance import installation_id
+    store = app.store(workspace)
+    snap = store.snapshot()
+    owner = app.agent(workspace, agent_id, snap)
+    entry = snap.json(f"bindings/{binding}.json")
+    if owner["current"] != binding or not entry or entry["kind"] != "desktop" or entry["phase"] not in ("starting", "active"):
+        raise Conflict("Only the current original Desktop launch can be reconciled.")
+    execution = entry.get("execution")
+    if not execution or execution["installation_id"] != installation_id(app):
+        raise Conflict("Original execution source is unconfirmed or belongs to another home.")
+    root = app.root(workspace, agent_id, directory or execution["directory"])
+    if root != Path(execution["directory"]).resolve():
+        raise Conflict("The original execution belongs to another local copy.")
+    with locked(root / ".aw-local/runner.lock", wait=0):
+        if entry.get("controller"):
+            raise Conflict("The original controller remains; inspect it or use explicit takeover.")
+        if read_json(root / ".aw-local/entry.json", {}).get("binding") != binding:
+            raise Conflict("The original local entry changed; no session was bound.")
+        if entry.get("session") not in (None, session):
+            raise Conflict("This Binding already names a different native session.")
+        launch = read_json(root / ".aw-local/launch.json", {})
+        if launch.get("binding") != binding or not launch.get("attempted"):
+            raise Conflict("No matching attempted original launch receipt exists.")
+        original = (launch.get("result") or {}).get("threadId")
+        if not original:
+            return {"state": "outcome_unknown", "binding": binding, "session": entry.get("session"),
+                    "original_create_result_confirmed": False, "observation_started": False,
+                    "reason": "Original launch has no real threadId; candidate location cannot prove original creation."}
+        if original != session or (launch.get("reconciled", {}).get("session") not in (None, session)):
+            raise Conflict("Use only the real threadId returned by this original launch.")
+        config = read_json(root / ".aw-local/runtime.json", {})
+        if config.get("kind") != "desktop":
+            raise Conflict("The original Desktop connection configuration changed.")
+        profile = model_profiles.adopted(root, binding, session=entry.get("session"))
+        adapter = Desktop(root, config, session, read_only=True)
+        try:
+            native = adapter.read()
+        finally:
+            adapter.close()
+        thread = native["thread"]
+        if thread.get("id") != session or thread.get("hostId") != "local" or not thread.get("cwd") or Path(thread["cwd"]).resolve() != root:
+            raise Conflict("The original native session has not confirmed this local execution directory.")
+        native_state = desktop_native_state(native)
+        if native_state == "unknown":
+            raise Unavailable("Original native session state remains unknown; no session was bound.")
+        model_receipt = model_profiles.receipt(profile, {"catalog": "unconfirmed", "effective": "unconfirmed"},
+                                               result={**native, **thread})
+        model_profiles.require_matching(model_receipt)
+        latest = store.snapshot()
+        checked = latest.json(f"bindings/{binding}.json")
+        if (app.agent(workspace, agent_id, latest)["current"] != binding or checked["phase"] not in ("starting", "active")
+                or checked.get("controller") or checked.get("execution") != execution or checked.get("session") not in (None, session)):
+            raise Conflict("The original Binding changed during native observation; no session was bound.")
+        already_bound = checked["phase"] == "active" and checked.get("session") == session
+        recovery = {"binding": binding, "session": session, "association": "original_launch_thread_id",
+                    "selected_at": launch.get("reconciled", {}).get("selected_at", now()), "observed_at": now(),
+                    "native_host": thread["hostId"], "native_cwd": thread["cwd"], "native_state": native_state,
+                    "model_profile": model_receipt}
+        # Persist the original choice before the shared write, so a lost reply can be read back.
+        write_json(root / ".aw-local/launch.json", {**launch, "reconciled": recovery})
+        if not already_bound:
+            app.bind(workspace, agent_id, binding, session, str(root))
+        boot_path = root / ".aw-local/inputs" / f"boot-{binding}.json"
+        boot = read_json(boot_path)
+        if boot is None:
+            boot = queue_input(app, workspace, agent_id, entry_prompt(app, workspace, agent_id, binding, root),
+                               purpose="initial", directory=str(root), request_id="boot-" + binding, expected_binding=binding)
+        elif boot.get("binding") != binding or boot.get("purpose") != "initial":
+            raise Conflict("The original boot input does not match this Binding; its bytes were preserved.")
+        return {"state": "session_bound", "binding": binding, "session": session, "directory": str(root),
+                "already_bound": already_bound, "association": recovery["association"], "original_create_result_confirmed": True,
+                "native_state": native_state, "model_profile": model_receipt,
+                "initial_input_state": boot["state"], "observation_started": False}
+
+
 class Desktop:
     supports_insert = True
 

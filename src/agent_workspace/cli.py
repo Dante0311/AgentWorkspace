@@ -200,11 +200,13 @@ def parser():
     msg["watch"].add_argument("--directory")
     msg["reconcile"].add_argument("operation_id")
 
-    rt = actions("runtime", ["run", "start", "stop", "status", "desktop-observe"])
+    rt = actions("runtime", ["run", "start", "stop", "status", "desktop-observe", "launch-show", "reconcile-create"])
     for sub in rt.values():
         sub.add_argument("agent_id")
         sub.add_argument("--directory")
     rt["run"].add_argument("--stop-binding")
+    rt["reconcile-create"].add_argument("--binding", required=True)
+    rt["reconcile-create"].add_argument("--session", required=True)
     bridge = actions("bridge", ["configure", "start", "stop", "status", "send"])
     for key, sub in bridge.items():
         sub.add_argument("agent_id")

@@ -13,14 +13,14 @@ from .util import Conflict, Error, digest, inside, locked, read_json, relpath, w
 READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.history", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
-             "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "bridge.status",
+             "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
              "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log"}
 
 USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
-                   "maintenance.grant", "maintenance.schedule", "maintenance.repair", "backend.start", "backend.stop", "backend.restart", "backend.attach", "backend.cancel"}
+                   "maintenance.grant", "maintenance.schedule", "maintenance.repair", "backend.start", "backend.stop", "backend.restart", "backend.attach", "backend.cancel", "runtime.reconcile-create"}
 CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile", "direct-message.record"}
 
 
@@ -199,6 +199,8 @@ def command_map(app):
         "runtime.start": partial(runtime_launch, app), "runtime.stop": partial(runtime_stop, app),
         "runtime.status": app.show,
         "runtime.desktop-observe": partial(runtime.desktop_observe, app),
+        "runtime.launch-show": partial(runtime.launch_show, app),
+        "runtime.reconcile-create": partial(runtime.reconcile_create, app),
         "runtime.receive-input": partial(runtime.receive_input, app),
         "work.create": app.work_create, "work.list": app.work_list, "work.show": app.work_show,
         "work.update": app.work_update, "work.deliver": app.work_deliver,

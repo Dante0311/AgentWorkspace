@@ -655,7 +655,7 @@ class App:
         store.change("main", {path: encode(item)}, {path: snap.entries[path]}, f"Archive={archived} {agent_id}")
         return item
 
-    def reserve(self, workspace, agent_id, directory=None, binding_id=None):
+    def reserve(self, workspace, agent_id, directory=None, binding_id=None, *, expected_handoff=None):
         root = self.root(workspace, agent_id, directory)
         config = model_profiles.migrate(root)
         profile = (model_profiles.selected(root) if config.get("kind") in model_profiles.CODEX_KINDS
@@ -665,6 +665,9 @@ class App:
         item = self.agent(workspace, agent_id, snap)
         if item["current"] or item["archived"]:
             raise Conflict("Agent already has an entry or is archived; relay cannot take it over.")
+        # An automatic continuation must consume its verified handoff, never a later one.
+        if expected_handoff is not None and item["handoff"] != expected_handoff:
+            raise Conflict("The handoff selected for continuation changed; the old request cannot use its successor.")
         if item["has_run"] and not item["handoff"]:
             raise Conflict("No handoff is available. A crash is not a release of ownership.")
         binding = slug(binding_id) if binding_id else uid("b")

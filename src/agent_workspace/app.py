@@ -476,25 +476,80 @@ class App:
             raise Error("Saved checkpoint material is missing or does not match its reference.")
         return {**pointer, "record": record, "files": list(snap.entries)}
 
-    def fork(self, workspace, agent_id, checkpoint, name, new_id=None, directory=None):
+    def fork(self, workspace, agent_id, checkpoint, name, new_id=None, directory=None, *, resume=False):
         point = self.checkpoint_show(workspace, agent_id, checkpoint)
         target = slug(new_id or name)
         store = self.store(workspace)
         snap = store.snapshot()
-        if f"agents/{target}.json" in snap.entries:
-            raise Conflict("Fork target already exists.")
         source = store.snapshot(revision=point["revision"])
-        content = source.all()
         locator = snap.json("workspace.json")["locator"]
-        content[".aw/identity.json"] = encode({"workspace": locator, "agent": target,
-            "forked_from": {"agent": agent_id, "checkpoint": checkpoint, "revision": source.revision}})
         branch = "instance/" + target
-        store.branch(branch, content, parent=source.revision)
-        item = {"id": target, "name": name, "description": "", "branch": branch,
-                "archived": False, "current": None, "has_run": False, "handoff": None,
-                "created_at": now(), "forked_from": {"agent": agent_id, "checkpoint": checkpoint, "revision": source.revision}}
-        store.change("main", {f"agents/{target}.json": encode(item)}, {f"agents/{target}.json": None}, f"Fork {target}")
-        return {**item, **self.connect_agent(workspace, target, directory or str(self.home / "instances" / workspace / target))}
+        agent_path = f"agents/{target}.json"
+        origin = {"agent": agent_id, "checkpoint": point["id"], "revision": source.revision}
+        identity = {"workspace": locator, "agent": target, "forked_from": origin}
+        receipt_path = self.home / "fork-operations" / digest(encode([locator, target])) / "operation.json"
+        location = directory or str(self.home / "instances" / workspace / target)
+        with locked(receipt_path.with_suffix(".lock")):
+            receipt = read_json(receipt_path)
+            existing = store.snapshot().json(agent_path)
+            if not resume:
+                if existing or receipt:
+                    raise Conflict("Fork target already exists or has a pending operation; explicitly resume the original Fork.")
+                item = {"id": target, "name": name, "description": "", "branch": branch,
+                        "archived": False, "current": None, "has_run": False, "handoff": None,
+                        "created_at": now(), "forked_from": origin}
+                content = source.all()
+                content[".aw/identity.json"] = encode(identity)
+                content[".aw/fork.json"] = encode(item)
+                receipt = {"fingerprint": digest(encode(item)), "registration_unknown": False}
+                # Retain the original target even if branch publication loses its reply.
+                write_json(receipt_path, receipt)
+                try:
+                    store.branch(branch, content, parent=source.revision)
+                except Uncertain:
+                    raise
+                except Error:
+                    receipt_path.unlink()
+                    raise
+            else:
+                saved = store.snapshot(branch)
+                if not saved.revision:
+                    raise Uncertain("The original Fork branch is not confirmed; do not create it again.")
+                item = saved.json(".aw/fork.json", {})
+                if (not isinstance(item, dict) or item.get("id") != target or item.get("branch") != branch
+                        or item.get("name") != name or item.get("forked_from") != origin
+                        or saved.json(".aw/identity.json") != identity
+                        or (receipt and receipt["fingerprint"] != digest(encode(item)))):
+                    raise Conflict("Saved target does not belong to this Fork and checkpoint revision.")
+                if existing:
+                    if (existing.get("id") != target or existing.get("branch") != branch
+                            or existing.get("forked_from") != origin
+                            or existing.get("created_at") != item.get("created_at")):
+                        raise Conflict("Registered target belongs to another Fork identity.")
+                    return {**existing, **self.connect_agent(workspace, target, location)}
+                # Until registration, the target must still contain exactly the saved starting files.
+                content = source.all()
+                content[".aw/identity.json"] = encode(identity)
+                content[".aw/fork.json"] = encode(item)
+                if saved.all() != content:
+                    raise Conflict("Unregistered Fork files changed; inspect the original target before continuing.")
+                if receipt and receipt["registration_unknown"]:
+                    raise Uncertain("Original Fork registration is still unconfirmed; do not publish it again.")
+                receipt = {"fingerprint": digest(encode(item)), "registration_unknown": False}
+            # A crash or an unknown write result leaves this marker until the original record is read back.
+            receipt["registration_unknown"] = True
+            write_json(receipt_path, receipt)
+            try:
+                store.change("main", {agent_path: encode(item)}, {agent_path: None}, f"Fork {target}")
+            except Uncertain:
+                raise
+            except Error:
+                receipt["registration_unknown"] = False
+                write_json(receipt_path, receipt)
+                raise
+            receipt["registration_unknown"] = False
+            write_json(receipt_path, receipt)
+            return {**item, **self.connect_agent(workspace, target, location)}
 
     def configure(self, workspace, agent_id, value, directory=None):
         root = self.root(workspace, agent_id, directory)

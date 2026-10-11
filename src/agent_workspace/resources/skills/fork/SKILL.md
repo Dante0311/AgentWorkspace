@@ -5,13 +5,23 @@ description: 从已经保存的检查点创建另一个实例，保留资产与�
 
 # fork
 
-Fork 创建新身份，原实例不必停工。不从任意未保存的聊天位置分叉。
+Fork 创建一个新的持久 Agent 身份，原 Agent 不必停工。本地目录只是这个 Agent 的一份资料副本，准备目录不会启动原生会话或取得执行权。不从任意未保存的聊天位置分叉。
 
 ```sh
 aw -w sea checkpoint list helper
 aw -w sea checkpoint show helper --id CHECKPOINT_ID
 aw -w sea agent fork helper --checkpoint CHECKPOINT_ID --name exploration
 ```
+
+如果新分支已经保存，但 Agent 登记或本地目录准备未完成，明确继续原目标：
+
+```sh
+aw -w sea agent fork helper --checkpoint CHECKPOINT_ID --name exploration --new-id exploration --resume
+```
+
+继续时保留原来源 Agent、检查点、名称和目标 ID。平台核对检查点资料版本、原目标身份与来源，只补尚未完成的登记或目录准备；已有目录中的用户修改不会覆盖。普通 Fork 遇到已有目标仍拒绝创建。已经登记的目标只准备或复用本地副本，不另建身份。
+
+原发表结果未知时先读取原分支和登记；仍不能确认结果就保留未知，不重放。当前 `AW_HOME` 保存一份原发表凭据，避免登记尚未可见时重复发表；它不是 Agent 身份记录。换机器或换 `AW_HOME` 前，应先在原环境核实尚未确认的发表，不能把新环境没有凭据当作原操作未发生。来源检查点版本或目标身份不匹配时，先检查原操作，不能换目标掩盖失败。
 
 新实例分支从指定版本开始，保留全部已保存的来源文件和历史，不改写旧消息的身份或旧 Work 的负责人，不自动清空待办事实。
 新实例不取得原实例的执行权或工单。需要正式工单才创建新 Work；普通协作无需 Work。

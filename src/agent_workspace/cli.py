@@ -92,6 +92,7 @@ def parser():
     ag["fork"].add_argument("--checkpoint", required=True)
     ag["fork"].add_argument("--name", required=True)
     ag["fork"].add_argument("--new-id")
+    ag["fork"].add_argument("--resume", action="store_true", help="Continue preparing the same Fork target after checking its original source.")
     ag["create"].add_argument("--skill", dest="skills", action="append")
     for key in ("skill-install", "skill-update"):
         ag[key].add_argument("--name", required=True)

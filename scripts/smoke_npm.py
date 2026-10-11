@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
 import urllib.request
 
@@ -20,6 +21,11 @@ def main():
     if len(artifacts) != 1:
         raise SystemExit(f"Expected one npm artifact in {directory}, found {len(artifacts)}")
     artifact = artifacts[0]
+    with tarfile.open(artifact, "r:gz") as archive:
+        caches = [name for name in archive.getnames() if name.startswith("package/app/")
+                  and ("/__pycache__/" in name or name.endswith((".pyc", ".pyo")))]
+    if caches:
+        raise SystemExit("Application build caches were included in the npm package: " + ", ".join(caches))
     npm = shutil.which("npm.cmd")
     node = shutil.which("node")
     git = shutil.which("git")
@@ -126,7 +132,7 @@ for name in ('index.html', 'setup.html', 'sessions.html'):
         print(json.dumps({"ok": True, "artifact": artifact.name,
                           "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
                           "npm_version": build["version"], "program_version": version,
-                          "checks": ["offline npm install", "bundled runtime", "seven Skills and web resources",
+                          "checks": ["no application build caches", "offline npm install", "bundled runtime", "seven Skills and web resources",
                                      "CLI and HTTP", "backend singleton, restart, logs and separate home",
                                      "package replacement preserves user data", "orderly shutdown"]}))
 

@@ -59,8 +59,11 @@ jobs:
           package-manager-cache: false
       - name: Install build frontend
         run: python -m pip install build
-      - name: Build sdist and wheel
-        run: python -m build
+      - name: Compile and build sdist and wheel
+        run: |
+          python -m compileall -q src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m build
       - name: Build Windows npm artifact with bundled runtime
         run: python scripts/build_npm.py dist
       - name: Test npm installation and replacement outside checkout

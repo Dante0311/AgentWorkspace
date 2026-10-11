@@ -72,6 +72,10 @@ def build_state(app):
                         "kind": "local_registry_and_runtime",
                     },
                 )
+                for copy in detail.get("copies", []):
+                    if "observation_error" in copy:
+                        result["errors"].append({"workspace": alias, "agent": agent["id"],
+                                                 "directory": copy["directory"], "error": copy["observation_error"]})
             except (Error, ValueError, OSError, KeyError) as exc:
                 # Keep the known identity, not invented liveness or ownership.
                 error = f"Instance observation failed ({type(exc).__name__}); use workspace doctor."

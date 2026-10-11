@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: 保存实际工作事实，交出当前实例的执行权，不启动下一端。
+description: 保存实际工作事实，交出当前 Agent 的执行权，不启动下一端。
 ---
 
 # handoff

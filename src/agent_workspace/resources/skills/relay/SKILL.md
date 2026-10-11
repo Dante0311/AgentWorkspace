@@ -1,6 +1,6 @@
 ---
 name: relay
-description: 首次进入或接手同一实例，加载必要材料，不抢占已有入口。
+description: 首次进入或接手同一 Agent，加载必要材料，不抢占已有入口。
 ---
 
 # relay
@@ -14,7 +14,7 @@ aw -w sea agent start helper
 aw -w sea agent start helper --open
 ```
 
-本工具在尚无入口时预留唯一 binding。已捕获控制连接并准备项目的 Codex Desktop 由运行器创建、核验和绑定真实新聊天。manual 或尚未捕获连接的 Desktop 会返回手动入口提示词，用户在新原生会话中发送后，按提示绑定真实会话 ID。不要把已有/历史会话登记成新入口。Codex ID 可从真实 CODEX_THREAD_ID 取得，不编造 ID。桌面实例的平台操作使用进入材料提供的 `aw call --desktop-agent` 前缀，不能自行替换调用身份。
+本工具在尚无入口时预留唯一 binding。已捕获控制连接并准备项目的 Codex Desktop 由运行器创建、核验和绑定真实新聊天。manual 或尚未捕获连接的 Desktop 会返回手动入口提示词，用户在新原生会话中发送后，按提示绑定真实会话 ID。不要把已有/历史会话登记成新入口。Codex ID 可从真实 CODEX_THREAD_ID 取得，不编造 ID。桌面 Agent 的平台操作使用进入材料提供的 `aw call --desktop-agent` 前缀，不能自行替换调用身份。
 
 进入使用现有 Agent 的本地副本，不另建身份；目录未准备时先用 agent connect。一次有效执行入口由当前 Binding 指向具体原生会话，目录存在、历史聊天可打开或本地状态文件仍在都不能代替当前资格。强制接手后也必须启动并核验新会话，不能把尚在运行的旧聊天重新绑定。
 Desktop 自动投递需按 `.aw/prompts/entry.md` 与安装文档配置真实桌面 MCP 控制连接，不能用 exec resume 抢原生 writer。

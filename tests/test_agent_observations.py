@@ -118,3 +118,40 @@ def test_old_binding_without_execution_source_is_not_backfilled(observed_app):
     assert "execution" not in value["history"][0]
     assert value["copies"][0]["execution_matches_local"] is False
     assert store.head("main") == before
+
+
+def test_damaged_old_copy_preserves_healthy_current_copy_and_history(observed_app, tmp_path):
+    app = observed_app
+    old_copy = app.root("sea", "alice")
+    current_copy = tmp_path / "current-copy"
+    app.connect_agent("sea", "alice", current_copy)
+    binding = app.reserve("sea", "alice", current_copy)["binding"]
+    app.bind("sea", "alice", binding, "fixture-current-session", current_copy)
+    damaged = old_copy / ".aw-local/status.json"
+    damaged.write_bytes(b"{broken")
+    write_json(current_copy / ".aw-local/status.json", {"binding": binding, "session": "fixture-current-session",
+                                                       "state": "idle"})
+    before = app.store("sea").head("main")
+    value = app.show("sea", "alice")
+    assert value["binding"]["id"] == binding
+    assert value["directory"] == str(current_copy)
+    assert value["runtime"]["state"] == "idle"
+    assert value["history"][0]["id"] == binding
+    copies = {copy["directory"]: copy for copy in value["copies"]}
+    broken = copies[str(old_copy)]
+    assert broken["unknown_reason"] == "local_copy_observation_failed"
+    assert "JSONDecodeError" in broken["observation_error"]
+    assert broken["observation_source"]["directory"] == str(old_copy)
+    assert "runtime" not in broken and "entry_binding" not in broken
+    assert copies[str(current_copy)]["runtime_matches_current"] is True
+    explicit = app.show("sea", "alice", old_copy)
+    assert explicit["directory"] == str(old_copy)
+    assert explicit["runtime"]["state"] == "unknown"
+    assert explicit["binding"]["id"] == binding
+    state = build_state(app)
+    projected = state["agents"][0]
+    assert projected["runtime"]["state"] == "idle"
+    assert projected["history"][0]["id"] == binding
+    assert state["errors"][0]["directory"] == str(old_copy)
+    assert damaged.read_bytes() == b"{broken"
+    assert app.store("sea").head("main") == before

@@ -1,7 +1,7 @@
-"""Workbench 0.4 through real local HTTP and Chromium.
+"""Three Workbench views through real local HTTP and Chromium.
 
-These checks keep the recovery and authority contracts while following the
-0.4 information architecture. They use isolated Git data and no real model.
+Git data and backend observations are isolated fixtures. No native model or
+Desktop session is opened; explicit backend protocol fixtures are named below.
 """
 import json
 import os
@@ -10,10 +10,10 @@ import threading
 
 import pytest
 
-from agent_workspace import maintenance, runtime, skills
+from agent_workspace.direct_messages import DirectMessages
 from agent_workspace.messages import Messages
 from agent_workspace.server import make_server
-from agent_workspace.util import encode, read_json, write_json
+from agent_workspace.util import write_json
 
 
 @pytest.fixture(scope="module")
@@ -48,38 +48,79 @@ def ui(pair, browser):
         yield app, bindings, page
         assert not failures, failures
     finally:
-        context.close()
-        server.shutdown()
-        server.server_close()
-        thread.join(5)
-        assert not thread.is_alive()
+        try:
+            context.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+            assert not thread.is_alive()
 
 
 def nav(page, view):
+    if page.viewport_size["width"] < 700:
+        page.locator("#mobile-menu").click()
     page.locator(f'[data-view="{view}"]').click()
-
-
-def compose(page, content="original message"):
-    nav(page, "collaboration")
-    page.get_by_role("button", name="发送 Message", exact=True).click()
-    page.get_by_label("发送实例", exact=True).select_option("alice")
-    page.get_by_label("接收者（实例 ID 或 好友/实例）", exact=True).fill("bob")
-    page.get_by_label("正文", exact=True).fill(content)
+    page.wait_for_function("!busy")
 
 
 def pending(page):
     return page.evaluate("pendingMessage()")
 
 
+def store_pending(page, bindings, request_id):
+    value = {"locator": page.evaluate("wsMeta().locator"), "args": {
+        "workspace": "sea", "agent_id": "alice", "binding": bindings["alice"],
+        "to": "bob", "content": "original message", "request_id": request_id,
+        "delivery": "normal",
+    }}
+    page.evaluate("value => {sessionStorage.setItem(pendingKey(), JSON.stringify(value)); render()}", value)
+    return value
+
+
+def backend_fixture(page, control=None):
+    """HTTP boundary fixture, not evidence that an OS process started or exited."""
+    observed = {"running": True, "ready": True, "pid": 101, "observed_at": "fixture-read-time"}
+    calls = []
+
+    def route(request):
+        name = request.request.post_data_json["command"]
+        if not name.startswith("backend."):
+            request.continue_()
+            return
+        calls.append(name)
+        if name == "backend.status":
+            result = dict(observed)
+        elif name == "backend.log":
+            result = {"content": "fixture backend log"}
+        else:
+            result = control(name, observed) if control else {"state": "stop_requested"}
+        request.fulfill(json={"ok": True, "result": result})
+
+    page.route("**/api/execute", route)
+    return calls, observed
+
+
+def test_primary_navigation_has_three_views_and_keeps_identity_distinct(ui):
+    app, bindings, page = ui
+    assert page.locator("[data-view]").evaluate_all("items => items.map(item => item.dataset.view)") == ["agents", "messages", "backend"]
+    assert page.locator("article.agent-row").count() == 2
+    assert page.get_by_role("button", name="创建 Agent", exact=True).count() == 0
+    page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
+    assert page.get_by_role("heading", name="当前执行会话", exact=True).is_visible()
+    assert page.get_by_role("heading", name="历史执行会话", exact=True).is_visible()
+    assert "native-alice" in page.locator("dl.kv").first.inner_text()
+    assert app.agent("sea", "alice")["current"] == bindings["alice"]
+
+
 def test_refresh_reads_external_messages_and_ack(ui):
     app, bindings, page = ui
     messages = Messages(app)
     messages.send("sea", "alice", bindings["alice"], "bob", "First", request_id="refresh-first")
-    nav(page, "collaboration")
+    nav(page, "messages")
     page.locator('[data-action="message-show"][data-id="refresh-first"]').first.wait_for()
     messages.receive("sea", "bob", bindings["bob"], "refresh-first")
     messages.send("sea", "bob", bindings["bob"], "alice", "Second", request_id="refresh-second")
-
     page.locator("#refresh").click()
     page.wait_for_function("document.querySelectorAll('article.table-row').length === 2", timeout=15000)
     first = page.locator("article.table-row").filter(has_text="refresh-first")
@@ -87,20 +128,21 @@ def test_refresh_reads_external_messages_and_ack(ui):
     assert len(messages.list("sea")) == 2
 
 
-def test_agent_message_scope_does_not_replace_workspace_history(ui):
+def test_agent_scope_includes_inbound_and_outbound_without_replacing_workspace(ui):
     app, bindings, page = ui
     messages = Messages(app)
-    messages.send("sea", "alice", bindings["alice"], "bob", "Alice outgoing", request_id="scope-out")
-    messages.send("sea", "bob", bindings["bob"], "alice", "Alice incoming", request_id="scope-in")
+    for sender, receiver, identifier in [("alice", "bob", "scope-out"), ("bob", "alice", "scope-in"), ("bob", "bob", "scope-other")]:
+        messages.send("sea", sender, bindings[sender], receiver, identifier, request_id=identifier)
     page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
-    page.get_by_role("tab", name="通信", exact=True).click()
-    page.get_by_role("button", name="读取消息列表", exact=True).click()
-    page.locator('[data-action="message-show"][data-id="scope-in"]').first.wait_for()
+    page.get_by_role("button", name="查看此 Agent 的消息", exact=True).click()
+    page.wait_for_function("!busy")
+    assert page.locator("article.table-row").count() == 2
+    page.locator("#message-direction").select_option("in")
     assert page.locator("article.table-row").count() == 1
-
-    nav(page, "collaboration")
-    page.wait_for_function("document.querySelectorAll('article.table-row').length === 2", timeout=15000)
-    assert page.locator('[data-action="message-show"][data-id="scope-out"]').first.is_visible()
+    assert page.locator('[data-id="scope-in"]').first.is_visible()
+    nav(page, "messages")
+    assert page.locator("#message-agent").input_value() == ""
+    assert page.locator("article.table-row").count() == 3
 
 
 @pytest.mark.parametrize("observation", ["missing", "damaged"])
@@ -118,444 +160,160 @@ def test_agent_detail_does_not_turn_unknown_observation_into_stopped(ui, observa
     facts = page.locator("dl.kv").first.inner_text()
     assert expected in facts
     assert "未运行" not in facts and "关闭" not in facts
-    if observation == "damaged":
-        assert "当前入口详情未知" in facts
-        assert bindings["alice"] in facts
+    assert bindings["alice"] in facts
     assert app.agent("sea", "alice")["current"] == bindings["alice"]
 
 
-@pytest.mark.parametrize("delivered", [False, True])
-def test_message_response_loss_continues_only_original_request(ui, delivered):
+@pytest.mark.parametrize("damaged_old_copy", [False, True])
+def test_current_copy_is_not_replaced_by_stale_copy_and_history_is_separate(ui, tmp_path, damaged_old_copy):
     app, bindings, page = ui
-    attempts = []
+    first = app.root("sea", "alice")
+    old = bindings["alice"]
+    point = app.checkpoint("sea", "alice", "saved", binding=old, checkpoint_id="copy-point")
+    app.stop("sea", "alice", old, point["id"])
+    app.finish_stop("sea", "alice", old, observed_idle=True)
+    second = tmp_path / "second-copy"
+    app.connect_agent("sea", "alice", second)
+    current = app.reserve("sea", "alice", second)["binding"]
+    app.bind("sea", "alice", current, "fixture-current-session", second)
+    write_json(first / ".aw-local/status.json", {"binding": old, "session": "native-alice", "state": "fixture-old-busy"})
+    if damaged_old_copy:
+        (first / ".aw-local/status.json").write_bytes(b"{broken")
+    write_json(second / ".aw-local/status.json", {"binding": current, "session": "fixture-current-session", "state": "fixture-current-idle"})
+    page.locator("#refresh").click()
+    page.wait_for_function("!document.getElementById('refresh').disabled")
+    assert page.locator("#agent-count").inner_text() == "2"
+    page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
+    facts = page.locator("dl.kv").first.inner_text()
+    assert "fixture-current-idle" in facts and "fixture-old-busy" not in facts
+    copies = page.locator("section.card").filter(has=page.get_by_role("heading", name="本地副本", exact=True))
+    old_copy = copies.locator("article.operation").filter(has_text=str(first)).inner_text()
+    assert ("此副本的本机状态读取失败" if damaged_old_copy else "fixture-old-busy") in old_copy
+    assert page.get_by_text("历史执行入口", exact=True).count() == 1
+    assert page.get_by_text("来源登记不证明原生会话当前仍在该机器执行", exact=True).is_visible()
 
-    def lose_response(route):
-        body = route.request.post_data_json
-        if body["command"] == "message.send":
-            attempts.append(body["arguments"])
-            if delivered:
-                assert route.fetch().json()["ok"]
+
+def test_direct_records_are_labeled_without_formal_ack_or_failure(ui):
+    app, bindings, page = ui
+    messages = Messages(app)
+    messages.send("sea", "alice", bindings["alice"], "bob", "Formal", request_id="formal-history")
+    direct = DirectMessages(app).record("sea", "alice", bindings["alice"], "bob", "Native record only", request_id="native-history")
+    assert direct["recorded"] is True
+    nav(page, "messages")
+    assert page.locator("article.table-row").count() == 2
+    row = page.locator("article.table-row").filter(has_text="native-history")
+    assert row.get_by_text("Codex 直发记录", exact=True).is_visible()
+    assert row.get_by_text("未保存可选回执", exact=True).is_visible()
+    assert "首次留档时间" in row.inner_text() and "发送失败" not in row.inner_text()
+    row.get_by_role("button", name="查看", exact=True).click()
+    page.wait_for_selector("#result:not(.hidden)")
+    assert json.loads(page.locator("#result-output").inner_text())["record"]["content"] == "Native record only"
+    assert [record["id"] for record in messages.list("sea")] == ["formal-history"]
+    snap = app.store("sea").snapshot()
+    assert "message-index/native-history.json" not in snap.entries
+    assert "acks/native-history.json" not in snap.entries
+
+
+@pytest.mark.parametrize("published", [False, True])
+def test_old_unknown_message_keeps_original_id_when_response_is_lost(ui, published):
+    app, bindings, page = ui
+    identifier = "original-pending"
+    value = store_pending(page, bindings, identifier)
+    if published:
+        Messages(app).send(**value["args"])
+    sends = []
+
+    def lose_reply(route):
+        if route.request.post_data_json["command"] == "message.send":
+            sends.append(route.request.post_data_json["arguments"])
+            response = route.fetch().json()
             route.abort()
+            assert response["ok"], response
         else:
             route.continue_()
 
-    page.route("**/api/execute", lose_response)
-    compose(page)
-    page.locator("#form").evaluate("(form) => { form.requestSubmit(); form.requestSubmit(); }")
-    page.wait_for_function("!busy && !!pendingMessage() && !!document.getElementById('error').textContent")
-    assert len(attempts) == 1
-    identifier = pending(page)["args"]["request_id"]
-    assert pending(page)["args"]["delivery"] == "normal"
-    assert attempts[0]["binding"] == bindings["alice"]
-    assert len(Messages(app).list("sea")) == int(delivered)
-
-    page.unroute("**/api/execute", lose_response)
-    page.reload()
-    page.wait_for_selector("#pending-operation:not(.hidden)")
-    assert pending(page)["args"]["request_id"] == identifier
-    assert len(Messages(app).list("sea")) == int(delivered)
+    page.route("**/api/execute", lose_reply)
     page.get_by_role("button", name="继续原请求", exact=True).click()
-    page.wait_for_function("!busy && !pendingMessage()")
-    result = Messages(app).list("sea")
-    assert len(result) == 1 and result[0]["id"] == identifier
-    assert Messages(app).show("sea", identifier)["message"]["content"] == "original message"
+    page.wait_for_function("!busy")
+    if not published:
+        assert pending(page)["args"]["request_id"] == identifier
+        page.unroute("**/api/execute", lose_reply)
+        page.get_by_role("button", name="继续原请求", exact=True).click()
+        page.wait_for_function("!busy")
+    assert pending(page) is None
+    assert len(sends) == (0 if published else 1)
+    assert [record["id"] for record in Messages(app).list("sea")] == [identifier]
+    assert not app.store("sea").snapshot().json(f"acks/{identifier}.json")
 
 
-def test_message_storage_failure_prevents_network_send(ui):
+def test_corrupt_pending_record_is_retained_without_replay(ui):
     app, _, page = ui
-    compose(page)
-    page.evaluate("() => { Storage.prototype.setItem = function() { throw new Error('storage unavailable'); }; }")
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("document.getElementById('error').textContent.includes('storage unavailable')")
-    assert not Messages(app).list("sea")
-    assert page.locator("#dialog").is_visible()
+    page.evaluate("sessionStorage.setItem(pendingKey(), '{broken'); render()")
+    assert "旧消息请求不可读" in page.locator("#pending-operation").inner_text()
+    assert page.evaluate("sessionStorage.getItem(pendingKey())") == "{broken"
+    assert Messages(app).list("sea") == []
 
 
-def test_create_agent_uses_selected_directory_and_shared_skill(ui, tmp_path):
-    app, _, page = ui
-    store = app.store("sea")
-    store.change(
-        "main",
-        {
-            "skills/review/SKILL.md": b"---\ndescription: Shared review\n---\nversion one",
-            "skills/review/references/list.md": b"checklist",
-        },
-        {},
-        "Add browser Skill",
-    )
-    page.locator("#refresh").click()
-    page.get_by_role("button", name="创建 Agent", exact=True).click()
-    page.get_by_label("名称", exact=True).fill("skill-user")
-    page.get_by_label("实例 ID", exact=True).fill("skill-user")
-    page.get_by_label("运行入口", exact=True).select_option("manual")
-    page.get_by_label("本机实例目录", exact=True).fill("relative/skill-user")
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("document.getElementById('dialog-description').textContent.includes('绝对路径')")
-    assert not any(item["id"] == "skill-user" for item in app.agents("sea"))
-    target = tmp_path / "separate-volume" / "skill-user"
-    page.get_by_label("本机实例目录", exact=True).fill(str(target))
-    page.get_by_label("运行入口", exact=True).select_option("manual")
-    page.locator('fieldset[data-key="skills"] input[value="review"]').check()
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-
-    root = app.root("sea", "skill-user")
-    assert root == target.resolve()
-    assert (root / ".agents/skills/review/references/list.md").read_bytes() == b"checklist"
-    assert read_json(root / ".aw-local/runtime.json") == {"kind": "manual"}
-    assert app.agent("sea", "skill-user")["current"] is None
-    assert json.loads(page.locator("#result-output").inner_text())["directory"] == str(target.resolve())
-    page.locator("#close-result").click()
-
-    responsibility = (root / "AGENTS.md").read_bytes()
-    store.change("main", {"skills/review/SKILL.md": b"version two"}, {}, "Update browser Skill")
-    page.locator("#refresh").click()
-    card = page.locator("article.agent-row").filter(has_text="skill-user")
-    card.locator(".agent-name").click()
-    page.get_by_role("button", name="管理 Skill", exact=True).click()
-    page.locator('fieldset[data-key="update"] input[value="review"]').check()
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    assert (root / ".agents/skills/review/SKILL.md").read_bytes() == b"version two"
-    assert (root / "AGENTS.md").read_bytes() == responsibility
+def test_backend_stop_acceptance_is_not_shown_as_actual_exit(ui):
+    _, _, page = ui
+    calls, _ = backend_fixture(page)
+    nav(page, "backend")
+    page.get_by_role("button", name="请求停止", exact=True).click()
+    page.wait_for_function("!busy")
+    assert page.get_by_text("本机后台已就绪", exact=True).is_visible()
+    assert "尚需确认实际退出" in page.locator("#content").inner_text()
+    assert calls.count("backend.stop") == 1
 
 
-def test_caretaker_grants_are_explicit_and_revocable(ui):
-    app, _, page = ui
-    app.create("sea", "steward")
-    store = app.store("sea")
-    snap = store.snapshot()
-    meta = snap.json("workspace.json")
-    meta["caretakers"] = {"steward": "steward"}
-    store.change("main", {"workspace.json": encode(meta)}, {"workspace.json": snap.entries["workspace.json"]}, "Test caretaker")
-    page.locator("#refresh").click()
-    nav(page, "caretakers")
-    page.get_by_role("button", name="管家授权", exact=True).click()
-    assert page.locator("#f-agent_id").input_value() == "steward"
-    action = page.locator('fieldset[data-key="commands"] input[value="agent.start"]')
-    target = page.locator('fieldset[data-key="targets"] input[value="alice"]')
-    action.check()
-    target.check()
-    assert not page.locator('fieldset[data-key="targets"] input[value="*"]').is_checked()
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    grant = maintenance.status(app, "sea")["grants"]["steward"]
-    assert grant["commands"] == ["agent.start"] and grant["targets"] == ["alice"]
-    page.locator("#close-result").click()
+def test_backend_restart_reads_new_process_without_repeating_control(ui):
+    _, _, page = ui
 
-    page.get_by_role("button", name="管家授权", exact=True).click()
-    assert action.is_checked() and target.is_checked()
-    action.uncheck()
-    target.uncheck()
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    assert maintenance.status(app, "sea")["grants"]["steward"]["commands"] == []
+    def control(name, observed):
+        assert name == "backend.restart"
+        observed.update(pid=202)
+        return {"state": "restart_requested"}
+
+    calls, _ = backend_fixture(page, control)
+    nav(page, "backend")
+    page.get_by_role("button", name="请求重启", exact=True).click()
+    page.wait_for_function("!busy")
+    assert "观察到新的后台进程就绪" in page.locator("#content").inner_text()
+    assert calls.count("backend.restart") == 1
+    assert calls.count("backend.status") >= 2
 
 
-def test_health_report_prefills_bounded_repair_and_rejects_changed_generation(ui):
-    app, bindings, page = ui
-    root = app.root("sea", "alice")
-    config = root / ".aw-local/bridges/chat.json"
-    status = root / ".aw-local/bridges/status/chat.json"
-    write_json(config, {"enabled": True, "generation": "observed"})
-    write_json(status, {"fatal": True})
-    nav(page, "workspace")
-    page.get_by_role("button", name="健康检查", exact=True).click()
-    page.wait_for_function("document.getElementById('content').textContent.includes('bridge_fault')")
-    page.locator("#close-result").click()
-    page.get_by_role("button", name="处理", exact=True).click()
-    assert page.locator("#f-agent_id").input_value() == "alice"
-    assert page.locator("#f-expected_binding").input_value() == bindings["alice"]
-    assert page.locator("#f-expected_generation").input_value() == "observed"
+def test_message_source_failure_does_not_claim_empty_complete_history(ui):
+    _, _, page = ui
 
-    write_json(config, {"enabled": True, "generation": "changed"})
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("document.getElementById('dialog-description').textContent.includes('changed')")
-    assert read_json(config)["generation"] == "changed"
-    assert not list((maintenance.folder(app, "sea") / "repairs").glob("*.json"))
+    def fail_direct(route):
+        if route.request.post_data_json["command"] == "direct-message.list":
+            route.fulfill(status=500, json={"ok": False, "error": "fixture unreadable direct records"})
+        else:
+            route.continue_()
 
-
-def test_relative_directory_is_rejected_before_connecting_another_copy(ui):
-    app, _, page = ui
-    original = app.root("sea", "alice")
-    page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
-    page.get_by_role("button", name="准备另一份副本", exact=True).click()
-    page.get_by_label("绝对路径", exact=True).fill("relative/another-copy")
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("document.getElementById('dialog-description').textContent.includes('绝对路径')")
-    assert app.root("sea", "alice") == original
-    assert page.locator("#dialog").is_visible()
-
-
-def test_input_response_loss_preserves_original_request(ui):
-    app, bindings, page = ui
-    page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
-    page.get_by_role("tab", name="通信", exact=True).click()
-    page.get_by_role("button", name="发送指令", exact=True).click()
-    page.get_by_label("要求", exact=True).fill("one explicit fixture input")
-    requests = []
-
-    def lose_first_response(route):
-        body = route.request.post_data_json
-        if body["command"] == "agent.input":
-            requests.append(body["arguments"])
-            if len(requests) == 1:
-                assert route.fetch().json()["ok"]
-                route.abort()
-                return
-        route.continue_()
-
-    page.route("**/api/execute", lose_first_response)
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!busy && !!document.getElementById('error').textContent")
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    assert len(requests) == 2 and requests[0] == requests[1]
-    files = list((app.root("sea", "alice") / ".aw-local/inputs").glob("*.json"))
-    assert len(files) == 1
-    assert read_json(files[0])["binding"] == bindings["alice"]
-    assert read_json(files[0])["text"] == "one explicit fixture input"
-
-
-def test_pending_skill_recovers_original_version_after_upstream_changes(ui, monkeypatch):
-    app, _, page = ui
-    store = app.store("sea")
-    store.change("main", {"skills/review/SKILL.md": b"first"}, {}, "Fixture Skill")
-    app.create("sea", "skill-recovery", skills=["review"])
-    root = app.root("sea", "skill-recovery")
-    responsibility = (root / "AGENTS.md").read_bytes()
-    store.change("main", {"skills/review/SKILL.md": b"second"}, {}, "Original update")
-    write_manifest = skills.write_json
-
-    def fail_manifest(path, value):
-        if path == root / skills.MANIFEST:
-            raise OSError("fixture disk interruption")
-        return write_manifest(path, value)
-
-    with monkeypatch.context() as fault:
-        fault.setattr(skills, "write_json", fail_manifest)
-        with pytest.raises(OSError, match="fixture disk interruption"):
-            skills.apply(app, "update", "sea", "skill-recovery", "review")
-    store.change("main", {"skills/review/SKILL.md": b"third"}, {}, "Later upstream update")
-    page.locator("#refresh").click()
-    page.locator("article.agent-row").filter(has_text="skill-recovery").locator(".agent-name").click()
-    page.get_by_role("button", name="管理 Skill", exact=True).click()
-    page.get_by_role("button", name="继续原 Skill 更新", exact=True).click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    assert not (root / ".aw-local/skill-install").exists()
-    assert (root / ".agents/skills/review/SKILL.md").read_bytes() == b"second"
-    assert (root / "AGENTS.md").read_bytes() == responsibility
-
-
-def test_stop_repair_retries_original_binding_checkpoint_and_request(ui, monkeypatch):
-    app, _, page = ui
-    app.create("sea", "stopper")
-    app.configure("sea", "stopper", {"kind": "codex", "command": [sys.executable],
-                                    "model": "fixture-model", "effort": "low"})
-    binding = app.reserve("sea", "stopper")["binding"]
-    app.bind("sea", "stopper", binding, "original-native-session")
-    checkpoint = app.checkpoint("sea", "stopper", "Explicit stop", binding=binding)["id"]
-    app.stop("sea", "stopper", binding, checkpoint)
-    observed = []
-
-    def continue_original(app, workspace, agent_id, old_binding, *, expected_checkpoint):
-        observed.append((workspace, agent_id, old_binding, expected_checkpoint))
-        return {"state": "awaiting_native_idle", "binding": old_binding, "checkpoint": expected_checkpoint}
-
-    monkeypatch.setattr(runtime, "continue_stop", continue_original)
-    nav(page, "workspace")
-    page.get_by_role("button", name="健康检查", exact=True).click()
-    page.wait_for_function("document.getElementById('content').textContent.includes('stop_confirmation_not_observed')")
-    page.locator("#close-result").click()
-    page.locator('[data-action="doctor-repair"][data-code="stop_confirmation_not_observed"]').click()
-    # The health report can find an instance created after the page loaded.
-    assert page.locator("#f-agent_id").input_value() == "stopper"
-    assert page.locator("#f-action").input_value() == "continue-stop"
-    assert page.locator("#f-expected_binding").input_value() == binding
-    assert page.locator("#f-expected_checkpoint").input_value() == checkpoint
-    requests = []
-
-    def lose_first_response(route):
-        body = route.request.post_data_json
-        if body["command"] == "maintenance.repair":
-            requests.append(body["arguments"])
-            if len(requests) == 1:
-                assert route.fetch().json()["ok"]
-                route.abort()
-                return
-        route.continue_()
-
-    page.route("**/api/execute", lose_first_response)
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!busy && !!document.getElementById('error').textContent")
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    assert len(requests) == 2 and requests[0] == requests[1]
-    assert observed == [("sea", "stopper", binding, checkpoint)]
-    assert app.show("sea", "stopper")["binding"]["phase"] == "stopping"
-    result = json.loads(page.locator("#result-output").inner_text())
-    assert result["result"]["state"] == "awaiting_native_idle"
-    assert result["verification"]["stop"]["state"] == "stopping"
-
-
-def test_damaged_observation_keeps_other_instances_and_diagnostics_usable(ui):
-    app, bindings, page = ui
-    damaged = app.root("sea", "alice") / ".aw-local/status.json"
-    damaged.write_bytes(b"{broken")
-    page.locator("#refresh").click()
-    broken = page.locator("article.agent-row").filter(has_text="alice")
-    broken.get_by_text("状态读取失败", exact=True).wait_for()
-    assert broken.get_by_role("button", name="健康检查", exact=True).is_visible()
-    assert not broken.get_by_role("button", name="进入新会话", exact=True).count()
-    healthy = page.locator("article.agent-row").filter(has_text="bob")
-    assert healthy.get_by_role("button", name="查看当前状态", exact=True).is_visible()
-
-    broken.get_by_role("button", name="健康检查", exact=True).click()
-    page.wait_for_function("document.getElementById('result-output').textContent.includes('local_observation_failed')")
-    assert damaged.read_bytes() == b"{broken"
-    assert app.agent("sea", "alice")["current"] == bindings["alice"]
-
-
-def test_model_profile_requires_explicit_http_consent_and_resets_on_change(ui):
-    app, _, page = ui
-    app.create("sea", "http-profile")
-    page.locator("#refresh").click()
-    card = page.locator("article.agent-row").filter(has_text="http-profile")
-    card.get_by_role("button", name="更多", exact=True).click()
-    page.get_by_role("button", name="配置运行方式", exact=True).click()
-    page.locator("#f-model").fill("gpt-test")
-    page.locator("#f-effort").fill("low")
-    page.locator("#f-executable").fill(sys.executable)
-    url = page.locator("#f-base_url")
-    consent = page.locator("#f-allow_http")
-    url.fill("http://192.0.2.75:4000/v1")
-    assert not consent.is_checked()
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("document.getElementById('dialog-description').textContent.includes('allow-http')")
-    path = app.root("sea", "http-profile") / ".aw-local/runtime.json"
-    assert not path.exists()
-
-    consent.check()
-    url.fill("http://models.internal:4000/v1")
-    assert not consent.is_checked()
-    consent.check()
-    page.locator("#f-kind").select_option("claude")
-    assert not consent.is_checked()
-    page.locator("#f-kind").select_option("codex")
-    consent.check()
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    assert read_json(path)["allow_http"] is True
-    assert app.agent("sea", "http-profile")["current"] is None
-
-
-def test_desktop_project_form_preserves_local_reference_only(ui, tmp_path):
-    from agent_workspace import desktop_projects
-
-    app, _, page = ui
-    product = tmp_path / "product"
-    product.mkdir()
-    before = app.store("sea").head("main")
-    card = page.locator("article.agent-row").filter(has_text="alice")
-    card.get_by_role("button", name="更多", exact=True).click()
-    page.get_by_role("button", name="目录与桌面组织", exact=True).click()
-    page.locator("#f-project_name").fill("My Existing Project")
-    page.locator("#f-section_name").fill("My Existing Section")
-    page.locator("#f-product_paths").fill(str(product))
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    value = desktop_projects.plan(app, "sea", "alice")
-    assert value["project"]["project_name"] == "My Existing Project"
-    assert value["project"]["section_name"] == "My Existing Section"
-    assert value["native_project_verified"] is False
-    assert app.store("sea").head("main") == before and not list(product.iterdir())
-    page.locator("#close-result").click()
-
-    page.get_by_role("button", name="目录与桌面组织", exact=True).click()
-    assert page.locator("#f-project_name").input_value() == "My Existing Project"
-    page.locator("#f-harness").select_option("workbuddy")
-    page.wait_for_function("document.getElementById('f-section_name').disabled")
-    assert page.locator("#f-section_name").input_value() == ""
-
-
-def test_desktop_project_discovery_can_adopt_the_selected_project(ui, monkeypatch):
-    app, _, page = ui
-    app.create("sea", "desktop-prep")
-    root = app.root("sea", "desktop-prep")
-    app.configure("sea", "desktop-prep", {"kind": "desktop", "command": ["fixture"],
-                                         "pipe_path": "fixture", "caller_thread": "fixture",
-                                         "model": "fixture-model", "effort": "low"})
-    calls = []
-
-    class Catalog:
-        tools = {"list_projects"}
-        tool_schemas = {}
-
-        def __init__(self, *args):
-            pass
-
-        def close(self):
-            pass
-
-        def call(self, name, arguments):
-            calls.append(name)
-            assert name == "list_projects"
-            return {"projects": [{"projectId": "matching-project", "label": "User's project",
-                                   "projectKind": "local", "hostId": "local", "path": str(root)}]}
-
-    monkeypatch.setattr(runtime, "Desktop", Catalog)
-    page.locator("#refresh").click()
-    page.locator("article.agent-row").filter(has_text="desktop-prep").get_by_role("button", name="更多", exact=True).click()
-    page.get_by_role("button", name="目录与桌面组织", exact=True).click()
-    page.get_by_role("button", name="发现并复用 Codex 项目", exact=True).click()
-    page.get_by_role("button", name="确认复用", exact=True).wait_for()
-    assert page.locator("#f-project_id").input_value() == "matching-project"
-    assert page.locator("#f-section_id").input_value() == ""
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    result = json.loads(page.locator("#result-output").inner_text())
-    assert result["native_project_id"] == "matching-project"
-    assert result["native_project_verified"] and not result["session_created"]
-    assert read_json(root / ".aw-local/runtime.json")["project_id"] == "matching-project"
-    assert calls == ["list_projects", "list_projects"]
-    assert app.agent("sea", "desktop-prep")["current"] is None
-
-
-def test_shared_material_read_uses_fixed_workspace_revision(ui):
-    app, _, page = ui
-    app.store("sea").change("main", {"knowledge/team.md": "共同约定：TEAM_BROWSER_MARKER".encode()}, {}, "Shared text")
-    page.locator("#refresh").click()
-    nav(page, "shared")
-    page.get_by_role("button", name="读取指定共同资料", exact=True).click()
-    page.get_by_label("路径，一行一个", exact=True).fill("knowledge/team.md")
-    page.locator("#dialog-submit").click()
-    page.wait_for_function("!document.getElementById('dialog').open && !busy")
-    assert "TEAM_BROWSER_MARKER" in page.locator("#result-output").inner_text()
-    last = page.evaluate("lastResult")
-    assert last
-    assert last["complete"] is True and last["files"][0]["content"] == "共同约定：TEAM_BROWSER_MARKER"
+    page.route("**/api/execute", fail_direct)
+    nav(page, "messages")
+    assert page.get_by_role("heading", name="历史尚未完整读取", exact=True).is_visible()
+    assert "不能据此判定另一来源没有消息" in page.locator("#content").inner_text()
 
 
 @pytest.mark.parametrize("viewport", [{"width": 390, "height": 844}, {"width": 1440, "height": 960}])
-def test_workbench_forms_and_recovery_fit_viewport(ui, viewport):
-    _, _, page = ui
+def test_three_views_and_recovery_fit_viewport(ui, viewport, tmp_path):
+    _, bindings, page = ui
     page.set_viewport_size(viewport)
-    if viewport["width"] < 700:
-        menu = page.locator("#mobile-menu")
-        menu.click()
-        assert menu.get_attribute("aria-expanded") == "true"
-        page.locator("#close-mobile-menu").click()
-        assert menu.get_attribute("aria-expanded") == "false"
-    page.get_by_role("button", name="创建 Agent", exact=True).click()
+    backend_fixture(page)
+    store_pending(page, bindings, "layout-pending-with-a-long-original-identifier")
+    for view in ("agents", "messages", "backend"):
+        nav(page, view)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), view
+        page.screenshot(path=str(tmp_path / f"workbench-{viewport['width']}-{view}.png"), full_page=True, animations="disabled")
+    page.get_by_role("button", name="读取日志", exact=True).click()
+    page.wait_for_function("!busy")
+    assert "fixture backend log" in page.locator("#backend-log").inner_text()
+    page.get_by_role("button", name="查看原请求", exact=True).click()
+    page.wait_for_function("!busy")
+    assert page.locator("#result:not(.hidden)").is_visible()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-    assert page.locator("#dialog").evaluate("d => d.scrollWidth <= d.clientWidth")
-    page.locator("#dialog-cancel").click()
-    if viewport["width"] < 700:
-        page.locator("#mobile-menu").click()
-    nav(page, "caretakers")
-    page.get_by_role("button", name="限定维修", exact=True).click()
-    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-    assert page.locator("#dialog").evaluate("d => d.scrollWidth <= d.clientWidth")
 
 
 def test_ordinary_page_without_workspace_lost_response_does_not_open_twice(tmp_path, browser, monkeypatch):
@@ -652,3 +410,76 @@ def test_first_use_page_creates_caretakers_in_selected_directories(tmp_path, bro
         server.shutdown()
         server.server_close()
         thread.join(5)
+
+
+@pytest.mark.parametrize("native_host", ["local", "other-host"])
+def test_native_session_confirmation_requires_explicit_read_and_actual_host(ui, monkeypatch, native_host):
+    from unittest.mock import Mock
+    from agent_workspace import runtime
+
+    app, _, page = ui
+    app.create("sea", "desktop-fixture")
+    root = app.root("sea", "desktop-fixture")
+    app.configure("sea", "desktop-fixture", {"kind": "desktop", "model": "fixture-model", "effort": "low"})
+    binding = app.reserve("sea", "desktop-fixture")["binding"]
+    app.bind("sea", "desktop-fixture", binding, "fixture-native-id")
+    peer = Mock()
+    peer.tools = {"read_thread", "send_message_to_thread"}
+    peer.read.return_value = {"thread": {"id": "fixture-native-id", "hostId": native_host,
+                                       "cwd": str(root), "status": {"type": "active"}}}
+    constructor = Mock(return_value=peer)
+    monkeypatch.setattr(runtime, "Desktop", constructor)
+    page.locator("#refresh").click()
+    page.wait_for_function("!document.getElementById('refresh').disabled")
+    page.locator("article.agent-row").filter(has_text="desktop-fixture").locator(".agent-name").click()
+    constructor.assert_not_called()
+    page.get_by_role("button", name="核对本机原生会话", exact=True).click()
+    page.wait_for_function("!busy")
+    expected = "该次核对确认了本机原生会话" if native_host == "local" else "该次核对未确认当前本机原生会话"
+    assert page.get_by_text(expected, exact=True).is_visible()
+    peer.read.assert_called_once()
+    peer.notify.assert_not_called()
+    peer.create.assert_not_called()
+    peer.close.assert_called_once()
+
+
+
+def test_backend_unknown_lock_status_is_not_displayed_as_stopped(ui):
+    _, _, page = ui
+    _, observed = backend_fixture(page)
+    observed.update(state="unknown", ready=False, unknown_reason="fixture unreadable control endpoint")
+    nav(page, "backend")
+    assert page.get_by_text("后台锁仍被占用，实际状态未知", exact=True).is_visible()
+    assert page.get_by_text("本机后台未运行", exact=True).count() == 0
+
+
+def test_backend_log_retains_registered_source_on_refresh_and_clears_on_change(ui):
+    app, _, page = ui
+    calls = []
+
+    def route(request):
+        body = request.request.post_data_json
+        if body["command"] == "backend.status":
+            result = {"running": True, "ready": True, "pid": 101}
+        elif body["command"] == "backend.log":
+            calls.append(body["arguments"])
+            result = {"source": {"kind": "runner"}, "exists": True, "content": "REGISTERED_COPY_LOG_MARKER", "observed_at": "fixture-log-time"}
+        else:
+            request.continue_()
+            return
+        request.fulfill(json={"ok": True, "result": result})
+
+    page.route("**/api/execute", route)
+    nav(page, "backend")
+    page.locator("#log-source").select_option(index=1)
+    selected = page.locator("#log-source").input_value()
+    page.get_by_role("button", name="读取日志", exact=True).click()
+    page.wait_for_function("!busy")
+    assert calls == [{"workspace": "sea", "agent_id": "alice", "directory": str(app.root("sea", "alice"))}]
+    assert "REGISTERED_COPY_LOG_MARKER" in page.locator("#backend-log").inner_text()
+    page.locator("#refresh").click()
+    page.wait_for_function("!document.getElementById('refresh').disabled")
+    assert page.locator("#log-source").input_value() == selected
+    assert "REGISTERED_COPY_LOG_MARKER" in page.locator("#backend-log").inner_text()
+    page.locator("#log-source").select_option("")
+    assert "尚未读取此来源" in page.locator("#backend-log").inner_text()

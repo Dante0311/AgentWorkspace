@@ -485,3 +485,96 @@ def test_backend_log_retains_registered_source_on_refresh_and_clears_on_change(u
     assert "REGISTERED_COPY_LOG_MARKER" in page.locator("#backend-log").inner_text()
     page.locator("#log-source").select_option("")
     assert "尚未读取此来源" in page.locator("#backend-log").inner_text()
+
+
+def test_real_backend_browser_restart_stop_and_reconnect_without_workspace(tmp_path, browser, monkeypatch):
+    """Real isolated OS backend and HTTP/browser, without Agent or model tasks."""
+    import time
+    import subprocess
+    from pathlib import Path
+    from agent_workspace.app import App
+    from agent_workspace import backend
+    from agent_workspace.util import read_json
+
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parents[1] / "src"))
+    app = App(tmp_path / "isolated-backend-home")
+
+    def wait_status(predicate):
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            result = backend.status(app)
+            if predicate(result):
+                return result
+            time.sleep(0.2)
+        pytest.fail("Isolated backend did not reach the expected actual status")
+
+    context = browser.new_context(viewport={"width": 1280, "height": 900})
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    failures = []
+    page.on("pageerror", lambda error: failures.append(str(error)))
+    try:
+        started = backend.start(app, port=0)
+        assert started["ready"] and started["running"]
+        original_pid = started["pid"]
+        connection = read_json(app.home / "backend/connection.json")
+        page.goto(started["url"] + "#token=" + connection["token"])
+        page.wait_for_selector("#app:not(.hidden)")
+        assert page.get_by_role("heading", name="尚未接入 Workspace", exact=True).is_visible()
+        nav(page, "backend")
+        assert page.get_by_text("本机后台已就绪", exact=True).is_visible()
+        page.get_by_role("button", name="启动后台", exact=True).click()
+        page.wait_for_function("!busy")
+        assert backend.status(app)["pid"] == original_pid
+        assert page.locator("#result").get_attribute("class").split().count("hidden") == 1
+
+        with (app.home / "backend/backend.log").open("a", encoding="utf-8") as output:
+            output.write("ISOLATED_BACKEND_BROWSER_MARKER\n")
+        page.get_by_role("button", name="读取日志", exact=True).click()
+        page.wait_for_function("!busy")
+        assert "ISOLATED_BACKEND_BROWSER_MARKER" in page.locator("#backend-log").inner_text()
+
+        page.get_by_role("button", name="请求重启", exact=True).click()
+        page.wait_for_function("!busy", timeout=30000)
+        restarted = wait_status(lambda result: result.get("ready") and result.get("pid") != original_pid)
+        assert "观察到新的后台进程就绪" in page.locator("#content").inner_text()
+        assert page.evaluate("backendState.pid") == restarted["pid"]
+        assert restarted["url"] == started["url"]
+        assert read_json(app.home / "backend/connection.json")["token"] == connection["token"]
+        assert page.locator("#result").get_attribute("class").split().count("hidden") == 1
+
+        page.get_by_role("button", name="请求停止", exact=True).click()
+        page.wait_for_function("!busy")
+        assert "尚需确认实际退出" in page.locator("#content").inner_text()
+        wait_status(lambda result: result.get("running") is False)
+        cli = subprocess.run([sys.executable, "-m", "agent_workspace", "--home", str(app.home), "backend", "status"],
+                             capture_output=True, text=True, encoding="utf-8", check=True)
+        reply = json.loads(cli.stdout)
+        assert reply["ok"] is True
+        exited = reply["result"]
+        assert exited["running"] is False and exited["ready"] is False
+        assert "已停止" not in page.locator("#content").inner_text()
+
+        backend.start(app)
+        wait_status(lambda result: result.get("ready") is True)
+        page.get_by_role("button", name="重新连接", exact=True).click()
+        page.wait_for_function("!document.getElementById('refresh').disabled")
+        assert page.get_by_text("本机后台已就绪", exact=True).is_visible()
+        assert not app.registry.exists() and not failures
+        assert "ISOLATED_BACKEND_BROWSER_MARKER" in backend.log(app)["content"]
+        reconnected = backend.status(app)
+        write_json(tmp_path / "backend-browser-observations.json", {
+            "initial": {key: started[key] for key in ("pid", "ready", "running", "observed_at")},
+            "restarted": {key: restarted[key] for key in ("pid", "ready", "running", "observed_at")},
+            "cli_after_stop": {key: exited[key] for key in ("state", "ready", "running", "observed_at")},
+            "reconnected": {key: reconnected[key] for key in ("pid", "ready", "running", "observed_at")},
+        })
+        page.screenshot(path=str(tmp_path / "backend-browser-reconnected.png"), full_page=True, animations="disabled")
+    finally:
+        try:
+            context.close()
+        finally:
+            current = backend.status(app)
+            if current.get("running"):
+                backend.stop(app)
+                wait_status(lambda result: result.get("running") is False)

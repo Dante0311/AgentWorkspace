@@ -71,6 +71,59 @@ def pending(page):
     return page.evaluate("pendingMessage()")
 
 
+def test_refresh_reads_external_messages_and_ack(ui):
+    app, bindings, page = ui
+    messages = Messages(app)
+    messages.send("sea", "alice", bindings["alice"], "bob", "First", request_id="refresh-first")
+    nav(page, "collaboration")
+    page.locator('[data-action="message-show"][data-id="refresh-first"]').first.wait_for()
+    messages.receive("sea", "bob", bindings["bob"], "refresh-first")
+    messages.send("sea", "bob", bindings["bob"], "alice", "Second", request_id="refresh-second")
+
+    page.locator("#refresh").click()
+    page.wait_for_function("document.querySelectorAll('article.table-row').length === 2", timeout=15000)
+    first = page.locator("article.table-row").filter(has_text="refresh-first")
+    assert first.get_by_text("已确认通知", exact=True).is_visible()
+    assert len(messages.list("sea")) == 2
+
+
+def test_agent_message_scope_does_not_replace_workspace_history(ui):
+    app, bindings, page = ui
+    messages = Messages(app)
+    messages.send("sea", "alice", bindings["alice"], "bob", "Alice outgoing", request_id="scope-out")
+    messages.send("sea", "bob", bindings["bob"], "alice", "Alice incoming", request_id="scope-in")
+    page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
+    page.get_by_role("tab", name="通信", exact=True).click()
+    page.get_by_role("button", name="读取消息列表", exact=True).click()
+    page.locator('[data-action="message-show"][data-id="scope-in"]').first.wait_for()
+    assert page.locator("article.table-row").count() == 1
+
+    nav(page, "collaboration")
+    page.wait_for_function("document.querySelectorAll('article.table-row').length === 2", timeout=15000)
+    assert page.locator('[data-action="message-show"][data-id="scope-out"]').first.is_visible()
+
+
+@pytest.mark.parametrize("observation", ["missing", "damaged"])
+def test_agent_detail_does_not_turn_unknown_observation_into_stopped(ui, observation):
+    app, bindings, page = ui
+    if observation == "missing":
+        app.change_local(lambda registry: registry["workspaces"]["sea"]["instances"].pop("alice"))
+        expected = "本机无副本，未观测"
+    else:
+        (app.root("sea", "alice") / ".aw-local/status.json").write_bytes(b"{broken")
+        expected = "本机状态读取失败"
+    page.locator("#refresh").click()
+    page.wait_for_function("!document.getElementById('refresh').disabled")
+    page.locator("article.agent-row").filter(has_text="alice").locator(".agent-name").click()
+    facts = page.locator("dl.kv").first.inner_text()
+    assert expected in facts
+    assert "未运行" not in facts and "关闭" not in facts
+    if observation == "damaged":
+        assert "当前入口详情未知" in facts
+        assert bindings["alice"] in facts
+    assert app.agent("sea", "alice")["current"] == bindings["alice"]
+
+
 @pytest.mark.parametrize("delivered", [False, True])
 def test_message_response_loss_continues_only_original_request(ui, delivered):
     app, bindings, page = ui

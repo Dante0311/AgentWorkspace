@@ -67,6 +67,8 @@ message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确�
 
 被跳过的原生测试不计为通过；分组有交叉时不累加数量；当前源码不能沿用旧提交的绿色 CI。源码制品只用于准确恢复，长期成果保存在 Git 提交中。
 
+2026-10-11 本机候选的实际安装包、校验值、独立浏览器与并发复验，以及历次失败见[固定版本实现与验证报告](https://github.com/Dante0311/AW-Workspace/blob/27eef03d5d23a18f5e7e232866261a77d8a182df/development/evidence/2026-10-11-focused-collaboration/README.md)。报告中的受测提交与产物各有明确来源；远端 CI、真实客户端和日常安装不沿用本机隔离检查的结论。
+
 ## 当前限制与待验证事项
 
 | 类别 | 内容 |

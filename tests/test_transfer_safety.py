@@ -61,11 +61,18 @@ def test_unconfirmed_native_close_does_not_release_binding(app, monkeypatch):
     runner = runtime.Runner(app, "sea", "alice")
     with pytest.raises(Unavailable, match="unconfirmed"):
         runner.run()
+    local_status = read_json(app.root("sea", "alice") / ".aw-local/status.json")
+    assert local_status["binding"] == binding
+    assert local_status["state"] == "native_stop_unconfirmed"
+    assert local_status["entry_automatically_released"] is False
+    assert "session" not in local_status
     state = app.show("sea", "alice")
     assert state["current"] == binding
     assert state["binding"]["phase"] == "stopping"
     assert state["binding"]["controller"]
     assert state["runtime"]["state"] == "native_stop_unconfirmed"
+    assert state["copies"][0]["runtime_matches_current"] is True
+    assert "session" not in state["runtime"]
 
 
 def test_unsupported_insert_does_not_consume_an_attempt_or_relabel_the_input(owner):

@@ -590,8 +590,9 @@ class App:
             return {
                 "directory": str(root), "entry_binding": local_entry.get("binding"),
                 "entry_matches_current": bool(binding and local_entry.get("binding") == binding["id"]),
+                # Runner lifecycle status identifies its Binding; session is optional, but must match when present.
                 "runtime_matches_current": bool(binding and status.get("binding") == binding["id"]
-                                                 and status.get("session") == binding.get("session")),
+                                                 and ("session" not in status or status["session"] == binding.get("session"))),
                 "execution_matches_local": bool(execution and execution["installation_id"] == installation
                                                  and execution["directory"] == str(root)),
                 "runtime": status,

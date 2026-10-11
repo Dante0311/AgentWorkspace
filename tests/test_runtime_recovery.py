@@ -86,6 +86,27 @@ def request_stop(owner):
     return point
 
 
+def run_cancelled(runner):
+    errors = []
+
+    def run():
+        try:
+            runner.run()
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    thread.join(20)
+    finished = not thread.is_alive()
+    runner.stop_event.set()
+    thread.join(20)
+    assert finished, "Public cancellation did not stop observation"
+    assert not thread.is_alive()
+    if errors:
+        raise errors[0]
+
+
 def test_read_retry_retains_original_session_binding_and_single_input(desktop_owner, monkeypatch):
     app, root, binding, native = desktop_owner
     runtime.queue_input(app, "sea", "alice", "explicit test input", request_id="one-input")
@@ -284,6 +305,65 @@ def test_unknown_native_status_keeps_stop_owned(desktop_owner, monkeypatch):
     runner.run()
     assert app.show("sea", "alice")["binding"]["phase"] == "stopping"
     assert read_json(root / ".aw-local/status.json")["state"] == "stop_observation_unknown"
+
+
+@pytest.mark.parametrize("stop_only", [False, True])
+@pytest.mark.parametrize("native_state", ["busy", "unknown"])
+def test_public_cancel_stops_observation_without_release_or_successor(desktop_owner, monkeypatch, stop_only, native_state):
+    app, root, binding, native = desktop_owner
+    runtime.queue_input(app, "sea", "alice", "keep original queued input", request_id="untouched")
+    point = app.checkpoint("sea", "alice", "fixed stop request", binding=binding)
+    if stop_only:
+        app.stop("sea", "alice", binding, point["id"])
+    runner = runtime.Runner(app, "sea", "alice", stop_binding=binding if stop_only else None)
+    stopping = stop_only
+
+    def wait(delay):
+        nonlocal stopping
+        if not stopping:
+            app.stop("sea", "alice", binding, point["id"])
+            stopping = True
+        return runner.stop_event.is_set()
+
+    def cancel():
+        result = execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
+        assert result["monitor_stop_requested"] and not result["execution_right_released"]
+
+    monkeypatch.setattr(runner.stop_event, "wait", wait)
+    native["states"] = [native_state]
+    native["on_status"] = cancel
+    finish = Mock(side_effect=AssertionError("Cancellation must not publish a handoff"))
+    spawn = Mock(side_effect=AssertionError("Cancellation must not restart observation"))
+    monkeypatch.setattr(app, "finish_stop", finish)
+    monkeypatch.setattr(runtime, "spawn_runner", spawn)
+    run_cancelled(runner)
+
+    detail = app.show("sea", "alice")
+    assert detail["current"] == binding and detail["binding"]["phase"] == "stopping"
+    assert detail["binding"]["session"] == "original-chat" and detail["binding"]["checkpoint"] == point["id"]
+    assert native["attached"] == ["original-chat"] and not native["sent"] and native["closed"] == 1
+    assert native["read_only"] == [stop_only]
+    assert read_json(root / ".aw-local/inputs/untouched.json")["state"] == "queued"
+    assert detail["runtime"]["state"] == "monitor_stopped" and not detail["runtime"]["runner_alive"]
+    finish.assert_not_called()
+    spawn.assert_not_called()
+
+
+def test_public_cancel_during_stop_preflight_read_does_not_retry_release(desktop_owner, monkeypatch):
+    app, root, binding, native = desktop_owner
+    point = request_stop(desktop_owner)
+
+    def unavailable(*args, **kwargs):
+        execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
+        raise RetryableRead("Stop publication has not begun")
+
+    finish = Mock(side_effect=unavailable)
+    monkeypatch.setattr(app, "finish_stop", finish)
+    run_cancelled(runtime.Runner(app, "sea", "alice", stop_binding=binding))
+    detail = app.show("sea", "alice")
+    assert detail["binding"]["phase"] == "stopping" and detail["binding"]["checkpoint"] == point["id"]
+    assert detail["runtime"]["state"] == "monitor_stopped"
+    assert not native["sent"] and finish.call_count == 1
 
 
 @pytest.mark.parametrize("field", ["checkpoint", "session", "controller"])

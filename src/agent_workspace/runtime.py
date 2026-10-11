@@ -701,8 +701,18 @@ class Runner:
                     error_code=failure.code, attempts=attempts, retry_seconds=delay,
                     kind=self.runtime_kind, session=getattr(self.adapter, "session", None),
                     entry_automatically_released=False)
-        if self.stop_event.wait(delay):
+        if self._stop_requested() or self.stop_event.wait(delay) or self._stop_requested():
             raise _ReadStopped(str(failure)) from failure
+
+    def _stop_requested(self):
+        if self.stop_event.is_set():
+            return True
+        control = read_json(self.root / ".aw-local/control.json", {})
+        if self.binding and control.get("stop") == self.binding:
+            self.stop_event.set()
+            self.status(state="monitor_stopped", entry_automatically_released=False)
+            return True
+        return False
 
     def _shared_read(self, stage, read, *args, **kwargs):
         # Only call this with a read. Retrying an outer operation could replay
@@ -764,7 +774,7 @@ class Runner:
                     failure.add_note("Controller cleanup failed: " + str(exc))
                     self.cleanup_errors.append(str(exc))
         pending_stop = None
-        if not self.stop_only and self.binding and not isinstance(failure, Uncertain):
+        if not self.stop_event.is_set() and not self.stop_only and self.binding and not isinstance(failure, Uncertain):
             # A stop can arrive while an execution runner is exiting. Reuse the
             # saved request after releasing the local lock, never restart work.
             try:
@@ -787,7 +797,7 @@ class Runner:
             raise failure
         if pending_stop is not None:
             return
-        if self.stop_only:
+        if self.stop_only or self.stop_event.is_set():
             return
         transfer = read_json(self.root / ".aw-local/transfer.json")
         if transfer and transfer["old_binding"] == self.binding:
@@ -873,6 +883,8 @@ class Runner:
             bridges = BridgeManager(app, workspace, aid, self.binding, self.root)
             self.status(state="running", kind=entry["kind"], session=self.adapter.session)
             while not self.stop_event.wait(0.5):
+                if self._stop_requested():
+                    break
                 snap, agent, current = self._read_state()
                 if agent["current"] != self.binding:
                     break
@@ -895,6 +907,8 @@ class Runner:
                     native_state = "idle" if native_closed else self.adapter.status()
                     self.status(state="handoff_waiting_idle" if native_state in ("idle", "busy") else "stop_observation_unknown",
                                 session=self.adapter.session, native_state=native_state)
+                    if self._stop_requested():
+                        break
                     if native_state == "idle":
                         if isinstance(self.adapter, Desktop):
                             self._complete_inputs(stopping_checkpoint=current["checkpoint"])
@@ -919,9 +933,6 @@ class Runner:
                         self.status(state="released", handoff=result["id"])
                         break
                     continue
-                if read_json(self.root / ".aw-local/control.json", {}).get("stop") == self.binding:
-                    self.status(state="monitor_stopped", entry_still_owned=True)
-                    break
                 try:
                     stage = "bridge_poll"
                     handoff_requested = read_json(self.root / ".aw-local/control.json", {}).get("handoff") == self.binding
@@ -995,7 +1006,7 @@ class Runner:
         self.stop_request = {key: request.get(key) for key in ("id", "session", "checkpoint", "controller")}
         failures, read_failures = 0, 0
         try:
-            while not self.stop_event.is_set():
+            while not self._stop_requested():
                 snap, owner, current = self._read_state()
                 if current["phase"] == "released":
                     if current["session"] != request["session"]:
@@ -1029,6 +1040,10 @@ class Runner:
                     if self.stop_event.wait(delay):
                         return
                     continue
+                self.status(state="handoff_waiting_idle" if native_state in ("idle", "busy") else "stop_observation_unknown",
+                            session=request["session"], native_state=native_state)
+                if self._stop_requested():
+                    return
                 if native_state == "idle":
                     self._complete_inputs(stopping_checkpoint=current["checkpoint"])
                     self._close_adapter()
@@ -1044,8 +1059,6 @@ class Runner:
                         continue
                     self.status(state="released", handoff=result["id"], session=request["session"])
                     return
-                self.status(state="handoff_waiting_idle" if native_state == "busy" else "stop_observation_unknown",
-                            session=request["session"], native_state=native_state)
                 if self.stop_event.wait(0.5):
                     return
         finally:

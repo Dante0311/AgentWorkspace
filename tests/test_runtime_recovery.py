@@ -366,6 +366,79 @@ def test_public_cancel_during_stop_preflight_read_does_not_retry_release(desktop
     assert not native["sent"] and finish.call_count == 1
 
 
+@pytest.mark.parametrize("continuation", ["renew", "transfer"])
+def test_revoked_runner_cannot_consume_forced_handoff(desktop_owner, monkeypatch, continuation):
+    app, root, binding, native = desktop_owner
+    point = app.checkpoint("sea", "alice", "explicit takeover materials", binding=binding)
+    if continuation == "renew":
+        write_json(root / ".aw-local/renew.json", {"binding": binding, "requested": True})
+    else:
+        write_json(root / ".aw-local/transfer.json", {"old_binding": binding, "target_binding": "chosen-successor", "state": "handoff_requested"})
+    runner = runtime.Runner(app, "sea", "alice")
+    taken = False
+
+    def wait(delay):
+        nonlocal taken
+        if not taken:
+            app.takeover("sea", "alice", binding, point["id"], confirm=True)
+            taken = True
+        return False
+
+    monkeypatch.setattr(runner.stop_event, "wait", wait)
+    start = Mock(side_effect=AssertionError("A revoked Runner cannot start a successor"))
+    from agent_workspace import transfer
+    advance = Mock(side_effect=AssertionError("A revoked Runner cannot advance a transfer"))
+    monkeypatch.setattr(runtime, "start", start)
+    monkeypatch.setattr(transfer, "advance", advance)
+    runner.run()
+    snap = app.store("sea").snapshot()
+    owner = app.agent("sea", "alice", snap)
+    handoff = snap.json(f"handoffs/{owner['handoff']}.json")
+    assert owner["current"] is None and snap.json(f"bindings/{binding}.json")["phase"] == "revoked"
+    assert handoff["forced"] and handoff["consumed_by"] is None and not handoff["native_stop_confirmed"]
+    assert not native["sent"]
+    if continuation == "renew":
+        assert read_json(root / ".aw-local/renew.json")["requested"]
+    start.assert_not_called()
+    advance.assert_not_called()
+
+
+@pytest.mark.parametrize("continuation", ["renew", "transfer"])
+def test_normal_released_handoff_still_allows_requested_continuation(desktop_owner, monkeypatch, continuation):
+    app, root, binding, native = desktop_owner
+    point = app.checkpoint("sea", "alice", "normal handoff", binding=binding)
+    if continuation == "renew":
+        write_json(root / ".aw-local/renew.json", {"binding": binding, "requested": True})
+    else:
+        write_json(root / ".aw-local/transfer.json", {"old_binding": binding, "target_binding": "chosen-successor", "state": "handoff_requested"})
+    runner = runtime.Runner(app, "sea", "alice")
+    stopping = False
+
+    def wait(delay):
+        nonlocal stopping
+        if not stopping:
+            app.stop("sea", "alice", binding, point["id"])
+            stopping = True
+        return False
+
+    monkeypatch.setattr(runner.stop_event, "wait", wait)
+    start = Mock(return_value={"state": "fixture successor"})
+    from agent_workspace import transfer
+    advance = Mock(return_value={"state": "fixture transfer"})
+    monkeypatch.setattr(runtime, "start", start)
+    monkeypatch.setattr(transfer, "advance", advance)
+    runner.run()
+    assert app.store("sea").snapshot().json(f"bindings/{binding}.json")["phase"] == "released"
+    assert not native["sent"]
+    if continuation == "renew":
+        start.assert_called_once()
+        advance.assert_not_called()
+        assert not read_json(root / ".aw-local/renew.json")["requested"]
+    else:
+        advance.assert_called_once()
+        start.assert_not_called()
+
+
 @pytest.mark.parametrize("field", ["checkpoint", "session", "controller"])
 def test_changed_stop_facts_cannot_be_released(desktop_owner, monkeypatch, field):
     app, _, binding, native = desktop_owner

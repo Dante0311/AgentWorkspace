@@ -856,12 +856,25 @@ class Runner:
         if self.stop_only or self.stop_event.is_set():
             return
         transfer = read_json(self.root / ".aw-local/transfer.json")
+        if not (transfer and transfer["old_binding"] == self.binding) and not self.renew_after_exit:
+            return
+        if not self._normal_handoff_ready():
+            return
         if transfer and transfer["old_binding"] == self.binding:
             from .transfer import advance
             advance(self.app, self.workspace, self.agent_id, str(self.root))
         elif self.renew_after_exit:
+            renew = read_json(self.root / ".aw-local/renew.json")
+            write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
             result = start(self.app, self.workspace, self.agent_id, str(self.root), open_app=self.runtime_kind == "desktop")
             write_json(self.root / ".aw-local/renew-result.json", result)
+
+    def _normal_handoff_ready(self):
+        snap, owner, entry = self._read_state("successor_qualification")
+        if owner["current"] is not None or entry["phase"] != "released" or not owner["handoff"]:
+            return False
+        result = self._shared_read("successor_handoff", _released_stop, snap, self.agent_id, self.binding, entry)
+        return owner["handoff"] == result["handoff"]
 
     def _run_owned(self):
         app, workspace, aid = self.app, self.workspace, self.agent_id
@@ -1046,9 +1059,7 @@ class Runner:
         finally:
             self._cleanup_native(bridges)
         renew = read_json(self.root / ".aw-local/renew.json", {})
-        if renew.get("requested") and renew.get("binding") == self.binding and app.agent(workspace, aid)["current"] is None:
-            write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
-            # The old model is no longer involved. A new local runner owns the next entry.
+        if renew.get("requested") and renew.get("binding") == self.binding:
             self.renew_after_exit = True
 
     def _observe_stop(self, request, config):

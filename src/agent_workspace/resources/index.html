@@ -217,7 +217,7 @@ function render(){
 }
 async function refresh(){
  $('refresh').disabled=true;setError();
- const selected=currentWorkspace();
+ const selected=currentWorkspace(),wasDisconnected=!connected;
  try{
   state=await api('/api/state');connected=true;
   $('auth').classList.add('hidden');$('app').classList.remove('hidden');$('connection').classList.add('hidden');
@@ -226,7 +226,10 @@ async function refresh(){
   if(selectedAgent&&!agent())selectedAgent=null;
   setError((state.errors||[]).map(item=>`${item.workspace}${item.agent?' / '+item.agent:''}：${item.error}`).join('\n'));
   if(view==='messages')await readMessages();
-  if(view==='backend')await readBackend();
+  if(view==='backend'){
+   await readBackend();
+   if(wasDisconnected&&backendState.ready===true)backendNotice='已重新连接，当前观察到后台就绪。';
+  }
   render();
  }catch(error){
   connected=false;
@@ -247,7 +250,7 @@ async function reconnectAfterRestart(previousPid){
  for(let attempt=0;attempt<12;attempt++){
   await new Promise(resolve=>setTimeout(resolve,1000));
   try{
-   const observed=await command('backend.status');backendState=observed;
+   const observed=await command('backend.status');backendState=observed;connected=true;
    if(observed.ready===true&&previousPid&&observed.pid&&observed.pid!==previousPid){backendNotice='已重新连接，观察到新的后台进程就绪。';await refresh();return}
   }catch{connected=false}
  }

@@ -560,6 +560,8 @@ def test_real_backend_browser_restart_stop_and_reconnect_without_workspace(tmp_p
         page.get_by_role("button", name="重新连接", exact=True).click()
         page.wait_for_function("!document.getElementById('refresh').disabled")
         assert page.get_by_text("本机后台已就绪", exact=True).is_visible()
+        assert "当前连接不可用" not in page.locator("#content").inner_text()
+        assert "已重新连接" in page.locator("#content").inner_text()
         assert not app.registry.exists() and not failures
         assert "ISOLATED_BACKEND_BROWSER_MARKER" in backend.log(app)["content"]
         reconnected = backend.status(app)

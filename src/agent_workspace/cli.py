@@ -59,14 +59,14 @@ def parser():
     ws["read"].add_argument("--revision")
     ws["skills"].add_argument("--revision")
 
-    ag = actions("agent", ["create", "import", "list", "show", "connect", "configure", "versions", "update",
+    ag = actions("agent", ["create", "import", "list", "show", "history", "connect", "configure", "versions", "update",
         "promote", "archive", "unarchive", "start", "bind", "stop", "handoff", "renew", "fork", "input",
         "capture-desktop", "configure-desktop", "sync", "upgrade-tools", "configure-codex", "configure-sdk",
         "transfer", "transfer-profile", "transfer-continue", "transfer-status", "desktop-project", "desktop-project-save", "skills", "skill-install", "skill-update", "desktop-discover", "desktop-prepare"])
     for key, sub in ag.items():
         if key != "list":
             sub.add_argument("name" if key in ("create", "import") else "agent_id")
-            if key not in ("configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save", "desktop-discover", "desktop-prepare"):
+            if key not in ("history", "configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save", "desktop-discover", "desktop-prepare"):
                 sub.add_argument("--directory")
     for key in ("create", "import"):
         ag[key].add_argument("--id", dest="agent_id")

@@ -506,24 +506,76 @@ class App:
             write_json(root / ".aw-local/runtime.json", value)
         return {"configured": True, "entry_changed": False}
 
+    def _binding_history(self, snap, agent_id):
+        entries = []
+        for path in snap.entries:
+            if path.startswith("bindings/") and path.endswith(".json"):
+                entry = snap.json(path)
+                if entry["agent"] == agent_id:
+                    entries.append(entry)
+        return sorted(entries, key=lambda entry: (entry["created_at"], entry["id"]))
+
+    def history(self, workspace, agent_id, *, snapshot=None):
+        snap = snapshot or self.store(workspace).snapshot()
+        self.agent(workspace, agent_id, snap)
+        return {"agent": agent_id, "bindings": self._binding_history(snap, agent_id),
+                "snapshot_revision": snap.revision}
+
+    def _observe_copy(self, root, binding, installation):
+        local_entry = read_json(root / ".aw-local/entry.json", {})
+        status = read_json(root / ".aw-local/status.json", {"state": "not_running"})
+        try:
+            with locked(root / ".aw-local/runner.lock", wait=0):
+                status["runner_alive"] = False
+        except Conflict:
+            status["runner_alive"] = True
+        execution = binding.get("execution") if binding else None
+        return {
+            "directory": str(root), "entry_binding": local_entry.get("binding"),
+            "entry_matches_current": bool(binding and local_entry.get("binding") == binding["id"]),
+            "runtime_matches_current": bool(binding and status.get("binding") == binding["id"]
+                                             and status.get("session") == binding.get("session")),
+            "execution_matches_local": bool(execution and execution["installation_id"] == installation
+                                             and execution["directory"] == str(root)),
+            "runtime": status,
+            "watch": read_json(root / ".aw-local/watch.json", {"enabled": False}),
+            "configured_kind": read_json(root / ".aw-local/runtime.json", {}).get("kind", "manual"),
+            "model_selection": model_profiles.desired(root),
+            "observation_source": {"installation_id": installation, "directory": str(root),
+                                   "kind": "local_copy"},
+        }
+
     def show(self, workspace, agent_id, directory=None, *, snapshot=None):
         store = self.store(workspace)
         snap = snapshot or store.snapshot()
         item = self.agent(workspace, agent_id, snap)
         binding = snap.json(f"bindings/{item['current']}.json") if item["current"] else None
         locations = self.local()["workspaces"][workspace].get("instances", {}).get(agent_id, [])
-        result = {**item, "revision": snap.entries[f"agents/{agent_id}.json"], "binding": binding, "directories": locations}
-        if locations:
-            root = self.root(workspace, agent_id, directory)
-            result["runtime"] = read_json(root / ".aw-local/status.json", {"state": "not_running"})
-            try:
-                with locked(root / ".aw-local/runner.lock", wait=0):
-                    result["runtime"]["runner_alive"] = False
-            except Conflict:
-                result["runtime"]["runner_alive"] = True
-            result["watch"] = read_json(root / ".aw-local/watch.json", {"enabled": False})
-            result["configured_kind"] = read_json(root / ".aw-local/runtime.json", {}).get("kind", "manual")
-            result["model_selection"] = model_profiles.desired(root)
+        installation = read_json(self.home / "installation.json", {}).get("id")
+        copies = [self._observe_copy(Path(location), binding, installation) for location in locations]
+        result = {**item, "revision": snap.entries[f"agents/{agent_id}.json"], "binding": binding,
+                  "directories": locations, "copies": copies, "history": self._binding_history(snap, agent_id),
+                  "directory": None}
+        selected = None
+        if directory is not None:
+            requested = str(self.root(workspace, agent_id, directory))
+            selected = next(copy for copy in copies if copy["directory"] == requested)
+        elif binding:
+            for copy in copies:
+                if copy["entry_matches_current"] and (not binding.get("execution") or copy["execution_matches_local"]):
+                    selected = copy
+                    break
+        elif copies:
+            selected = copies[0]
+        if selected:
+            result["directory"] = selected["directory"]
+            result.update(watch=selected["watch"], configured_kind=selected["configured_kind"],
+                          model_selection=selected["model_selection"])
+            if not binding or (selected["entry_matches_current"] and selected["runtime_matches_current"]
+                               and (not binding.get("execution") or selected["execution_matches_local"])):
+                result["runtime"] = selected["runtime"]
+        if binding and "runtime" not in result:
+            result["runtime"] = {"state": "unknown", "reason": "current_entry_not_observed_locally"}
         return result
 
     def archive(self, workspace, agent_id, archived=True, directory=None):
@@ -552,6 +604,8 @@ class App:
         binding = slug(binding_id) if binding_id else uid("b")
         entry = {"id": binding, "agent": agent_id, "kind": config.get("kind", "manual"),
                  "phase": "starting", "session": None, "created_at": now(), "handoff": item["handoff"]}
+        from .maintenance import installation_id
+        entry["execution"] = {"installation_id": installation_id(self), "directory": str(root)}
         changes = {f"bindings/{binding}.json": encode(entry)}
         path = f"agents/{agent_id}.json"
         expected = {path: snap.entries[path], f"bindings/{binding}.json": None}

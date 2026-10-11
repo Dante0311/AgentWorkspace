@@ -64,7 +64,6 @@ def build_state(app):
                 detail = app.show(alias, agent["id"], snapshot=shared_snapshot)
                 directories = list(detail.get("directories", []))
                 detail.update(
-                    directory=directories[0] if directories else None,
                     local_ready=bool(directories),
                     observed_at=observed_at,
                     snapshot_revision=workspace.get("snapshot_revision"),

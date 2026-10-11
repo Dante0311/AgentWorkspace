@@ -9,7 +9,7 @@ from .messages import Messages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
 
-READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
+READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.history", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "asset.list", "asset.read", "runtime.status", "bridge.status",
              "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project"}
@@ -176,7 +176,7 @@ def command_map(app):
         "maintenance.schedule": partial(maintenance.schedule, app),
         "maintenance.status": partial(maintenance.status, app),
         "maintenance.repair": partial(maintenance.repair, app),
-        "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show,
+        "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show, "agent.history": app.history,
         "agent.connect": app.connect_agent, "agent.configure": app.configure,
         "agent.update": app.update, "agent.versions": app.versions, "agent.promote": app.promote,
         "agent.archive": app.archive, "agent.fork": app.fork,

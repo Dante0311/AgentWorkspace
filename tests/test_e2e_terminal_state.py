@@ -1,6 +1,7 @@
 """E2E-004/001 regressions: real Git/lifecycle, deterministic native-event boundary."""
 import queue
 import sys
+from threading import Event
 from unittest.mock import Mock
 
 import pytest
@@ -79,15 +80,18 @@ def install_native(app, monkeypatch, *, terminal="completed", stop_on_boot=False
     return Native
 
 
-class Steps:
+class Steps(Event):
     def __init__(self, action=lambda step: None):
+        super().__init__()
         self.step, self.action = 0, action
 
-    def wait(self, interval):
+    def wait(self, timeout=None):
+        if self.is_set():
+            return True
         self.step += 1
         assert self.step <= 8, "Runner did not finish the targeted stop path"
         self.action(self.step)
-        return False
+        return super().wait(0)
 
 
 @pytest.mark.parametrize("terminal,expected", [("completed", "completed"), ("failed", "failed"),

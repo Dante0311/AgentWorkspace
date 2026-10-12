@@ -101,13 +101,14 @@ def test_workbench_assets_are_real_command_ui_not_demo_gateway():
     setup = (root / "setup.html").read_text(encoding="utf-8")
     assert "DemoGateway" not in index + setup
     assert "WORKBENCH 0.4" in index + setup
-    for text in ("操作与恢复", "状态依据", "本机实例目录", "继续原请求"):
+    for text in ("消息历史", "本机后台", "状态依据", "本机实例目录", "继续原请求"):
         assert text in index + setup
     for identifier in ("dir-steward", "dir-sentinel", "dir-maintainer", "instance-directory"):
         assert f'id="{identifier}"' in setup
     assert "args.directories" in setup
-    assert index.count('<a href="/sessions">普通会话</a>') == 1
-    assert "session=null" in index
+    for view in ("agents", "messages", "backend"):
+        assert index.count(f'data-view="{view}"') == 1
+    assert 'data-view="collaboration"' not in index
 
 
 def test_inline_scripts_parse_when_node_is_available():

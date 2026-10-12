@@ -1,6 +1,6 @@
 # 普通会话、内网模型服务与桌面项目
 
-这是 main `e55dfbf` 之后的独立功能批次，需安装包含本页的新构建；旧验收包不会自动拥有这些入口。当前支持范围以随包 [capabilities.md](../src/agent_workspace/resources/prompts/capabilities.md) 为准。
+本文保留已有高级接口。普通会话和模型服务配置不在近期主工作台展开，也不是本轮扩展目标；npm 包没有包含全部可选 SDK。当前支持范围以随包 [capabilities.md](../src/agent_workspace/resources/prompts/capabilities.md) 为准。
 
 ## 1. 内网 HTTP 模型服务
 
@@ -15,7 +15,7 @@ aw -w demo agent configure-sdk reviewer --kind claude --model MODEL_ID --base-ur
 
 ## 2. 无 Workspace 的普通会话
 
-打开工作台或首次配置页的“新建普通会话（无需 Workspace）”。选择 Codex / Claude Code / CodeBuddy **CLI**、已有工作目录、模型服务和本次任务，再点击“保存并打开原生 CLI”。该入口不要求 Git；仍需自行安装、登录 Harness。
+保留的 `/sessions` 高级页面可选择 Codex / Claude Code / CodeBuddy **CLI**、已有工作目录、模型服务和本次任务，再点击“保存并打开原生 CLI”。该页面不在主工作台导航中；也可以使用下列 CLI。此入口不要求 Git，仍需自行安装、登录 Harness。
 
 软件直接启动交互式原生 CLI，不调用受管实例的 Agent Loop，不创建隐含 Workspace、管家、Agent、Binding 或 worktree。任务以一个原生输入参数传递，不把本次角色写入共享 AGENTS.md，不注入平台 MCP 或旧入口身份。原生工具、用户/项目配置和规则仍可能被 Harness 加载；这不是沙箱或指令隔离保证。文件修改权限由原生 CLI 确认，不自动打开“完全访问”。
 
@@ -43,7 +43,7 @@ aw session run ordinary-001
 
 ## 3. 持久 Agent 的桌面项目与 Codex 分区
 
-在 Agent 卡片选择“桌面项目”。选择实际桌面端后，平台展示实例主目录、建议项目名和 Codex 分区名；允许保存用户已有名称和显式选定的产品目录。这里只保存**本机引用**，不创建或修改原生项目、分区、权限、会话、实例职责或产品文件。
+通过以下命令选择实际桌面端，查看实例主目录、建议项目名和 Codex 分区名；允许保存用户已有名称和显式选定的产品目录。这两个命令只保存**本机引用**，不创建或修改原生项目、分区、权限、会话、实例职责或产品文件。
 
 ```sh
 aw -w demo agent desktop-project reviewer --harness codex
@@ -54,7 +54,7 @@ aw -w demo agent desktop-project-save reviewer --harness codex --project-name "A
 
 主目录指向 Agent 已有实例目录。产品目录作为附加工作对象按需关联，不复制代码，不在原生项目设置里再维护完整角色提示。Codex 分区按 Workspace 组织，只用于侧栏显示，不新增共享 AGENTS.md 或共同权限。普通会话使用已有项目目录，不归入 Agent 专属分区。
 
-实际手动步骤只维护于随包 [desktop-projects.md](../src/agent_workspace/resources/prompts/desktop-projects.md)。`agent.desktop-project` 也向 Agent 返回当前安装的同一份说明，旧实例不必依赖过期副本。保存引用不是原生操作成功，当前始终明确 `native_project_verified=false`。桌面项目/分区自动管理未接入，不读写私有应用数据库，不暗中回退 CLI。项目容纳历史会话不改变持久 Agent 单一有效入口规则。
+实际手动步骤维护于随包 [desktop-projects.md](../src/agent_workspace/resources/prompts/desktop-projects.md)。`agent.desktop-project` 也返回当前安装的同一份说明。仅保存引用时 `native_project_verified=false`，不表示原生操作成功。另有 `agent.desktop-discover` / `agent.desktop-prepare` 发现、核验和复用已有 Codex 项目；分区操作只在实际控制接口支持时按明确选择执行并读回，项目创建和文件夹编辑仍需手动。不读写私有应用数据库，不暗中回退 CLI。项目容纳历史会话不改变持久 Agent 单一有效入口规则。
 
 ## 4. 验证范围与原生资料
 

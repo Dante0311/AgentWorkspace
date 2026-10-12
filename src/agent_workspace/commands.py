@@ -4,22 +4,24 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills
+from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills
 from .messages import Messages
+from .direct_messages import DirectMessages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
 
 
-READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.versions",
+READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.history", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
-             "asset.list", "asset.read", "runtime.status", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project"}
+             "direct-message.list", "direct-message.show",
+             "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log"}
 
 USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
-                   "maintenance.grant", "maintenance.schedule", "maintenance.repair"}
-CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile"}
+                   "maintenance.grant", "maintenance.schedule", "maintenance.repair", "backend.start", "backend.stop", "backend.restart", "backend.attach", "backend.cancel", "runtime.reconcile-create"}
+CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile", "direct-message.record"}
 
 
 def assets(app, operation, workspace, agent_id, path=None, content=None, revision=None, directory=None):
@@ -81,8 +83,10 @@ def stop_entry(app, workspace, agent_id, binding, checkpoint, directory=None, co
 def runtime_stop(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
     binding = app.agent(workspace, agent_id)["current"]
-    write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": binding})
-    return {"monitor_stop_requested": True, "binding": binding, "execution_right_released": False}
+    with locked(root / ".aw-local/stop-launch.lock"):
+        write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": binding})
+        signal = backend.cancel(app, workspace, agent_id, str(root), expected_binding=binding)
+    return {"monitor_stop_requested": True, "binding": binding, "execution_right_released": False, **signal}
 
 
 def runtime_launch(app, workspace, agent_id, directory=None):
@@ -144,7 +148,12 @@ def bridge_status(app, workspace, agent_id, directory=None):
 
 def command_map(app):
     messages = Messages(app)
+    direct_messages = DirectMessages(app)
     return {
+        "backend.start": partial(backend.start, app), "backend.status": partial(backend.status, app),
+        "backend.stop": partial(backend.stop, app), "backend.restart": partial(backend.restart, app),
+        "backend.log": partial(backend.log, app), "backend.attach": partial(backend.attach, app),
+        "backend.cancel": partial(backend.cancel, app),
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
         "agent.desktop-project": partial(desktop_projects.plan, app),
@@ -176,10 +185,10 @@ def command_map(app):
         "maintenance.schedule": partial(maintenance.schedule, app),
         "maintenance.status": partial(maintenance.status, app),
         "maintenance.repair": partial(maintenance.repair, app),
-        "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show,
+        "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show, "agent.history": app.history,
         "agent.connect": app.connect_agent, "agent.configure": app.configure,
         "agent.update": app.update, "agent.versions": app.versions, "agent.promote": app.promote,
-        "agent.archive": app.archive, "agent.fork": app.fork,
+        "agent.archive": app.archive, "agent.fork": app.fork, "agent.takeover": app.takeover,
         "checkpoint.create": app.checkpoint, "checkpoint.list": app.checkpoints, "checkpoint.show": app.checkpoint_show,
         "agent.sync": app.sync_agent,
         "agent.start": partial(runtime.start, app), "agent.bind": partial(bind_entry, app),
@@ -190,12 +199,17 @@ def command_map(app):
         "agent.upgrade-tools": partial(upgrade_tools, app),
         "runtime.start": partial(runtime_launch, app), "runtime.stop": partial(runtime_stop, app),
         "runtime.status": app.show,
+        "runtime.desktop-observe": partial(runtime.desktop_observe, app),
+        "runtime.launch-show": partial(runtime.launch_show, app),
+        "runtime.reconcile-create": partial(runtime.reconcile_create, app),
         "runtime.receive-input": partial(runtime.receive_input, app),
         "work.create": app.work_create, "work.list": app.work_list, "work.show": app.work_show,
         "work.update": app.work_update, "work.deliver": app.work_deliver,
         "message.send": messages.send, "message.list": messages.list, "message.show": messages.show,
         "message.receive": messages.receive, "message.poll": partial(message_poll, app),
         "message.operation": messages.operation, "message.reconcile": messages.reconcile, "message.watch": partial(runtime.watch, app),
+        "direct-message.record": direct_messages.record, "direct-message.list": direct_messages.list,
+        "direct-message.show": direct_messages.show,
         "asset.list": partial(assets, app, "list"),
         "asset.read": partial(assets, app, "read"),
         "asset.write": partial(assets, app, "write"),
@@ -217,8 +231,12 @@ def execute(app, command, arguments, *, actor=None):
     # Snapshot objects are in-process read contexts, not command input.
     if "snapshot" in args:
         raise Error(f"Invalid arguments for {command}: unsupported snapshot argument.")
+    if command == "agent.start" and "expected_handoff" in args:
+        raise Error("expected_handoff is an internal automatic-continuation condition, not command input.")
     if actor:
         workspace, aid, binding = actor
+        if command == "agent.takeover":
+            raise Error("Force takeover is an explicit user operation, not an Agent or caretaker operation.")
         # Signatures supply defaults, never authorization. A new agent's ID is a target.
         if "workspace" in signature.parameters:
             args.setdefault("workspace", workspace)

@@ -9,7 +9,6 @@ import secrets
 import sys
 import threading
 import urllib.parse
-import webbrowser
 
 from .commands import command_map, execute
 from .runtime import TOOL_SCHEMA
@@ -64,7 +63,6 @@ def build_state(app):
                 detail = app.show(alias, agent["id"], snapshot=shared_snapshot)
                 directories = list(detail.get("directories", []))
                 detail.update(
-                    directory=directories[0] if directories else None,
                     local_ready=bool(directories),
                     observed_at=observed_at,
                     snapshot_revision=workspace.get("snapshot_revision"),
@@ -73,6 +71,10 @@ def build_state(app):
                         "kind": "local_registry_and_runtime",
                     },
                 )
+                for copy in detail.get("copies", []):
+                    if "observation_error" in copy:
+                        result["errors"].append({"workspace": alias, "agent": agent["id"],
+                                                 "directory": copy["directory"], "error": copy["observation_error"]})
             except (Error, ValueError, OSError, KeyError) as exc:
                 # Keep the known identity, not invented liveness or ownership.
                 error = f"Instance observation failed ({type(exc).__name__}); use workspace doctor."
@@ -142,7 +144,7 @@ def make_server(app, port=8765, token=None):
                     page = (files("agent_workspace") / "resources/sessions.html").read_bytes()
                     self.reply(200, page, "text/html; charset=utf-8")
                     return
-                name = "setup.html" if self.path == "/setup" or not app.workspace_list() else "index.html"
+                name = "setup.html" if self.path == "/setup" else "index.html"
                 page = (files("agent_workspace") / "resources" / name).read_bytes()
                 self.reply(200, page, "text/html; charset=utf-8")
                 return
@@ -164,6 +166,10 @@ def make_server(app, port=8765, token=None):
             if not self.authorized():
                 return
             if self.path == "/api/shutdown":
+                if getattr(app, "backend", None):
+                    from .backend import stop
+                    self.reply(200, {"ok": True, "result": {**stop(app), "shutdown_requested": True}})
+                    return
                 self.server.stopping.set()
                 self.reply(200, {"ok": True, "result": {"shutdown_requested": True, "agent_bindings_released": False}})
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
@@ -190,24 +196,8 @@ def make_server(app, port=8765, token=None):
 
 
 def serve(app, port=8765, open_browser=False, setup=False):
-    server = make_server(app, port)
-    path = "/setup" if setup else "/"
-    url = f"http://127.0.0.1:{server.server_port}{path}#token={server.control_token}"
-    print("本机工作台（地址包含控制凭据，请勿分享）：\n" + url, flush=True)
-    if open_browser:
-        webbrowser.open(url)
-    from .maintenance import run
-    stop = threading.Event()
-    worker = threading.Thread(target=run, args=(app, stop), name="aw-maintenance", daemon=False)
-    worker.start()
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass  # Ctrl+C is an orderly service stop, not an Agent release.
-    finally:
-        stop.set()
-        server.server_close()  # Drain accepted HTTP handlers before stopping the worker.
-        worker.join()  # Its external operations have their own bounded timeouts.
+    from .backend import run
+    run(app, port, open_browser, setup)
 
 
 def mcp(app, actor=None):

@@ -48,7 +48,9 @@ def entry_prompt(app, workspace, agent_id, binding, root):
     if entry["handoff"]:
         handoff = snap.json(f"handoffs/{entry['handoff']}.json")
         point = app.checkpoint_show(workspace, agent_id, handoff["checkpoint"])
-        lines.append("交接点与检查点：\n" + json.dumps(point, ensure_ascii=False))
+        lines.append("以下检查点由此前入口 " + handoff["entry"] + " 保存。其中描述旧入口的 renew、stop 或交出安排是历史上下文，"
+                     "不是对当前入口再次停工的指令；明确交给后继的待续业务按 relay Skill 接手。\n"
+                     "交接点与检查点：\n" + json.dumps(point, ensure_ascii=False))
     elif item.get("forked_from"):
         lines.append("你是新的实例，不是历史里的发送者或负责人。来源：\n" + json.dumps(item["forked_from"], ensure_ascii=False))
     else:
@@ -281,6 +283,177 @@ class Codex:
         self.rpc.close()
 
 
+def desktop_native_state(result):
+    state = result["thread"]["status"]["type"]
+    if state == "active":
+        return "busy"
+    if state == "idle":
+        return "idle"
+    if state == "notLoaded":
+        turns = result.get("turns", result["thread"].get("turns", []))
+        if turns and turns[0].get("status") in ("completed", "interrupted"):
+            return "idle"
+    return "unknown"
+
+
+def desktop_observe(app, workspace, agent_id, directory=None):
+    """Read the current local Desktop entry; never create or submit model input."""
+    from .maintenance import installation_id
+    store = app.store(workspace)
+    snap = store.snapshot()
+    owner = app.agent(workspace, agent_id, snap)
+    binding = owner["current"]
+    entry = snap.json(f"bindings/{binding}.json") if binding else None
+    result = {"binding": binding, "phase": entry["phase"] if entry else None,
+              "session": entry.get("session") if entry else None, "observed_at": now(),
+              "native_state": "unknown", "native_host": None, "native_cwd": None,
+              "local_session_confirmed": False}
+    if not entry or entry["phase"] != "active" or entry["kind"] != "desktop":
+        return {**result, "unknown_reason": "no_active_desktop_entry"}
+    execution = entry.get("execution")
+    if not execution:
+        return {**result, "unknown_reason": "execution_source_missing"}
+    if execution["installation_id"] != installation_id(app):
+        return {**result, "unknown_reason": "different_execution_environment"}
+    if directory is not None and Path(directory).resolve() != Path(execution["directory"]).resolve():
+        return {**result, "unknown_reason": "different_local_copy"}
+    root = app.root(workspace, agent_id, execution["directory"])
+    result["directory"] = str(root)
+    if read_json(root / ".aw-local/entry.json", {}).get("binding") != binding:
+        return {**result, "unknown_reason": "local_entry_mismatch"}
+    config = read_json(root / ".aw-local/runtime.json", {})
+    if config.get("kind") != "desktop":
+        return {**result, "unknown_reason": "desktop_connection_missing"}
+    try:
+        adapter = Desktop(root, config, entry["session"], read_only=True)
+        try:
+            native = adapter.read()
+            can_send = "send_message_to_thread" in adapter.tools
+        finally:
+            adapter.close()
+    except (Error, OSError, ValueError, KeyError) as exc:
+        return {**result, "unknown_reason": "native_observation_failed", "error_code": getattr(exc, "code", None)}
+    thread = native["thread"]
+    result.update(native_state=desktop_native_state(native), native_host=thread.get("hostId"),
+                  native_cwd=thread.get("cwd"), observed_at=now())
+    if thread.get("hostId") != "local" or not thread.get("cwd") or Path(thread["cwd"]).resolve() != root:
+        return {**result, "unknown_reason": "native_local_copy_unconfirmed"}
+    if not can_send or result["native_state"] == "unknown":
+        return {**result, "unknown_reason": "native_control_unconfirmed"}
+    latest = store.snapshot()
+    current = app.agent(workspace, agent_id, latest)
+    checked = latest.json(f"bindings/{binding}.json")
+    if (current["current"] != binding or checked["phase"] != "active"
+            or checked["session"] != entry["session"] or checked.get("execution") != execution):
+        return {**result, "unknown_reason": "binding_changed_during_observation"}
+    return {**result, "local_session_confirmed": True, "snapshot_revision": latest.revision}
+
+
+def launch_show(app, workspace, agent_id, directory=None):
+    """Expose the original receipt's identifiers, without native probing or credentials."""
+    from .maintenance import installation_id
+    snap = app.store(workspace).snapshot()
+    owner = app.agent(workspace, agent_id, snap)
+    binding = owner["current"]
+    entry = snap.json(f"bindings/{binding}.json") if binding else None
+    execution = entry.get("execution") if entry else None
+    if directory is None and execution and execution["installation_id"] == installation_id(app):
+        directory = execution["directory"]
+    root = app.root(workspace, agent_id, directory)
+    launch = read_json(root / ".aw-local/launch.json", {})
+    returned = launch.get("result") or {}
+    profile = launch.get("model_profile") or {}
+    requested, reported = profile.get("requested", {}), profile.get("reported", {})
+    recovery = launch.get("reconciled") or {}
+    return {"binding": launch.get("binding"), "current_binding": binding,
+            "current_phase": entry["phase"] if entry else None, "directory": str(root), "observed_at": now(),
+            "attempted": launch.get("attempted", False), "receipt_matches_current": bool(binding and launch.get("binding") == binding),
+            "project_id": launch.get("project_id"), "has_original_session_id": bool(returned.get("threadId")),
+            "result": {key: returned[key] for key in ("threadId", "hostId", "clientThreadId") if key in returned},
+            "model_profile": {"requested": {key: requested[key] for key in ("generation", "model", "effort") if key in requested},
+                "reported": {key: reported[key] for key in ("model", "effort") if key in reported},
+                "effective": profile.get("effective", "unconfirmed"), "native_accepted": profile.get("native_accepted")},
+            "reconciled": {key: recovery[key] for key in ("binding", "session", "association", "selected_at", "observed_at",
+                "native_host", "native_cwd", "native_state") if key in recovery}}
+
+
+def reconcile_create(app, workspace, agent_id, binding, session, directory=None):
+    """Bind only a verified original launch ID; never create or execute native input."""
+    from .maintenance import installation_id
+    store = app.store(workspace)
+    snap = store.snapshot()
+    owner = app.agent(workspace, agent_id, snap)
+    entry = snap.json(f"bindings/{binding}.json")
+    if owner["current"] != binding or not entry or entry["kind"] != "desktop" or entry["phase"] not in ("starting", "active"):
+        raise Conflict("Only the current original Desktop launch can be reconciled.")
+    execution = entry.get("execution")
+    if not execution or execution["installation_id"] != installation_id(app):
+        raise Conflict("Original execution source is unconfirmed or belongs to another home.")
+    root = app.root(workspace, agent_id, directory or execution["directory"])
+    if root != Path(execution["directory"]).resolve():
+        raise Conflict("The original execution belongs to another local copy.")
+    with locked(root / ".aw-local/runner.lock", wait=0):
+        if entry.get("controller"):
+            raise Conflict("The original controller remains; inspect it or use explicit takeover.")
+        if read_json(root / ".aw-local/entry.json", {}).get("binding") != binding:
+            raise Conflict("The original local entry changed; no session was bound.")
+        if entry.get("session") not in (None, session):
+            raise Conflict("This Binding already names a different native session.")
+        launch = read_json(root / ".aw-local/launch.json", {})
+        if launch.get("binding") != binding or not launch.get("attempted"):
+            raise Conflict("No matching attempted original launch receipt exists.")
+        original = (launch.get("result") or {}).get("threadId")
+        if not original:
+            return {"state": "outcome_unknown", "binding": binding, "session": entry.get("session"),
+                    "original_create_result_confirmed": False, "observation_started": False,
+                    "reason": "Original launch has no real threadId; candidate location cannot prove original creation."}
+        if original != session or (launch.get("reconciled", {}).get("session") not in (None, session)):
+            raise Conflict("Use only the real threadId returned by this original launch.")
+        config = read_json(root / ".aw-local/runtime.json", {})
+        if config.get("kind") != "desktop":
+            raise Conflict("The original Desktop connection configuration changed.")
+        profile = model_profiles.adopted(root, binding, session=entry.get("session"))
+        adapter = Desktop(root, config, session, read_only=True)
+        try:
+            native = adapter.read()
+        finally:
+            adapter.close()
+        thread = native["thread"]
+        if thread.get("id") != session or thread.get("hostId") != "local" or not thread.get("cwd") or Path(thread["cwd"]).resolve() != root:
+            raise Conflict("The original native session has not confirmed this local execution directory.")
+        native_state = desktop_native_state(native)
+        if native_state == "unknown":
+            raise Unavailable("Original native session state remains unknown; no session was bound.")
+        model_receipt = model_profiles.receipt(profile, {"catalog": "unconfirmed", "effective": "unconfirmed"},
+                                               result={**native, **thread})
+        model_profiles.require_matching(model_receipt)
+        latest = store.snapshot()
+        checked = latest.json(f"bindings/{binding}.json")
+        if (app.agent(workspace, agent_id, latest)["current"] != binding or checked["phase"] not in ("starting", "active")
+                or checked.get("controller") or checked.get("execution") != execution or checked.get("session") not in (None, session)):
+            raise Conflict("The original Binding changed during native observation; no session was bound.")
+        already_bound = checked["phase"] == "active" and checked.get("session") == session
+        recovery = {"binding": binding, "session": session, "association": "original_launch_thread_id",
+                    "selected_at": launch.get("reconciled", {}).get("selected_at", now()), "observed_at": now(),
+                    "native_host": thread["hostId"], "native_cwd": thread["cwd"], "native_state": native_state,
+                    "model_profile": model_receipt}
+        # Persist the original choice before the shared write, so a lost reply can be read back.
+        write_json(root / ".aw-local/launch.json", {**launch, "reconciled": recovery})
+        if not already_bound:
+            app.bind(workspace, agent_id, binding, session, str(root))
+        boot_path = root / ".aw-local/inputs" / f"boot-{binding}.json"
+        boot = read_json(boot_path)
+        if boot is None:
+            boot = queue_input(app, workspace, agent_id, entry_prompt(app, workspace, agent_id, binding, root),
+                               purpose="initial", directory=str(root), request_id="boot-" + binding, expected_binding=binding)
+        elif boot.get("binding") != binding or boot.get("purpose") != "initial":
+            raise Conflict("The original boot input does not match this Binding; its bytes were preserved.")
+        return {"state": "session_bound", "binding": binding, "session": session, "directory": str(root),
+                "already_bound": already_bound, "association": recovery["association"], "original_create_result_confirmed": True,
+                "native_state": native_state, "model_profile": model_receipt,
+                "initial_input_state": boot["state"], "observation_started": False}
+
+
 class Desktop:
     supports_insert = True
 
@@ -326,17 +499,7 @@ class Desktop:
         return json.loads(result["content"][0]["text"])
 
     def status(self):
-        result = self.read()
-        state = result["thread"]["status"]["type"]
-        if state == "active":
-            return "busy"
-        if state == "idle":
-            return "idle"
-        if state == "notLoaded":
-            turns = result.get("turns", result["thread"].get("turns", []))
-            if turns and turns[0].get("status") in ("completed", "interrupted"):
-                return "idle"
-        return "unknown"
+        return desktop_native_state(self.read())
 
     def read(self, **options):
         result = self.call("read_thread", {"threadId": self.session, "turnLimit": 1,
@@ -439,18 +602,8 @@ class Desktop:
 
 
 def spawn_runner(app, workspace, agent_id, directory=None, *, stop_binding=None):
-    root = app.root(workspace, agent_id, directory)
-    log = root / ".aw-local/runner.log"
-    with log.open("ab") as output:
-        args = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "--workspace", workspace,
-                "runtime", "run", agent_id, "--directory", str(root)]
-        if stop_binding:
-            args += ["--stop-binding", stop_binding]
-        kwargs = {"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}
-        env = {key: value for key, value in os.environ.items()
-               if key not in ("AW_HOME", "AW_WORKSPACE", "AW_AGENT", "AW_BINDING", "CODEX_THREAD_ID")}
-        proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=output, stderr=output, env=env, **kwargs)
-    return {"pid": proc.pid, "state": "starting_runner"}
+    from .backend import attach
+    return attach(app, workspace, agent_id, directory, stop_binding)
 
 
 def _released_stop(snap, agent_id, binding, entry, expected_checkpoint=None):
@@ -509,17 +662,25 @@ def continue_stop(app, workspace, agent_id, binding, directory=None, *, expected
             write_json(root / ".aw-local/status.json", {**result, "observed_at": now(),
                        "entry_automatically_released": False})
             return result
+        # A validated stopping request resumes confirmation only, never business work.
+        control = read_json(root / ".aw-local/control.json", {})
+        if control.get("stop") == binding:
+            write_json(root / ".aw-local/control.json", {**control, "stop": None})
         result = spawn_runner(app, workspace, agent_id, str(root), stop_binding=binding)
+        if result.get("state") == "released":
+            return {**request, **result}
         return {**request, **result, "state": "starting_stop_observer"}
 
 
-def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None):
+def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=None, *, expected_handoff=None):
     root = app.root(workspace, agent_id, directory)
     if (root / ".aw-local/skill-install/operation.json").exists():
         raise Conflict("Recover the pending Skill update before starting a session.")
     requirements(app, workspace, root)  # Fail before reserving an entry or opening a native session.
     config = model_profiles.migrate(root)
     item = app.agent(workspace, agent_id)
+    if expected_handoff is not None and item["current"]:
+        raise Conflict("Another entry already owns this Agent; the original automatic continuation was refused.")
     profile = None
     if config.get("kind") in model_profiles.CODEX_KINDS:
         profile = model_profiles.adopted(root, item["current"]) if item["current"] else model_profiles.selected(root)
@@ -555,7 +716,7 @@ def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=N
         result = {"agent": agent_id, "binding": item["current"], "phase": "starting", "kind": entry["kind"]}
     else:
         app.sync_agent(workspace, agent_id, str(root))
-        result = app.reserve(workspace, agent_id, str(root), binding_id=binding_id)
+        result = app.reserve(workspace, agent_id, str(root), binding_id=binding_id, expected_handoff=expected_handoff)
     binding = result["binding"]
     prompt = entry_prompt(app, workspace, agent_id, binding, root)
     bind_args = ["aw", "--home", str(app.home), "--workspace", workspace, "agent", "bind", agent_id,
@@ -643,7 +804,9 @@ def handoff_request(app, workspace, agent_id, *, renew=False, directory=None):
     write_json(root / ".aw-local/watch.json", {"enabled": False, "reason": "handoff_requested"})
     if renew:
         write_json(root / ".aw-local/renew.json", {"binding": agent["current"], "requested": True})
-    text = (root / ".aw/prompts/handoff.md").read_text(encoding="utf-8")
+    guidance = (root / ".aw/prompts/handoff.md").read_text(encoding="utf-8")
+    text = ("本次明确请求当前入口 " + agent["current"] + " 正常交出。请使用这个 Binding 执行 handoff Skill，"
+            "保存实际检查点、请求 agent.stop 后结束当前轮次，不自行启动后继。\n\n" + guidance)
     kind = app.store(workspace).snapshot().json(f"bindings/{agent['current']}.json")["kind"]
     return queue_input(app, workspace, agent_id, text, delivery="normal" if kind in SDK_TYPES else "insert", purpose="handoff", directory=str(root),
                        request_id="handoff-" + agent["current"])
@@ -665,11 +828,12 @@ def watch(app, workspace, agent_id, operation, interval=5, directory=None):
 
 
 class Runner:
-    def __init__(self, app, workspace, agent_id, directory=None, stop_binding=None):
+    def __init__(self, app, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None):
         self.app, self.workspace, self.agent_id = app, workspace, agent_id
         self.root = app.root(workspace, agent_id, directory)
         self.adapter = None
-        self.binding = None
+        self.expected_binding = expected_binding or stop_binding
+        self.binding = self.expected_binding
         self.stop_event = threading.Event()
         self.renew_after_exit = False
         self.runtime_kind = None
@@ -701,8 +865,18 @@ class Runner:
                     error_code=failure.code, attempts=attempts, retry_seconds=delay,
                     kind=self.runtime_kind, session=getattr(self.adapter, "session", None),
                     entry_automatically_released=False)
-        if self.stop_event.wait(delay):
+        if self._stop_requested() or self.stop_event.wait(delay) or self._stop_requested():
             raise _ReadStopped(str(failure)) from failure
+
+    def _stop_requested(self):
+        if self.stop_event.is_set():
+            return True
+        control = read_json(self.root / ".aw-local/control.json", {})
+        if self.binding and control.get("stop") == self.binding:
+            self.stop_event.set()
+            self.status(state="monitor_stopped", entry_automatically_released=False)
+            return True
+        return False
 
     def _shared_read(self, stage, read, *args, **kwargs):
         # Only call this with a read. Retrying an outer operation could replay
@@ -764,7 +938,7 @@ class Runner:
                     failure.add_note("Controller cleanup failed: " + str(exc))
                     self.cleanup_errors.append(str(exc))
         pending_stop = None
-        if not self.stop_only and self.binding and not isinstance(failure, Uncertain):
+        if not self.stop_event.is_set() and not self.stop_only and self.binding and not isinstance(failure, Uncertain):
             # A stop can arrive while an execution runner is exiting. Reuse the
             # saved request after releasing the local lock, never restart work.
             try:
@@ -787,24 +961,39 @@ class Runner:
             raise failure
         if pending_stop is not None:
             return
-        if self.stop_only:
+        if self.stop_only or self.stop_event.is_set():
             return
         transfer = read_json(self.root / ".aw-local/transfer.json")
+        if not (transfer and transfer["old_binding"] == self.binding) and not self.renew_after_exit:
+            return
+        handoff = self._normal_handoff_ready()
+        if not handoff:
+            return
         if transfer and transfer["old_binding"] == self.binding:
             from .transfer import advance
             advance(self.app, self.workspace, self.agent_id, str(self.root))
         elif self.renew_after_exit:
-            result = start(self.app, self.workspace, self.agent_id, str(self.root), open_app=self.runtime_kind == "desktop")
+            renew = read_json(self.root / ".aw-local/renew.json")
+            result = start(self.app, self.workspace, self.agent_id, str(self.root),
+                           open_app=self.runtime_kind == "desktop", expected_handoff=handoff)
             write_json(self.root / ".aw-local/renew-result.json", result)
+            write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
+
+    def _normal_handoff_ready(self):
+        snap, owner, entry = self._read_state("successor_qualification")
+        if owner["current"] is not None or entry["phase"] != "released" or not owner["handoff"]:
+            return False
+        result = self._shared_read("successor_handoff", _released_stop, snap, self.agent_id, self.binding, entry)
+        return result["handoff"] if owner["handoff"] == result["handoff"] else None
 
     def _run_owned(self):
         app, workspace, aid = self.app, self.workspace, self.agent_id
         record = read_json(self.root / ".aw-local/entry.json")
         if not record:
             raise Error("No local entry; use relay/start before launching a runner.")
+        if self.expected_binding and record["binding"] != self.expected_binding:
+            raise Conflict("The original Binding changed before its Runner started.")
         self.binding = record["binding"]
-        if self.stop_binding and self.binding != self.stop_binding:
-            raise Conflict("The original stopping binding changed before its observer started.")
         snap, item, entry = self._read_state()
         if self.stop_binding and entry and entry["phase"] == "released":
             self.stop_only = True
@@ -873,6 +1062,8 @@ class Runner:
             bridges = BridgeManager(app, workspace, aid, self.binding, self.root)
             self.status(state="running", kind=entry["kind"], session=self.adapter.session)
             while not self.stop_event.wait(0.5):
+                if self._stop_requested():
+                    break
                 snap, agent, current = self._read_state()
                 if agent["current"] != self.binding:
                     break
@@ -895,6 +1086,8 @@ class Runner:
                     native_state = "idle" if native_closed else self.adapter.status()
                     self.status(state="handoff_waiting_idle" if native_state in ("idle", "busy") else "stop_observation_unknown",
                                 session=self.adapter.session, native_state=native_state)
+                    if self._stop_requested():
+                        break
                     if native_state == "idle":
                         if isinstance(self.adapter, Desktop):
                             self._complete_inputs(stopping_checkpoint=current["checkpoint"])
@@ -919,9 +1112,6 @@ class Runner:
                         self.status(state="released", handoff=result["id"])
                         break
                     continue
-                if read_json(self.root / ".aw-local/control.json", {}).get("stop") == self.binding:
-                    self.status(state="monitor_stopped", entry_still_owned=True)
-                    break
                 try:
                     stage = "bridge_poll"
                     handoff_requested = read_json(self.root / ".aw-local/control.json", {}).get("handoff") == self.binding
@@ -979,9 +1169,7 @@ class Runner:
         finally:
             self._cleanup_native(bridges)
         renew = read_json(self.root / ".aw-local/renew.json", {})
-        if renew.get("requested") and renew.get("binding") == self.binding and app.agent(workspace, aid)["current"] is None:
-            write_json(self.root / ".aw-local/renew.json", {**renew, "requested": False})
-            # The old model is no longer involved. A new local runner owns the next entry.
+        if renew.get("requested") and renew.get("binding") == self.binding:
             self.renew_after_exit = True
 
     def _observe_stop(self, request, config):
@@ -995,7 +1183,7 @@ class Runner:
         self.stop_request = {key: request.get(key) for key in ("id", "session", "checkpoint", "controller")}
         failures, read_failures = 0, 0
         try:
-            while not self.stop_event.is_set():
+            while not self._stop_requested():
                 snap, owner, current = self._read_state()
                 if current["phase"] == "released":
                     if current["session"] != request["session"]:
@@ -1029,6 +1217,10 @@ class Runner:
                     if self.stop_event.wait(delay):
                         return
                     continue
+                self.status(state="handoff_waiting_idle" if native_state in ("idle", "busy") else "stop_observation_unknown",
+                            session=request["session"], native_state=native_state)
+                if self._stop_requested():
+                    return
                 if native_state == "idle":
                     self._complete_inputs(stopping_checkpoint=current["checkpoint"])
                     self._close_adapter()
@@ -1044,8 +1236,6 @@ class Runner:
                         continue
                     self.status(state="released", handoff=result["id"], session=request["session"])
                     return
-                self.status(state="handoff_waiting_idle" if native_state == "busy" else "stop_observation_unknown",
-                            session=request["session"], native_state=native_state)
                 if self.stop_event.wait(0.5):
                     return
         finally:

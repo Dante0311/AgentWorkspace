@@ -476,25 +476,80 @@ class App:
             raise Error("Saved checkpoint material is missing or does not match its reference.")
         return {**pointer, "record": record, "files": list(snap.entries)}
 
-    def fork(self, workspace, agent_id, checkpoint, name, new_id=None, directory=None):
+    def fork(self, workspace, agent_id, checkpoint, name, new_id=None, directory=None, *, resume=False):
         point = self.checkpoint_show(workspace, agent_id, checkpoint)
         target = slug(new_id or name)
         store = self.store(workspace)
         snap = store.snapshot()
-        if f"agents/{target}.json" in snap.entries:
-            raise Conflict("Fork target already exists.")
         source = store.snapshot(revision=point["revision"])
-        content = source.all()
         locator = snap.json("workspace.json")["locator"]
-        content[".aw/identity.json"] = encode({"workspace": locator, "agent": target,
-            "forked_from": {"agent": agent_id, "checkpoint": checkpoint, "revision": source.revision}})
         branch = "instance/" + target
-        store.branch(branch, content, parent=source.revision)
-        item = {"id": target, "name": name, "description": "", "branch": branch,
-                "archived": False, "current": None, "has_run": False, "handoff": None,
-                "created_at": now(), "forked_from": {"agent": agent_id, "checkpoint": checkpoint, "revision": source.revision}}
-        store.change("main", {f"agents/{target}.json": encode(item)}, {f"agents/{target}.json": None}, f"Fork {target}")
-        return {**item, **self.connect_agent(workspace, target, directory or str(self.home / "instances" / workspace / target))}
+        agent_path = f"agents/{target}.json"
+        origin = {"agent": agent_id, "checkpoint": point["id"], "revision": source.revision}
+        identity = {"workspace": locator, "agent": target, "forked_from": origin}
+        receipt_path = self.home / "fork-operations" / digest(encode([locator, target])) / "operation.json"
+        location = directory or str(self.home / "instances" / workspace / target)
+        with locked(receipt_path.with_suffix(".lock")):
+            receipt = read_json(receipt_path)
+            existing = store.snapshot().json(agent_path)
+            if not resume:
+                if existing or receipt:
+                    raise Conflict("Fork target already exists or has a pending operation; explicitly resume the original Fork.")
+                item = {"id": target, "name": name, "description": "", "branch": branch,
+                        "archived": False, "current": None, "has_run": False, "handoff": None,
+                        "created_at": now(), "forked_from": origin}
+                content = source.all()
+                content[".aw/identity.json"] = encode(identity)
+                content[".aw/fork.json"] = encode(item)
+                receipt = {"fingerprint": digest(encode(item)), "registration_unknown": False}
+                # Retain the original target even if branch publication loses its reply.
+                write_json(receipt_path, receipt)
+                try:
+                    store.branch(branch, content, parent=source.revision)
+                except Uncertain:
+                    raise
+                except Error:
+                    receipt_path.unlink()
+                    raise
+            else:
+                saved = store.snapshot(branch)
+                if not saved.revision:
+                    raise Uncertain("The original Fork branch is not confirmed; do not create it again.")
+                item = saved.json(".aw/fork.json", {})
+                if (not isinstance(item, dict) or item.get("id") != target or item.get("branch") != branch
+                        or item.get("name") != name or item.get("forked_from") != origin
+                        or saved.json(".aw/identity.json") != identity
+                        or (receipt and receipt["fingerprint"] != digest(encode(item)))):
+                    raise Conflict("Saved target does not belong to this Fork and checkpoint revision.")
+                if existing:
+                    if (existing.get("id") != target or existing.get("branch") != branch
+                            or existing.get("forked_from") != origin
+                            or existing.get("created_at") != item.get("created_at")):
+                        raise Conflict("Registered target belongs to another Fork identity.")
+                    return {**existing, **self.connect_agent(workspace, target, location)}
+                # Until registration, the target must still contain exactly the saved starting files.
+                content = source.all()
+                content[".aw/identity.json"] = encode(identity)
+                content[".aw/fork.json"] = encode(item)
+                if saved.all() != content:
+                    raise Conflict("Unregistered Fork files changed; inspect the original target before continuing.")
+                if receipt and receipt["registration_unknown"]:
+                    raise Uncertain("Original Fork registration is still unconfirmed; do not publish it again.")
+                receipt = {"fingerprint": digest(encode(item)), "registration_unknown": False}
+            # A crash or an unknown write result leaves this marker until the original record is read back.
+            receipt["registration_unknown"] = True
+            write_json(receipt_path, receipt)
+            try:
+                store.change("main", {agent_path: encode(item)}, {agent_path: None}, f"Fork {target}")
+            except Uncertain:
+                raise
+            except Error:
+                receipt["registration_unknown"] = False
+                write_json(receipt_path, receipt)
+                raise
+            receipt["registration_unknown"] = False
+            write_json(receipt_path, receipt)
+            return {**item, **self.connect_agent(workspace, target, location)}
 
     def configure(self, workspace, agent_id, value, directory=None):
         root = self.root(workspace, agent_id, directory)
@@ -506,24 +561,88 @@ class App:
             write_json(root / ".aw-local/runtime.json", value)
         return {"configured": True, "entry_changed": False}
 
+    def _binding_history(self, snap, agent_id):
+        entries = []
+        for path in snap.entries:
+            if path.startswith("bindings/") and path.endswith(".json"):
+                entry = snap.json(path)
+                if entry["agent"] == agent_id:
+                    entries.append(entry)
+        return sorted(entries, key=lambda entry: (entry["created_at"], entry["id"]))
+
+    def history(self, workspace, agent_id, *, snapshot=None):
+        snap = snapshot or self.store(workspace).snapshot()
+        self.agent(workspace, agent_id, snap)
+        return {"agent": agent_id, "bindings": self._binding_history(snap, agent_id),
+                "snapshot_revision": snap.revision}
+
+    def _observe_copy(self, root, binding, installation):
+        source = {"installation_id": installation, "directory": str(root), "kind": "local_copy"}
+        try:
+            local_entry = read_json(root / ".aw-local/entry.json", {})
+            status = read_json(root / ".aw-local/status.json", {"state": "not_running"})
+            try:
+                with locked(root / ".aw-local/runner.lock", wait=0):
+                    status["runner_alive"] = False
+            except Conflict:
+                status["runner_alive"] = True
+            execution = binding.get("execution") if binding else None
+            return {
+                "directory": str(root), "entry_binding": local_entry.get("binding"),
+                "entry_matches_current": bool(binding and local_entry.get("binding") == binding["id"]),
+                # Runner lifecycle status identifies its Binding; session is optional, but must match when present.
+                "runtime_matches_current": bool(binding and status.get("binding") == binding["id"]
+                                                 and ("session" not in status or status["session"] == binding.get("session"))),
+                "execution_matches_local": bool(execution and execution["installation_id"] == installation
+                                                 and execution["directory"] == str(root)),
+                "runtime": status,
+                "watch": read_json(root / ".aw-local/watch.json", {"enabled": False}),
+                "configured_kind": read_json(root / ".aw-local/runtime.json", {}).get("kind", "manual"),
+                "model_selection": model_profiles.desired(root),
+                "observation_source": source,
+            }
+        except (Error, ValueError, OSError, KeyError) as exc:
+            return {"directory": str(root), "observation_source": source,
+                    "unknown_reason": "local_copy_observation_failed",
+                    "observation_error": f"Local copy observation failed ({type(exc).__name__}); inspect its local files."}
+
     def show(self, workspace, agent_id, directory=None, *, snapshot=None):
         store = self.store(workspace)
         snap = snapshot or store.snapshot()
         item = self.agent(workspace, agent_id, snap)
         binding = snap.json(f"bindings/{item['current']}.json") if item["current"] else None
         locations = self.local()["workspaces"][workspace].get("instances", {}).get(agent_id, [])
-        result = {**item, "revision": snap.entries[f"agents/{agent_id}.json"], "binding": binding, "directories": locations}
-        if locations:
-            root = self.root(workspace, agent_id, directory)
-            result["runtime"] = read_json(root / ".aw-local/status.json", {"state": "not_running"})
-            try:
-                with locked(root / ".aw-local/runner.lock", wait=0):
-                    result["runtime"]["runner_alive"] = False
-            except Conflict:
-                result["runtime"]["runner_alive"] = True
-            result["watch"] = read_json(root / ".aw-local/watch.json", {"enabled": False})
-            result["configured_kind"] = read_json(root / ".aw-local/runtime.json", {}).get("kind", "manual")
-            result["model_selection"] = model_profiles.desired(root)
+        installation = read_json(self.home / "installation.json", {}).get("id")
+        copies = [self._observe_copy(Path(location), binding, installation) for location in locations]
+        result = {**item, "revision": snap.entries[f"agents/{agent_id}.json"], "binding": binding,
+                  "directories": locations, "copies": copies, "history": self._binding_history(snap, agent_id),
+                  "directory": None}
+        errors = [f"{copy['directory']}: {copy['observation_error']}" for copy in copies if "observation_error" in copy]
+        if errors:
+            result["observation_error"] = "\n".join(errors)
+        selected = None
+        if directory is not None:
+            requested = str(self.root(workspace, agent_id, directory))
+            selected = next(copy for copy in copies if copy["directory"] == requested)
+        elif binding:
+            for copy in copies:
+                if copy.get("entry_matches_current") and (not binding.get("execution") or copy["execution_matches_local"]):
+                    selected = copy
+                    break
+        elif copies:
+            selected = copies[0]
+        if selected:
+            result["directory"] = selected["directory"]
+            if "observation_error" in selected:
+                result["runtime"] = {"state": "unknown", "reason": "local_copy_observation_failed"}
+            else:
+                result.update(watch=selected["watch"], configured_kind=selected["configured_kind"],
+                              model_selection=selected["model_selection"])
+                if not binding or (selected["entry_matches_current"] and selected["runtime_matches_current"]
+                                   and (not binding.get("execution") or selected["execution_matches_local"])):
+                    result["runtime"] = selected["runtime"]
+        if binding and "runtime" not in result:
+            result["runtime"] = {"state": "unknown", "reason": "current_entry_not_observed_locally"}
         return result
 
     def archive(self, workspace, agent_id, archived=True, directory=None):
@@ -537,7 +656,7 @@ class App:
         store.change("main", {path: encode(item)}, {path: snap.entries[path]}, f"Archive={archived} {agent_id}")
         return item
 
-    def reserve(self, workspace, agent_id, directory=None, binding_id=None):
+    def reserve(self, workspace, agent_id, directory=None, binding_id=None, *, expected_handoff=None):
         root = self.root(workspace, agent_id, directory)
         config = model_profiles.migrate(root)
         profile = (model_profiles.selected(root) if config.get("kind") in model_profiles.CODEX_KINDS
@@ -547,11 +666,16 @@ class App:
         item = self.agent(workspace, agent_id, snap)
         if item["current"] or item["archived"]:
             raise Conflict("Agent already has an entry or is archived; relay cannot take it over.")
+        # An automatic continuation must consume its verified handoff, never a later one.
+        if expected_handoff is not None and item["handoff"] != expected_handoff:
+            raise Conflict("The handoff selected for continuation changed; the old request cannot use its successor.")
         if item["has_run"] and not item["handoff"]:
             raise Conflict("No handoff is available. A crash is not a release of ownership.")
         binding = slug(binding_id) if binding_id else uid("b")
         entry = {"id": binding, "agent": agent_id, "kind": config.get("kind", "manual"),
                  "phase": "starting", "session": None, "created_at": now(), "handoff": item["handoff"]}
+        from .maintenance import installation_id
+        entry["execution"] = {"installation_id": installation_id(self), "directory": str(root)}
         changes = {f"bindings/{binding}.json": encode(entry)}
         path = f"agents/{agent_id}.json"
         expected = {path: snap.entries[path], f"bindings/{binding}.json": None}
@@ -683,6 +807,77 @@ class App:
                 return released
             raise
         return handoff
+
+    def _forced_handoff(self, snap, agent_id, binding, checkpoint):
+        entry = snap.json(f"bindings/{binding}.json")
+        if not entry or entry["phase"] != "revoked":
+            return None
+        handoff = snap.json(f"handoffs/h{binding[1:]}.json")
+        if (entry["id"] != binding or entry["agent"] != agent_id or not handoff
+                or not handoff.get("forced") or handoff["agent"] != agent_id or handoff["entry"] != binding):
+            raise Error("Revoked entry has no matching forced handoff.")
+        if entry.get("checkpoint") != checkpoint or handoff["checkpoint"] != checkpoint:
+            raise Conflict("This entry was taken over from another saved checkpoint.")
+        return handoff
+
+    def takeover(self, workspace, agent_id, binding, checkpoint, *, confirm=False):
+        if confirm is not True:
+            raise Error("Explicit user confirmation is required to revoke the old execution entry.")
+        slug(binding)
+        slug(checkpoint)
+        store = self.store(workspace)
+        locator = self.local()["workspaces"][workspace]["locator"]
+        operation = self.home / "takeovers" / digest(locator.encode()) / f"{binding}.json"
+        with locked(operation.with_suffix(".lock")):
+            snap = store.snapshot()
+            item = self.agent(workspace, agent_id, snap)
+            handoff = self._forced_handoff(snap, agent_id, binding, checkpoint)
+            if handoff is None:
+                if item["current"] != binding or item["archived"]:
+                    raise Conflict("The selected entry is no longer current; read the Agent before taking it over.")
+                entry = snap.json(f"bindings/{binding}.json")
+                if entry["agent"] != agent_id or entry["phase"] not in ("starting", "active", "stopping"):
+                    raise Conflict("The current execution entry cannot be taken over.")
+                point = self._read_checkpoint(store, snap, agent_id, checkpoint)
+                receipt = read_json(operation, {})
+                if receipt.get("publication_unknown"):
+                    if receipt["agent"] != agent_id or receipt["checkpoint"] != checkpoint:
+                        raise Conflict("An unresolved takeover already uses this entry and another checkpoint.")
+                    raise Uncertain("The original takeover publication remains unknown; it was not repeated.")
+                handoff_id = "h" + binding[1:]
+                handoff = {"id": handoff_id, "agent": agent_id, "entry": binding, "checkpoint": point["id"],
+                           "created_at": now(), "consumed_by": None, "forced": True,
+                           "native_stop_confirmed": False}
+                item.update(current=None, handoff=handoff_id)
+                entry.update(phase="revoked", checkpoint=point["id"], revoked_at=now(), revocation="user_takeover")
+                ap, bp = f"agents/{agent_id}.json", f"bindings/{binding}.json"
+                cp, hp = f"checkpoints/{agent_id}/{checkpoint}.json", f"handoffs/{handoff_id}.json"
+                pending = {"agent": agent_id, "checkpoint": checkpoint, "publication_unknown": True}
+                write_json(operation, pending)
+                try:
+                    store.change("main", {ap: encode(item), bp: encode(entry), hp: encode(handoff)},
+                                 {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp], hp: None},
+                                 "User takeover")
+                except (Conflict, Uncertain) as failure:
+                    if isinstance(failure, Conflict):
+                        write_json(operation, {**pending, "publication_unknown": False})
+                    try:
+                        latest = store.snapshot()
+                    except (Error, OSError, ValueError) as exc:
+                        raise Uncertain(f"{failure}\nCould not confirm the original takeover publication: {exc}") from exc
+                    try:
+                        handoff = self._forced_handoff(latest, agent_id, binding, checkpoint)
+                    except RetryableRead as exc:
+                        raise Uncertain(f"{failure}\nCould not read the original takeover result: {exc}") from exc
+                    if handoff is None:
+                        raise
+                except Error:
+                    write_json(operation, {**pending, "publication_unknown": False})
+                    raise
+                write_json(operation, {**pending, "publication_unknown": False})
+            return {"state": "execution_revoked", "previous_binding": binding, "checkpoint": checkpoint,
+                    "handoff": handoff, "execution_right_revoked": True, "native_state": "not_observed",
+                    "native_stop_confirmed": False, "starts_new_session": False}
 
     def versions(self, workspace, agent_id, directory=None):
         root = self.root(workspace, agent_id, directory)

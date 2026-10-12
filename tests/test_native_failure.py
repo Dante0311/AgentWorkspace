@@ -85,8 +85,16 @@ def test_runner_reports_disconnected_sdk_even_without_inputs_or_watch(app, monke
     monkeypatch.setattr(runtime, 'NativeSDK', DisconnectedSDK)
     runner = runtime.Runner(app, 'sea', 'alice')
     # One iteration suffices; no wall-clock waiting and no native program needed.
-    runner.stop_event = Mock()
-    runner.stop_event.wait.side_effect = [False, True]
+    waits = iter((False, True))
+
+    def wait(timeout=None):
+        if runner.stop_event.is_set():
+            return True
+        if next(waits):
+            runner.stop_event.set()
+        return runner.stop_event.is_set()
+
+    monkeypatch.setattr(runner.stop_event, "wait", wait)
     with pytest.raises(Unavailable, match='disconnected'):
         runner.run()
     state = read_json(app.root('sea', 'alice') / '.aw-local/status.json')

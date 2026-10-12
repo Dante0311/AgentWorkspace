@@ -34,6 +34,14 @@ def parser():
         sub = domains.add_parser(domain).add_subparsers(dest="action", required=True)
         return {name: sub.add_parser(name) for name in names}
 
+    service = actions("backend", ["run", "start", "status", "stop", "restart", "log"])
+    for key in ("run", "start", "restart"):
+        service[key].add_argument("--port", type=int)
+        service[key].add_argument("--open", dest="open_app", action="store_true")
+    service["log"].add_argument("--agent-id")
+    service["log"].add_argument("--directory")
+    service["log"].add_argument("--lines", type=int, default=100)
+
     session = actions("session", ["prepare", "open", "show", "run"])
     for key in ("open", "show", "run"):
         session[key].add_argument("request_id")
@@ -59,14 +67,14 @@ def parser():
     ws["read"].add_argument("--revision")
     ws["skills"].add_argument("--revision")
 
-    ag = actions("agent", ["create", "import", "list", "show", "connect", "configure", "versions", "update",
-        "promote", "archive", "unarchive", "start", "bind", "stop", "handoff", "renew", "fork", "input",
+    ag = actions("agent", ["create", "import", "list", "show", "history", "connect", "configure", "versions", "update",
+        "promote", "archive", "unarchive", "start", "bind", "stop", "takeover", "handoff", "renew", "fork", "input",
         "capture-desktop", "configure-desktop", "sync", "upgrade-tools", "configure-codex", "configure-sdk",
         "transfer", "transfer-profile", "transfer-continue", "transfer-status", "desktop-project", "desktop-project-save", "skills", "skill-install", "skill-update", "desktop-discover", "desktop-prepare"])
     for key, sub in ag.items():
         if key != "list":
             sub.add_argument("name" if key in ("create", "import") else "agent_id")
-            if key not in ("configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save", "desktop-discover", "desktop-prepare"):
+            if key not in ("history", "takeover", "configure-codex", "configure-sdk", "transfer-profile", "desktop-project", "desktop-project-save", "desktop-discover", "desktop-prepare"):
                 sub.add_argument("--directory")
     for key in ("create", "import"):
         ag[key].add_argument("--id", dest="agent_id")
@@ -86,9 +94,13 @@ def parser():
     ag["stop"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
     ag["stop"].add_argument("--checkpoint", required=True)
     ag["stop"].add_argument("--confirm-stopped", action="store_true", help="Current owner attestation for manual adapters only.")
+    ag["takeover"].add_argument("--binding", required=True, help="The current entry selected by the user.")
+    ag["takeover"].add_argument("--checkpoint", required=True, help="Saved materials to continue; unsaved files are not migrated.")
+    ag["takeover"].add_argument("--confirm", action="store_true", help="Revoke AW authority; does not stop the old native chat.")
     ag["fork"].add_argument("--checkpoint", required=True)
     ag["fork"].add_argument("--name", required=True)
     ag["fork"].add_argument("--new-id")
+    ag["fork"].add_argument("--resume", action="store_true", help="Continue preparing the same Fork target after checking its original source.")
     ag["create"].add_argument("--skill", dest="skills", action="append")
     for key in ("skill-install", "skill-update"):
         ag[key].add_argument("--name", required=True)
@@ -188,11 +200,13 @@ def parser():
     msg["watch"].add_argument("--directory")
     msg["reconcile"].add_argument("operation_id")
 
-    rt = actions("runtime", ["run", "start", "stop", "status"])
+    rt = actions("runtime", ["run", "start", "stop", "status", "desktop-observe", "launch-show", "reconcile-create"])
     for sub in rt.values():
         sub.add_argument("agent_id")
         sub.add_argument("--directory")
     rt["run"].add_argument("--stop-binding")
+    rt["reconcile-create"].add_argument("--binding", required=True)
+    rt["reconcile-create"].add_argument("--session", required=True)
     bridge = actions("bridge", ["configure", "start", "stop", "status", "send"])
     for key, sub in bridge.items():
         sub.add_argument("agent_id")
@@ -242,7 +256,7 @@ def main(argv=None):
             actor = desktop_directory_actor(app, operation)
         if actor and not workspace:
             workspace = actor[0]
-        if actor and (domain in ("serve", "setup") or (domain in ("maintenance", "runtime") and action == "run")):
+        if actor and (domain in ("serve", "setup") or (domain in ("maintenance", "runtime", "backend") and action == "run")):
             raise Error("Starting a server or worker is a user-management operation.")
         if domain == "session" and action == "run":
             if actor:
@@ -252,6 +266,10 @@ def main(argv=None):
         if domain == "maintenance" and action == "run":
             from .maintenance import run
             run(app)
+            return 0
+        if domain == "backend" and action == "run":
+            from .backend import run
+            run(app, **options)
             return 0
         if domain in ("serve", "setup"):
             from .server import serve
@@ -298,7 +316,11 @@ def main(argv=None):
                 command, args["renew"] = "agent.handoff", True
             if domain == "bridge" and action in ("start", "stop"):
                 command, args["enabled"] = "bridge.switch", action == "start"
-        if not command.startswith(("setup.", "session.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+        if command == "backend.log" and args.get("agent_id"):
+            if not workspace:
+                raise Error("Select the Runner's --workspace.")
+            args["workspace"] = workspace
+        if not command.startswith(("setup.", "session.", "backend.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)

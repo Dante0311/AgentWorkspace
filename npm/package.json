@@ -1,0 +1,12 @@
+{
+  "name": "git-native-agent-workspace",
+  "description": "Persistent agents and local collaboration workbench",
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": "github:Dante0311/AgentWorkspace",
+  "bin": { "aw": "aw.cjs" },
+  "files": ["aw.cjs", "app/", "runtime/", "build.json"],
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "engines": { "node": ">=22" }
+}

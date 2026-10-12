@@ -1,6 +1,6 @@
 # Message / message-index / ACK 的 Git 协议
 
-本说明对应随包版本的 `messages.py` 和产品 `docs/design.md` 第 6 节，用于脱离完整 AW 实施相同协议；不另设消息类型、身份、任务状态或业务完成标记。
+本说明只对应正式 AW Message 的 `messages.py` 和产品 `docs/design.md` 第 6 节，用于脱离完整 AW 实施相同协议。发送/回复先按主 Skill 选择通路；[独立直发记录](direct.md) 不属于本协议，不加入下列目录、ACK 或投递。不另设正式消息类型、身份、任务状态或业务完成标记。
 
 ## 地址与固定路径
 

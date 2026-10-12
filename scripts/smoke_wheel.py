@@ -73,7 +73,14 @@ def running_workbench(aw, home, cwd, env):
         except Exception as exc:
             shutdown_error = exc
             if process.poll() is None:
-                process.terminate()
+                if os.name == "nt":
+                    # npm's .cmd launcher has Node and Python children; stopping
+                    # only the wrapper leaves the installed test server running.
+                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                                   capture_output=True, timeout=10,
+                                   creationflags=subprocess.CREATE_NO_WINDOW, check=True)
+                else:
+                    process.terminate()
                 try:
                     process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
@@ -108,8 +115,8 @@ def remove_smoke_tree(root):
 
 
 @contextmanager
-def smoke_directory():
-    root = Path(tempfile.mkdtemp(prefix="aw-wheel-"))
+def smoke_directory(prefix="aw-wheel-"):
+    root = Path(tempfile.mkdtemp(prefix=prefix))
     try:
         yield root
     except BaseException:

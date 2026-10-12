@@ -4,25 +4,36 @@
 
 ## 1. 安装和依赖
 
-从所选提交的 GitHub Actions `CI` 中获取 `agent-workspace-build` 制品，解压后包含 wheel、sdist、`install.py`、`SHA256SUMS` 和准确源码快照。普通使用只需安装包，不必 clone 源码。制品有保留期限，尚不是正式 Release/PyPI 发布。
+正式用户路径使用 npm。当前先提供 Windows x64 安装包，需要 Node.js 22+；Git 和所用原生客户端仍由用户自行安装、登录。从所选提交的 GitHub Actions `CI` 获取 `agent-workspace-build` 制品，解压后选择 `.tgz` 文件，并用同目录 `SHA256SUMS` 核对下载内容。制品有保留期限，当前没有 npm Registry 或正式 Release 发布。
 
-本机先准备 Python 3.11+；Git 和需要的 Harness 由用户自行安装、登录。基础安装不访问包索引；选择 `--extra` 才通过 pip 安装对应 SDK 依赖。上游 SDK 包可能携带其二进制资源，平台仍要求明确发现或指定实际使用的 Harness，不自动配置、登录或执行它。
+包内已带程序、网页、七个 Skills 和固定版本的 Python 运行时，不需要系统 Python，也没有安装后下载运行时的脚本。包内 `build.json` 记录 wheel 与 Python 的版本、来源和 SHA-256。同一个预览版本可能对应不同提交，判断构建来源应看提交和文件校验值。
 
-```sh
-python install.py git_native_agent_workspace-0.1.0a1-py3-none-any.whl --destination ./aw-app --extra claude --extra codebuddy
+```powershell
+npm install --global .\git-native-agent-workspace-0.1.0-alpha.1.tgz
+aw --version
+aw backend start --open
 ```
 
-脚本先校验同目录 `SHA256SUMS`，再建立隔离环境；不改 PATH、不改 Workspace 数据、不覆盖无法确认归属的已有目录。校验和不能替代可信下载来源。终端会输出实际启动命令：POSIX 为 `./aw-app/bin/aw setup --open`，Windows 为 `aw-app\Scripts\aw.exe setup --open`。下文把这个可执行文件简称为 `aw`。
+npm 将 `aw` 命令加入它管理的命令目录；程序数据保存在安装目录之外。校验和不能代替可信下载来源。网页地址包含本机控制 Token，不要分享；关闭网页不等于停止后台。
 
-安装中断后，可用**相同 wheel、选装项、Python 主/次版本和目标目录**重跑原命令。安装器校验 `.aw-install.json` 后继续，不清空目录、不移动虚拟环境；已完成的同一安装仅检查启动程序，不再次运行 pip。不同包、不同选装项、损坏记录或复制到另一处的安装目录会被拒绝，不要删除标记绕过检查。没有安装记录的旧版残留也不会自动清理，应保留后换一个空目录。
+```powershell
+aw backend status
+aw backend log
+aw backend restart
+aw backend stop
+```
 
-升级使用新的独立安装目录。先保存并交接需要停止的会话、停用巡检和旧后台，再让新安装使用原 `--home`；不复制旧锁、不重建 Workspace。保留旧安装作为退路，但软件回退还要求数据格式兼容，不能把旧程序启动成功等同于数据迁移已经可逆。当前没有自动更新或自动迁移服务。
+`stop` 退出整个 AW 后台，网页随之断开；需要再启动时运行 `aw backend start --open`。这只停止 AW 的任务与观察，不证明原生聊天停工，也不替 Agent 交出执行资格。`restart` 必须等新进程实际就绪，启动请求已接受不等于已恢复正常。
+
+升级时先运行 `aw backend stop`，再用 `aw backend status` 确认状态为 `stopped`，之后才用 `npm install --global 新包.tgz` 替换程序，最后启动同一个数据目录。停止请求已接受或页面断开时，后台可能仍在结束任务，尚不能替换程序。不会因升级重建 Workspace、修改用户职责或更换当前会话。当前没有自动更新或自动数据迁移；软件回退仍需要数据格式兼容。
 
 默认应用数据在 `~/.agent-workspace`，可用 `--home` 或 `AW_HOME` 指定。软件安装目录、Workspace 数据仓与产品代码仓应分开。检测和 Git 认证规则见 [首次配置](first-use.md)。
 
+wheel 与旧隔离安装脚本保留为 Python 开发和底层构建检查，不再是另一条正式用户安装路线。npm 预览包没有随包安装 Claude、CodeBuddy、企业微信的可选 SDK；这些既有能力的扩展验证不在本轮用户路径内。
+
 ## 2. 配置和进入真实会话
 
-管家与普通实例共用相同配置入口。首次向导支持为三名管家分别选择本机绝对目录，也支持为已有身份准备明确目录；主工作台创建普通实例时同样先确定目录。“配置”支持三种受管入口。工作台状态与恢复语义见 [Workbench 0.4](workbench.md)。安装对应 extra 和用户指定的原生程序后，可以使用：
+近期工作台只提供 Agent 与环境、消息历史和本机后台。创建、配置和交接通过现有 CLI、Skills 与原生客户端进行；[工作台说明](workbench.md)解释各项状态的依据。下文保留既有高级运行接口，不表示 npm 预览包已包含或本轮已验收全部 Harness。使用独立 Python 开发环境并准备对应 SDK 和原生程序后，已有配置命令仍可使用：
 
 ```sh
 aw -w demo agent configure-codex helper --model MODEL_ID --effort low --base-url https://gateway.example/v1 --env-key MY_MODEL_API_KEY
@@ -53,7 +64,7 @@ aw -w demo agent input helper --text "请报告当前实例身份，暂不开展
 aw -w demo message watch helper start --interval 5
 ```
 
-`starting_runner` 只是进程启动请求，真实 Session 和 active Binding 必须由原生事件确认；初始化完成还需初始检查点。收到 Message 通知不等于业务完成，ACK 必须由当前实例的 `message.receive` 实际保存。
+`starting_runner` 只表示已请求启动运行任务，真实 Session 和 active Binding 必须由原生事件确认；初始化完成还需初始检查点。统一后台在同一进程内管理这些任务。收到 Message 通知不等于业务完成，ACK 必须由当前实例的 `message.receive` 实际保存。
 
 SDK 事件流断开或收到独立的终止错误时，运行器保存失败状态并停止，不继续显示为正常运行。错误事实保留在原会话记录中，不伪造成功检查点、不自动重发输入。关闭受管客户端后的 controller 清理不等于释放 Binding；交接中断也必须按原记录检查。
 
@@ -61,9 +72,9 @@ Claude/CodeBuddy 托管入口默认只放行指定的平台 MCP；其他原生�
 
 Windows 使用 CodeBuddy SDK 时，用户明确选择的 `.js/.cjs/.mjs` CLI 入口通过已安装的 Node 启动，沿用 SDK 原有参数、权限和通信。Node 需在实际运行器的 PATH 中；缺失或只有 `.cmd/.bat` 包装会在预留新入口或 handoff 前报错。选定的原生 `.exe` 继续直接启动，不自动切换为 SDK 自带程序。此改动只补启动方式，不复制桌面凭据、不切换模型服务或自动登录；返回 `/login` 只说明当前入口需要认证，真实 Windows/WorkBuddy 接手需单独验证。见 [定向复测说明](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/e2e-repair-acceptance.md#e2e-002-单独验证)。
 
-### 2.1 工作台发送与响应丢失
+### 2.1 已有发送请求与响应丢失
 
-发送方从当前有效实例中选择，表单固定当时的 Binding，后端在提交时重新检查。一次发送在网络请求前固定 request ID，并把正文及原参数暂存于本浏览器标签页；重复点击、响应丢失或页面刷新不生成新消息 ID。
+旧发送页留下的请求仍按原 request ID 查询和处理，精简工作台不会删除这些记录。原请求固定发送时的 Binding，后端在提交时重新检查；响应丢失或页面刷新不得生成新消息 ID。
 
 存在未确认请求时，“查看原请求”调用只读 `message.operation`，“继续原请求”只发送尚未落盘的原请求，或补齐已有 publication receipt；不会自动重发，也不会改用新的 Binding。结果为 published 后移除浏览器恢复记录，不代表消息已 ACK 或业务完成。本标签页一次只保留一个未确认发送，按安装位置和 Workspace 标识区分；关闭标签页可能丢失浏览器记录，服务端原回执仍保留，可按原 ID 查询。存储被禁用或记录损坏时停止发送并说明，不能静默创建新请求。
 
@@ -112,9 +123,9 @@ aw -w demo maintenance status
 
 `grant` 替换该管家的整份本机授权，不是追加。省略 `--command` 即撤销全部委托；`--target '*'` 表示本 Workspace 全部实例，只有用户明确选择才使用。授权不跨机器自动复制，不跨 Workspace 生效，不允许管家继续转授。跨实例资产写入也必须显式授权；配置程序路径、扩大原生工具权限等仍由用户操作。
 
-工作台“管家授权”读取当前角色映射和程序实际允许委托的操作，逐项勾选操作与目标，重新打开会显示已有授权。“整个 Workspace”必须显式选择；保存仍是替换而不是追加。健康报告中的可处理发布/桥接问题可带入原 operation ID、Binding 与 generation 到维修表单，由用户确认执行；后端仍重新核对版本和授权，报告不是绕过检查的凭证。
+授权通过上述 CLI 明确指定操作与目标。健康报告中的可处理发布/桥接问题应沿用原 operation ID、Binding 与 generation 调用维修入口；后端仍重新核对版本和授权，报告不是绕过检查的凭证。
 
-计时由 `aw serve` / `aw setup` 的本机服务或独立 `aw maintenance run` 执行。只关浏览器不停止服务；退出进程、系统休眠/关机时不会继续巡检。没有自动安装 OS 服务或开机启动项。一个安装只运行一个 worker，同一共享计划只由明确登记的安装位置执行，不因接入第二台机器自动启动第二份。
+正式数据目录由 `aw backend start` 启动的统一后台管理巡检；已有 `aw serve` / `aw setup` 和独立 `aw maintenance run` 入口保留。只关浏览器不停止服务；停止后台、系统休眠/关机时不会继续巡检。没有自动安装 OS 服务或开机启动项。一个安装只运行一个 worker，同一共享计划只由明确登记的安装位置执行，不因接入第二台机器自动启动第二份。
 
 健康报告基于共享登记和当前机器可观察的状态；其他机器的进程列为未观察范围。异常通知经稳定请求 ID 进入已运行的 Sentinel 会话，同一异常不每次巡检重复通知。没有可用 Sentinel 会话时保留待通知，不自动新增模型会话。Sentinel 可将诊断交给 Maintainer；业务判断和修复只能使用已授权工具。
 
@@ -173,17 +184,18 @@ aw -w demo maintenance repair helper --repair-action continue-stop --expected-bi
 
 Claude/WorkBuddy Desktop 完整自动化仍未接入；Codex Desktop 需要上述项目和实际控制连接条件，不承诺输入账号即可启用。后续扩展须取得合法控制接口与能力证据，不要求用户提交账号密码或整份私有会话。上游接口未知与本版未接入是两件事；已支持路径的实机验收与剩余限制分别列明。
 
-## 6. 实机验收顺序
+## 6. 近期实机验收顺序
 
 在隔离 Workspace 上，按以下顺序记录实际版本、命令结果和副作用；不要提交凭据或原始私密会话。
 
-1. 新机器缺 Git/Harness 时只提示，安装并登录后重新检测；本地与私有远端分别创建/接入，不覆盖原目录。
-2. 使用自己的端点、模型和凭据引用启动一个受管实例；确认真实 Session、初始检查点和模型服务日志，不只看“配置已保存”。
-3. 同一会话发送两轮输入，并接收另一实例的 Message；检查同一 Session、原消息 ID、ACK 和本机副本。
-4. 在 Codex 请求交接到 Claude/CodeBuddy；核对旧入口 released、新入口唯一、材料保留，且后续 Message 到达后继。不手工替模型完成 checkpoint/stop 来冒充自动交接。
-5. 启用明确授权的巡检，制造一个可恢复测试异常；确认发现、通知、允许的维修和复查。关闭计划后不复活旧入口，撤销授权后操作被拒绝。
-6. 单独验收企业微信和具备真实控制接口的 Desktop。接口未确认的入口不能列入“已通过”。
+1. 从确定提交的 npm 包在独立数据目录安装，检查网页、Skills、后台启动与停止；替换安装包后复用原数据。
+2. 准备两个 Codex Desktop Agent，核对真实聊天、目录、当前执行资格与初始检查点；分别检查正式 Message 与满足条件时的同机直发。
+3. 进行正常 handoff/relay，核对旧资格释放、唯一后继和资料保留。用户显式强制接手另测，不能把权限撤销当作旧聊天已关闭。
+4. 在隔离数据中检查共享读取暂时失败、Runner 退出后的停止确认，以及 busy/unknown/idle 观察；结果未知时只处理原会话和原请求。
+5. 对照真实会话检查工作台历史、本机观察和后台停止/重启。ChatGPT Web 手动收件、真实跨机器和长期运行各自保留结果，不由同机测试代验收。
+
+既有 Claude/CodeBuddy、自有 API、企业微信与其他 Desktop 的测试记录继续保留；这些扩展不作为本轮默认实机验收矩阵。巡检和维修只在明确授权的隔离计划上验证，不启用日常实例的新计划。
 
 ## 普通会话与桌面项目
 
-无 Workspace 的交互 CLI 启动、内网 HTTP 明确确认，以及持久 Agent 项目/分区的本机引用和手动准备，见 [session-projects.md](session-projects.md)。这批功能不把 Desktop 项目管理标为已自动接入。
+无 Workspace 的交互 CLI 启动、内网 HTTP 明确确认，以及持久 Agent 项目/分区的本机引用和手动准备，见 [session-projects.md](session-projects.md)。Codex 已有项目的发现与复用按真实接口核验，不能把仅保存引用当成原生项目操作成功。

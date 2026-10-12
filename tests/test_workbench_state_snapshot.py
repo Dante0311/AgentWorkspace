@@ -47,9 +47,15 @@ def test_workspace_response_uses_one_shared_snapshot(state_app, tmp_path, monkey
     assert all(item["snapshot_revision"] == original.revision for item in agents.values())
     assert agents["bob"]["revision"] == original.entries["agents/bob.json"]
     if local_unreadable:
-        assert agents["alice"]["unknown_reason"] == "instance_observation_failed"
-        assert "runtime" not in agents["alice"]
-        assert any(error.get("agent") == "alice" for error in value["errors"])
+        assert agents["alice"]["revision"] == original.entries["agents/alice.json"]
+        assert agents["alice"]["binding"] is None
+        assert agents["alice"]["runtime"] == {"state": "unknown", "reason": "local_copy_observation_failed"}
+        copy = agents["alice"]["copies"][0]
+        assert copy["directory"] == str(status_path.parent.parent)
+        assert copy["unknown_reason"] == "local_copy_observation_failed"
+        assert "observation_error" in copy and "runtime" not in copy
+        assert any(error.get("agent") == "alice" and error.get("directory") == copy["directory"]
+                   for error in value["errors"])
         write_json(status_path, local_status)
     else:
         assert agents["alice"]["revision"] == original.entries["agents/alice.json"]

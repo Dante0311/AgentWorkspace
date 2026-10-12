@@ -127,7 +127,8 @@ def advance(app, workspace, agent_id, directory=None):
             record["state"] = "launching"
             write_json(path, record)
         try:
-            result = start(app, workspace, agent_id, str(root), binding_id=record["target_binding"])
+            result = start(app, workspace, agent_id, str(root), binding_id=record["target_binding"],
+                           expected_handoff=handoff["id"])
         except (Error, OSError) as exc:
             record.update(state="outcome_unknown", failure=type(exc).__name__)
             write_json(path, record)

@@ -11,6 +11,7 @@ MESSAGE_PATHS = (
     ".agents/skills/message/SKILL.md",
     ".agents/skills/message/references/protocol.md",
     ".agents/skills/message/references/manual.md",
+    ".agents/skills/message/references/direct.md",
     ".agents/skills/message/scripts/message_git.py",
     ".aw/prompts/message-notification.json",
 )

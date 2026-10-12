@@ -29,9 +29,17 @@ def test_state_keeps_other_instances_and_diagnostics_available(pair, filename):
         assert set(entries) == {"alice", "bob"}
         assert entries["alice"]["current"] == bindings["alice"]
         assert "observation_error" in entries["alice"]
-        assert "binding" not in entries["alice"]  # Unknown, not an invented inactive state.
+        assert entries["alice"]["binding"]["id"] == bindings["alice"]
+        assert entries["alice"]["runtime"]["state"] == "unknown"
+        assert entries["alice"]["history"][0]["id"] == bindings["alice"]
+        copy = entries["alice"]["copies"][0]
+        assert copy["directory"] == str(damaged.parent.parent)
+        assert copy["unknown_reason"] == "local_copy_observation_failed"
+        assert "JSONDecodeError" in copy["observation_error"]
+        assert "runtime" not in copy  # Failed local reads do not erase known shared facts.
         assert entries["bob"]["binding"]["id"] == bindings["bob"]
         assert result["errors"][0]["agent"] == "alice"
+        assert result["errors"][0]["directory"] == copy["directory"]
         body = json.dumps({"command": "workspace.doctor", "arguments": {"workspace": "sea"}}).encode()
         with urllib.request.urlopen(urllib.request.Request(base + "/api/execute", data=body, headers=headers), timeout=10) as response:
             report = json.load(response)["result"]

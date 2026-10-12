@@ -48,7 +48,9 @@ def entry_prompt(app, workspace, agent_id, binding, root):
     if entry["handoff"]:
         handoff = snap.json(f"handoffs/{entry['handoff']}.json")
         point = app.checkpoint_show(workspace, agent_id, handoff["checkpoint"])
-        lines.append("交接点与检查点：\n" + json.dumps(point, ensure_ascii=False))
+        lines.append("以下检查点由此前入口 " + handoff["entry"] + " 保存。其中描述旧入口的 renew、stop 或交出安排是历史上下文，"
+                     "不是对当前入口再次停工的指令；明确交给后继的待续业务按 relay Skill 接手。\n"
+                     "交接点与检查点：\n" + json.dumps(point, ensure_ascii=False))
     elif item.get("forked_from"):
         lines.append("你是新的实例，不是历史里的发送者或负责人。来源：\n" + json.dumps(item["forked_from"], ensure_ascii=False))
     else:

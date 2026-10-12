@@ -83,8 +83,9 @@ def stop_entry(app, workspace, agent_id, binding, checkpoint, directory=None, co
 def runtime_stop(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
     binding = app.agent(workspace, agent_id)["current"]
-    write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": binding})
-    signal = backend.cancel(app, workspace, agent_id, str(root), expected_binding=binding)
+    with locked(root / ".aw-local/stop-launch.lock"):
+        write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": binding})
+        signal = backend.cancel(app, workspace, agent_id, str(root), expected_binding=binding)
     return {"monitor_stop_requested": True, "binding": binding, "execution_right_released": False, **signal}
 
 

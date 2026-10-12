@@ -657,6 +657,81 @@ def test_stop_command_starts_only_stop_observer(desktop_owner, monkeypatch):
     assert app.agent("sea", "alice")["current"] is None
 
 
+def test_stop_after_public_monitor_pause_confirms_original_idle_session(desktop_owner, monkeypatch):
+    app, root, binding, native = desktop_owner
+    runtime.queue_input(app, "sea", "alice", "do not execute during stop recovery", request_id="untouched")
+    queued = root / ".aw-local/inputs/untouched.json"
+    original_bytes = queued.read_bytes()
+    point = app.checkpoint("sea", "alice", "saved original stop", binding=binding)
+    execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
+    assert read_json(root / ".aw-local/control.json")["stop"] == binding
+    launches = []
+
+    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None):
+        launches.append(stop_binding)
+        runtime.Runner(app, workspace, agent_id, directory, stop_binding=stop_binding).run()
+        return {"pid": 1, "state": "starting_runner"}
+
+    monkeypatch.setattr(runtime, "spawn_runner", spawn)
+    monkeypatch.setattr(runtime, "start", Mock(side_effect=AssertionError("Stop recovery must not start a successor")))
+    execute(app, "agent.stop", {"workspace": "sea", "agent_id": "alice", "binding": binding,
+                               "checkpoint": point["id"]}, actor=("sea", "alice", binding))
+    snap = app.store("sea").snapshot()
+    entry = snap.json(f"bindings/{binding}.json")
+    assert entry["phase"] == "released" and entry["session"] == "original-chat"
+    assert entry["checkpoint"] == point["id"] and app.agent("sea", "alice", snap)["current"] is None
+    assert launches == [binding] and native["read_only"] == [True] and not native["sent"]
+    assert queued.read_bytes() == original_bytes
+
+
+def test_explicit_stop_repair_resumes_original_observation_and_can_be_cancelled_again(desktop_owner, monkeypatch):
+    from types import SimpleNamespace
+
+    app, root, binding, native = desktop_owner
+    point = request_stop(desktop_owner)
+    execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
+    native["states"] = ["busy"]
+    observed = threading.Event()
+    native["on_status"] = observed.set
+    manager = backend.Backend(app, SimpleNamespace(server_port=0))
+    app.backend = manager
+    monkeypatch.setattr(runtime, "start", Mock(side_effect=AssertionError("No successor during stop recovery")))
+    args = {"workspace": "sea", "agent_id": "alice", "action": "continue-stop",
+            "request_id": "original-confirmation", "expected_binding": binding, "expected_checkpoint": point["id"]}
+    try:
+        receipt = execute(app, "maintenance.repair", args)
+        assert receipt["state"] == "applied" and observed.wait(30)
+        task = manager.runners[root]
+        assert task["runner"].stop_only and native["read_only"] == [True]
+        cancelled = execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
+        assert cancelled["observer_signalled"]
+        task["thread"].join(30)
+        assert not task["thread"].is_alive()
+        entry = app.show("sea", "alice")["binding"]
+        assert entry["phase"] == "stopping" and entry["session"] == "original-chat" and entry["checkpoint"] == point["id"]
+        attached = list(native["attached"])
+        repeated = execute(app, "maintenance.repair", args)
+        assert repeated["verification"]["stop"]["state"] == "stopping"
+        assert native["attached"] == attached and read_json(root / ".aw-local/control.json")["stop"] == binding
+        native["states"] = ["idle"]
+        native.pop("on_status")
+        resumed = execute(app, "maintenance.repair", {**args, "request_id": "new-confirmation-attempt"})
+        assert resumed["state"] == "applied"
+        manager.runners[root]["thread"].join(30)
+        assert not manager.runners[root]["thread"].is_alive()
+        snap = app.store("sea").snapshot()
+        assert snap.json(f"bindings/{binding}.json")["phase"] == "released"
+        handoff = snap.json(f"handoffs/h{binding[1:]}.json")
+        assert handoff["checkpoint"] == point["id"] and handoff["entry"] == binding
+        assert snap.json(f"bindings/{binding}.json")["session"] == "original-chat"
+        assert native["read_only"] == [True, True] and not native["sent"]
+        verified = execute(app, "maintenance.repair", args)
+        assert verified["verification"]["stop"]["state"] == "released"
+    finally:
+        manager.close()
+        del app.backend
+
+
 def test_stop_arriving_during_runner_cleanup_has_an_observer(desktop_owner, monkeypatch):
     app, _, binding, native = desktop_owner
     point = app.checkpoint("sea", "alice", "stop while runner exits", binding=binding)

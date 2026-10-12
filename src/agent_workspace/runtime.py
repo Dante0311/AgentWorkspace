@@ -662,6 +662,10 @@ def continue_stop(app, workspace, agent_id, binding, directory=None, *, expected
             write_json(root / ".aw-local/status.json", {**result, "observed_at": now(),
                        "entry_automatically_released": False})
             return result
+        # A validated stopping request resumes confirmation only, never business work.
+        control = read_json(root / ".aw-local/control.json", {})
+        if control.get("stop") == binding:
+            write_json(root / ".aw-local/control.json", {**control, "stop": None})
         result = spawn_runner(app, workspace, agent_id, str(root), stop_binding=binding)
         if result.get("state") == "released":
             return {**request, **result}

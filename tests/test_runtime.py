@@ -162,13 +162,23 @@ def test_bridge_crash_backoff_and_handoff_no_restart(pair):
     finally:manager.stop_all()
 
 
-def test_handoff_request_disables_automatic_restarts_immediately(pair):
+@pytest.mark.parametrize('renew', [False, True])
+def test_handoff_request_disables_automatic_restarts_immediately(pair, renew):
     app,ids=pair;root=app.root('sea','alice')
     runtime.watch(app,'sea','alice','start')
-    runtime.handoff_request(app,'sea','alice')
+    request=runtime.handoff_request(app,'sea','alice',renew=renew)
     assert read_json(root/'.aw-local/control.json')['handoff']==ids['alice']
     assert not read_json(root/'.aw-local/watch.json')['enabled']
     assert app.agent('sea','alice')['current']==ids['alice']
+    assert request['purpose']=='handoff' and request['binding']==ids['alice']
+    assert request['id']=='handoff-'+ids['alice']
+    guidance=(root/'.aw/prompts/handoff.md').read_text(encoding='utf-8')
+    instruction, saved_guidance=request['text'].split('\n\n',1)
+    assert ids['alice'] in instruction and saved_guidance==guidance
+    repeated=runtime.handoff_request(app,'sea','alice',renew=renew)
+    assert repeated==request
+    if renew:
+        assert read_json(root/'.aw-local/renew.json')=={'binding':ids['alice'],'requested':True}
 
 
 def test_shared_controller_prevents_duplicate_runner(app,tmp_path):

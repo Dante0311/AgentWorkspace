@@ -800,7 +800,9 @@ def handoff_request(app, workspace, agent_id, *, renew=False, directory=None):
     write_json(root / ".aw-local/watch.json", {"enabled": False, "reason": "handoff_requested"})
     if renew:
         write_json(root / ".aw-local/renew.json", {"binding": agent["current"], "requested": True})
-    text = (root / ".aw/prompts/handoff.md").read_text(encoding="utf-8")
+    guidance = (root / ".aw/prompts/handoff.md").read_text(encoding="utf-8")
+    text = ("本次明确请求当前入口 " + agent["current"] + " 正常交出。请使用这个 Binding 执行 handoff Skill，"
+            "保存实际检查点、请求 agent.stop 后结束当前轮次，不自行启动后继。\n\n" + guidance)
     kind = app.store(workspace).snapshot().json(f"bindings/{agent['current']}.json")["kind"]
     return queue_input(app, workspace, agent_id, text, delivery="normal" if kind in SDK_TYPES else "insert", purpose="handoff", directory=str(root),
                        request_id="handoff-" + agent["current"])

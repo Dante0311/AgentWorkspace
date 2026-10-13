@@ -7,7 +7,7 @@ import inspect
 from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout
 from .messages import Messages
 from .direct_messages import DirectMessages
-from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
+from .util import Conflict, Error, digest, inside, locked, read_json, relpath, user_asset_path, write_bytes, write_json
 
 
 READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.history", "agent.versions",
@@ -36,19 +36,12 @@ def assets(app, operation, workspace, agent_id, path=None, content=None, revisio
     path = relpath(path)
     if any(":" in part or part.endswith((".", " ")) for part in path.split("/")):
         raise Error("Use portable asset paths without drive/stream syntax or trailing dots/spaces.")
-    target = inside(root, path)
     if operation == "read":
+        target = inside(root, path)
         data = target.read_bytes()
         return {"path": path, "content": data.decode("utf-8"), "revision": digest(data)}
     with locked(layout.local_path(root, "files.lock")):
-        # Check both the normalized name and its destination, including directory symlinks.
-        resolved = relpath(target.resolve().relative_to(root.resolve()).as_posix())
-        for candidate in (path, resolved):
-            parts = candidate.casefold().split("/")
-            internal = parts[0] == ".agentworkspace"
-            editable = len(parts) > 1 and (parts[1:] == ["config.json"] or parts[1] in ("records", "messages"))
-            if parts[0] == ".aw" or candidate.casefold() == "source.json" or (internal and not editable):
-                raise Error("Use platform operations to change managed metadata; asset.write edits user assets.")
+        target = user_asset_path(root, path, write=True)
         existing = target.read_bytes() if target.exists() else None
         if (digest(existing) if existing is not None else None) != revision:
             raise Conflict("Asset changed; read it before replacing it.")

@@ -13,6 +13,7 @@ from agent_workspace.util import Conflict, Error, write_bytes
 @pytest.mark.parametrize('path', [
     '.agentworkspace/identity.json', '.agentworkspace/layout.json',
     '.agentworkspace/local/operations/software-update.json', '.aw-local/control.json',
+    '.agentworkspace/messages/receipt.json',
 ])
 def test_asset_write_cannot_change_platform_metadata(tmp_path, path):
     write_bytes(tmp_path / layout.MARKER, layout.marker('instance'))
@@ -26,7 +27,7 @@ def test_asset_write_cannot_change_platform_metadata(tmp_path, path):
 
 
 @pytest.mark.parametrize('path', ['notes/work.md', '.agentworkspace/config.json',
-                                  '.agentworkspace/messages/processing.md'])
+                                  'messages/processing.md'])
 def test_user_assets_and_saved_configuration_remain_editable(tmp_path, path):
     write_bytes(tmp_path / layout.MARKER, layout.marker('instance'))
     app = SimpleNamespace(root=lambda *args: tmp_path)

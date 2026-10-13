@@ -105,7 +105,7 @@ def test_http_api_saves_one_profile_without_launching_or_publishing_credentials(
             return json.load(response)['result']
 
     try:
-        config_path = app.root('sea', 'http-user') / '.aw-local/runtime.json'
+        config_path = app.root('sea', 'http-user') / '.agentworkspace/local/runtime/runtime.json'
         with pytest.raises(urllib.error.HTTPError) as exc:
             post()
         assert 'allow-http' in exc.value.read().decode()

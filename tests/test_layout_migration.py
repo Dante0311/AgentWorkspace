@@ -1,5 +1,6 @@
 from contextlib import ExitStack
 import json
+from pathlib import Path
 import threading
 
 import pytest
@@ -323,3 +324,283 @@ def test_unknown_marker_after_plan_is_not_replaced_by_original_request(tmp_path,
     assert read_json(root / layout.MARKER) == marker
     assert (root / '.aw/identity.json').exists()
     assert receipt(app)[1]['tasks'][0]['published']
+
+
+def _desktop_binding(app, identifier='b-desktop', agent='alice', kind='desktop', session='native-original'):
+    store = app.store('sea')
+    value = {'id': identifier, 'agent': agent, 'kind': kind, 'session': session,
+             'phase': 'released', 'created_at': '2020-01-01'}
+    path = 'bindings/' + identifier + '.json'
+    store.change('main', {path: encode(value)}, {path: None}, 'Recorded historic Binding')
+
+
+def _desktop_record(turn='turn-original', session='native-original'):
+    return {'source': 'Codex Desktop read_thread', 'thread_id': session, 'observed_at': '2020-01-01T00:00:00Z',
+            'turn': {'id': turn, 'status': 'completed', 'error': None, 'startedAt': 1, 'completedAt': 2, 'durationMs': 1000},
+            'scope': 'Native turn metadata only; message and tool bodies remain in Desktop.'}
+
+
+@pytest.mark.parametrize('tracked', [True, False], ids=['saved-record', 'unsynchronized-local-record'])
+@pytest.mark.parametrize('metadata', ['full', 'id-only'])
+def test_legacy_desktop_record_is_planned_and_moved_without_rewriting_bytes(tmp_path, tracked, metadata):
+    app = legacy_app(tmp_path); store = app.store('sea'); root = app.root('sea', 'alice')
+    _desktop_binding(app)
+    path = 'records/b-desktop/desktop-turns/turn-original.json'
+    target = '.agentworkspace/' + path
+    document = _desktop_record()
+    if metadata == 'id-only':
+        document['turn'] = {'id': 'turn-original'}
+    raw = (json.dumps(document, indent=4) + '\r\n').encode()
+    user_path = 'records/b-desktop/desktop-turns/user-notes.json'
+    user = b'{"topic":"Private user material"}\n'
+    if tracked:
+        store.change('instance/alice', {path: raw, user_path: user}, {path: None, user_path: None}, 'Save original records')
+        app.sync_agent('sea', 'alice')
+        point = app.checkpoint('sea', 'alice', 'saved Desktop metadata', checkpoint_id='c-desktop', references=[path])
+    else:
+        write_bytes(root / path, raw); write_bytes(root / user_path, user)
+        point = app.checkpoint_show('sea', 'alice', 'c-old')
+    sealed = app.checkpoint_show('sea', 'alice', point['id'])
+    planned = app.layout_plan('sea')['instances'][0]
+    assert path in planned['owned_records']
+    assert user_path not in planned['owned_records']
+    assert planned['paths'].get(path) == (target if tracked else None)
+    result = app.layout_migrate('sea', 'desktop-records')
+    assert result['state'] == 'complete'
+    assert (root / target).read_bytes() == raw
+    assert not (root / path).exists()
+    assert (root / user_path).read_bytes() == user
+    current = store.snapshot('instance/alice')
+    if tracked:
+        assert current.bytes(target) == raw and path not in current.entries
+        assert store.snapshot(revision=point['revision']).bytes(path) == raw
+    else:
+        assert target not in current.entries  # Local discovery is not a publication of unsaved data.
+    assert app.checkpoint_show('sea', 'alice', point['id']) == sealed
+
+
+def test_unmatched_desktop_json_and_unknown_fields_are_kept_in_place(tmp_path):
+    app = legacy_app(tmp_path); root = app.root('sea', 'alice')
+    _desktop_binding(app); _desktop_binding(app, 'b-other', agent='bob'); _desktop_binding(app, 'b-codex', kind='codex')
+    store = app.store('sea')
+    store.change('main', {'bindings/not-the-record-id.json': encode({
+        'id': 'b-fake-registry', 'agent': 'alice', 'kind': 'desktop', 'session': 'native-original'})},
+        {'bindings/not-the-record-id.json': None}, 'Unregistered copied Binding fields')
+    changed = []
+    for label, update in [('wrong-source', {'source': 'User note'}), ('wrong-session', {'thread_id': 'another-session'}),
+                          ('wrong-scope', {'scope': 'Private user material'}), ('no-observation', {'observed_at': None}),
+                          ('extra-user-content', {'user_note': 'mine'})]:
+        doc = _desktop_record(label); doc.update(update)
+        changed.append(('records/b-desktop/desktop-turns/' + label + '.json', doc))
+    doc = _desktop_record('wrong-turn'); doc['turn']['id'] = 'different-id'
+    changed.append(('records/b-desktop/desktop-turns/wrong-turn.json', doc))
+    doc = _desktop_record('user-turn-field'); doc['turn']['user_note'] = 'mine'
+    changed.append(('records/b-desktop/desktop-turns/user-turn-field.json', doc))
+    changed.extend([('records/b-other/desktop-turns/foreign-agent.json', _desktop_record('foreign-agent')),
+                    ('records/b-unknown/desktop-turns/no-binding.json', _desktop_record('no-binding')),
+                    ('records/b-codex/desktop-turns/wrong-kind.json', _desktop_record('wrong-kind')),
+                    ('records/b-fake-registry/desktop-turns/wrong-registration.json', _desktop_record('wrong-registration'))])
+    original = {path: encode(doc) for path, doc in changed}
+    for path, data in original.items():write_bytes(root / path, data)
+    assert app.layout_migrate('sea', 'keep-user-json')['state'] == 'complete'
+    for path, data in original.items():
+        assert (root / path).read_bytes() == data
+        assert not (root / '.agentworkspace' / path).exists()
+
+
+def test_saved_desktop_record_does_not_claim_a_locally_replaced_user_json(tmp_path):
+    app = legacy_app(tmp_path); store = app.store('sea'); root = app.root('sea', 'alice')
+    _desktop_binding(app)
+    path = 'records/b-desktop/desktop-turns/turn-original.json'
+    original = encode(_desktop_record())
+    store.change('instance/alice', {path: original}, {path: None}, 'Original saved platform record')
+    app.sync_agent('sea', 'alice')
+    user = b'{"topic":"User replaced this old record locally"}'
+    write_bytes(root / path, user)
+    result = app.layout_migrate('sea', 'preserve-local-user-edit')
+    assert (root / path).read_bytes() == user
+    assert not (root / '.agentworkspace' / path).exists()
+    assert path in result['unclassified_local_files'][str(root)]
+    assert store.snapshot('instance/alice').bytes('.agentworkspace/' + path) == original
+
+
+def _completed_without_desktop(tmp_path, monkeypatch, *, tracked=True):
+    app = legacy_app(tmp_path); store = app.store('sea'); root = app.root('sea', 'alice')
+    _desktop_binding(app)
+    records = {}
+    for turn in ('full-turn', 'id-only-turn'):
+        document = _desktop_record(turn)
+        if turn == 'id-only-turn':
+            document['turn'] = {'id': turn}
+        records['records/b-desktop/desktop-turns/' + turn + '.json'] = (json.dumps(document, indent=4) + '\r\n').encode()
+    if tracked:
+        store.change('instance/alice', records, {path: None for path in records}, 'Original Desktop metadata')
+        app.sync_agent('sea', 'alice')
+    else:
+        for path, data in records.items():
+            write_bytes(root / path, data)
+    original = migration.owned_instance_files
+    with monkeypatch.context() as injection:
+        # Reproduce the original recognizer's omission, only in this isolated fixture.
+        injection.setattr(migration, 'owned_instance_files',
+                          lambda *args, **kwargs: {path for path in original(*args, **kwargs) if '/desktop-turns/' not in path})
+        result = app.layout_migrate('sea', 'original-completed-layout')
+    old_receipt = Path(result['receipt'])
+    return app, root, store, records, old_receipt, old_receipt.read_bytes()
+
+
+@pytest.mark.parametrize('tracked', [True, False], ids=['saved-records', 'unsynchronized-records'])
+def test_current_layout_supplements_only_proven_desktop_records(tmp_path, monkeypatch, tracked):
+    app, root, store, records, old_receipt, old_bytes = _completed_without_desktop(tmp_path, monkeypatch, tracked=tracked)
+    marker = (root / layout.MARKER).read_bytes(); shared_revision = store.head('main')
+    old_checkpoint = app.checkpoint_show('sea', 'alice', 'c-old')
+    untouched = {'records/user.json': b'{"private":"User document"}',
+                 '.agentworkspace/local/runtime/runtime.json': b'{"native_result":"outcome_unknown"}',
+                 '.gitignore': b'# User changed ignore after migration\n',
+                 'notes/work.md': b'Unsaved user work'}
+    for path, data in untouched.items():
+        write_bytes(root / path, data)
+    plan = app.layout_plan('sea')['instances'][0]
+    assert plan['layout_version'] == 1
+    assert plan['paths'] == ({path: '.agentworkspace/' + path for path in records} if tracked else {})
+    assert set(records) <= set(plan['owned_records'])
+    app.layout_migrate('sea', 'original-completed-layout')
+    assert old_receipt.read_bytes() == old_bytes and all((root / path).exists() for path in records)
+    result = app.layout_migrate('sea', 'desktop-supplement')
+    assert result['state'] == 'complete' and result['directories'] == [str(root)]
+    assert len(result['branches']) == (1 if tracked else 0)
+    current = store.snapshot('instance/alice')
+    for path, data in records.items():
+        assert not (root / path).exists()
+        assert (root / '.agentworkspace' / path).read_bytes() == data
+        assert current.bytes('.agentworkspace/' + path) == (data if tracked else None)
+        assert path not in current.entries
+    assert (root / layout.MARKER).read_bytes() == marker
+    assert current.bytes(layout.MARKER) == marker
+    assert old_receipt.read_bytes() == old_bytes
+    assert store.head('main') == shared_revision
+    assert app.checkpoint_show('sea', 'alice', 'c-old') == old_checkpoint
+    for path, data in untouched.items():
+        assert (root / path).read_bytes() == data
+    operation = read_json(Path(result['receipt']))
+    assert operation['layout_sources'][0]['marker']['migration'] == 'original-completed-layout'
+    assert operation['roots'][0]['marker_before'] == operation['roots'][0]['marker']
+    context = read_json(layout.local_path(root, 'context.json'))
+    assert context['revision'] == current.revision
+    assert context['saved'] == {path: migration.digest(data) for path, data in current.all().items()}
+    before = current.revision
+    again = app.layout_migrate('sea', 'nothing-remains')
+    assert again['branches'] == [] and again['directories'] == []
+    assert store.head('instance/alice') == before
+    assert old_receipt.read_bytes() == old_bytes
+
+
+@pytest.mark.parametrize('same', [True, False], ids=['identical-target', 'different-target'])
+def test_current_desktop_supplement_reconciles_identical_target_and_preserves_conflicts(tmp_path, monkeypatch, same):
+    app, root, store, records, old_receipt, old_bytes = _completed_without_desktop(tmp_path, monkeypatch)
+    path = next(iter(records)); target = '.agentworkspace/' + path
+    data = records[path] if same else b'User owns this destination'
+    write_bytes(root / target, data)
+    before = store.head('instance/alice')
+    if same:
+        assert app.layout_migrate('sea', 'target-check')['state'] == 'complete'
+        assert not (root / path).exists()
+    else:
+        with pytest.raises(Conflict):
+            app.layout_migrate('sea', 'target-check')
+        assert store.head('instance/alice') == before
+        assert (root / path).read_bytes() == records[path]
+    assert (root / target).read_bytes() == data
+    assert old_receipt.read_bytes() == old_bytes
+
+
+def test_current_supplement_does_not_move_user_replacement_or_unproven_runtime_record(tmp_path, monkeypatch):
+    app, root, store, records, old_receipt, old_bytes = _completed_without_desktop(tmp_path, monkeypatch)
+    path = next(iter(records)); user = b'{"topic":"User replaced the local JSON"}'
+    write_bytes(root / path, user)
+    runtime = 'records/b-desktop/runtime.jsonl'
+    write_bytes(root / runtime, b'{"method":"turn/start"}\n')
+    result = app.layout_migrate('sea', 'keep-user-record')
+    assert (root / path).read_bytes() == user and not (root / '.agentworkspace' / path).exists()
+    assert store.snapshot('instance/alice').bytes('.agentworkspace/' + path) == records[path]
+    assert (root / runtime).exists() and not (root / '.agentworkspace' / runtime).exists()
+    assert path in result['unclassified_local_files'][str(root)]
+    assert old_receipt.read_bytes() == old_bytes
+
+
+@pytest.mark.parametrize('failure', ['record', 'context'])
+def test_current_supplement_copy_interruption_continues_new_original_request(tmp_path, monkeypatch, failure):
+    app, root, store, records, old_receipt, old_bytes = _completed_without_desktop(tmp_path, monkeypatch)
+    marker = (root / layout.MARKER).read_bytes()
+    original = migration.write_bytes; failed = []
+    fail_at = root / ('.agentworkspace/' + next(iter(records))) if failure == 'record' else layout.local_path(root, 'context.json')
+    def write(path, data):
+        original(path, data)
+        if path == fail_at and not failed:
+            failed.append(True)
+            raise OSError('Fixture: durable write completed but process stopped before receipt')
+    monkeypatch.setattr(migration, 'write_bytes', write)
+    with pytest.raises(OSError):
+        app.layout_migrate('sea', 'interrupted-supplement')
+    published = store.head('instance/alice')
+    assert app.layout_plan('sea')['pending_migrations'][0]['request_id'] == 'interrupted-supplement'
+    with pytest.raises(Conflict):
+        app.layout_migrate('sea', 'cannot-bypass-original')
+    monkeypatch.setattr(migration, 'write_bytes', original)
+    result = app.layout_migrate('sea', 'interrupted-supplement')
+    assert result['state'] == 'complete' and store.head('instance/alice') == published
+    for path, data in records.items():
+        assert not (root / path).exists() and (root / '.agentworkspace' / path).read_bytes() == data
+    write_bytes(root / 'notes/work.md', b'New user work after supplement')
+    app.layout_migrate('sea', 'interrupted-supplement')
+    assert (root / 'notes/work.md').read_bytes() == b'New user work after supplement'
+    assert old_receipt.read_bytes() == old_bytes and (root / layout.MARKER).read_bytes() == marker
+    backup = Path(result['receipt']).parent / 'backups' / migration.digest(str(root).encode())
+    for path, data in records.items():
+        assert (backup / path).read_bytes() == data
+
+
+def test_current_supplement_reads_back_original_unknown_publication_without_replay(tmp_path, monkeypatch):
+    app, root, store, records, old_receipt, old_bytes = _completed_without_desktop(tmp_path, monkeypatch)
+    implementation = type(store).publish; calls = []
+    def lost(self, *args, **kwargs):
+        calls.append(args)
+        implementation(self, *args, **kwargs)
+        raise Uncertain('Fixture: original publication succeeded but reply was lost')
+    monkeypatch.setattr(type(store), 'publish', lost)
+    with pytest.raises(Uncertain):
+        app.layout_migrate('sea', 'unknown-supplement')
+    assert len(calls) == 1 and all((root / path).exists() for path in records)
+    original_revision = store.head('instance/alice')
+    monkeypatch.setattr(type(store), 'publish', implementation)
+    assert app.layout_migrate('sea', 'unknown-supplement')['state'] == 'complete'
+    assert store.head('instance/alice') == original_revision and len(calls) == 1
+    assert old_receipt.read_bytes() == old_bytes
+
+
+@pytest.mark.parametrize('interference', ['files-lock', 'changed-source'])
+def test_current_supplement_rechecks_actual_copy_after_publication(tmp_path, monkeypatch, interference):
+    app, root, store, records, old_receipt, old_bytes = _completed_without_desktop(tmp_path, monkeypatch)
+    original = migration._publish; held = ExitStack(); path = next(iter(records))
+    marker = (root / layout.MARKER).read_bytes()
+    def publish(*args):
+        original(*args)
+        if interference == 'files-lock':
+            held.enter_context(layout.lock(root, 'files.lock', wait=0))
+        else:
+            write_bytes(root / path, b'{"user":"changed after the plan"}')
+    monkeypatch.setattr(migration, '_publish', publish)
+    try:
+        with pytest.raises(LockBusy if interference == 'files-lock' else Conflict):
+            app.layout_migrate('sea', 'copy-interference')
+        assert all((root / path).exists() for path in records)
+        assert all(not (root / '.agentworkspace' / path).exists() for path in records)
+        assert (root / layout.MARKER).read_bytes() == marker and old_receipt.read_bytes() == old_bytes
+    finally:
+        held.close()
+    if interference == 'files-lock':
+        monkeypatch.setattr(migration, '_publish', original)
+        assert app.layout_migrate('sea', 'copy-interference')['state'] == 'complete'
+    else:
+        assert (root / path).read_bytes() == b'{"user":"changed after the plan"}'
+        assert app.layout_plan('sea')['pending_migrations'][0]['request_id'] == 'copy-interference'

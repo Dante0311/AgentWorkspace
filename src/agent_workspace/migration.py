@@ -80,12 +80,14 @@ def shared_mapping(snapshot):
 
 def owned_instance_files(files, shared, agent_id, *, local_files=None):
     """Recognize generated copies by shared facts, not by a directory's name."""
-    bindings = set()
+    bindings = {}
+    binding_prefix = layout.shared_path(shared, 'bindings/')
     for path in shared.entries:
-        if path.startswith(layout.shared_path(shared, 'bindings/')):
+        if path.startswith(binding_prefix):
             entry = shared.json(path)
-            if entry.get('agent') == agent_id:
-                bindings.add(entry['id'])
+            if (entry.get('agent') == agent_id and isinstance(entry.get('id'), str)
+                    and path == binding_prefix + entry['id'] + '.json'):
+                bindings[entry['id']] = entry
     owned = set()
     receipts = files if local_files is None else local_files
     for path, data in files.items():
@@ -94,6 +96,22 @@ def owned_instance_files(files, shared, agent_id, *, local_files=None):
             # This is the native adapter's segment for an actual recorded Binding.
             events = [_object(line) for line in data.splitlines() if line.strip()]
             if events and all(value is not None and ('method' in value or {'native_type', 'event', 'observed_at'} <= value.keys()) for value in events):
+                owned.add(path)
+        elif (len(parts) == 4 and parts[0] == 'records' and parts[1] in bindings
+              and parts[2] == 'desktop-turns' and parts[3].endswith('.json')):
+            entry = bindings[parts[1]]
+            record = _object(data)
+            if (entry.get('kind') != 'desktop' or not isinstance(entry.get('session'), str)
+                    or not entry['session'] or record is None):
+                continue
+            turn = record.get('turn')
+            if (set(record) == {'source', 'thread_id', 'observed_at', 'turn', 'scope'}
+                    and record['source'] == 'Codex Desktop read_thread'
+                    and record['thread_id'] == entry['session']
+                    and isinstance(record['observed_at'], str) and record['observed_at']
+                    and record['scope'] == 'Native turn metadata only; message and tool bodies remain in Desktop.'
+                    and isinstance(turn, dict) and turn.get('id') == parts[3][:-5]
+                    and turn.keys() <= {'id', 'status', 'error', 'startedAt', 'completedAt', 'durationMs'}):
                 owned.add(path)
         elif len(parts) == 2 and parts[0] == 'messages' and path.endswith('.json'):
             copy = _object(data)
@@ -132,8 +150,21 @@ def instance_files(files, *, owned=(), operation=None):
     """Project a legacy snapshot without modifying its original sealed commit."""
     if layout.version(files, 'instance'):
         result = {path: data for path, data in files.items() if not local_asset_path(path)}
-        layout.add_git_excludes(result)
-        return result, {}, []
+        mapping = {}
+        for source in sorted(owned):
+            parts = source.split('/')
+            if (source not in result or len(parts) != 4 or parts[0] != 'records'
+                    or parts[2] != 'desktop-turns' or not parts[3].endswith('.json')):
+                continue
+            target = '.agentworkspace/' + source
+            if target in result and result[target] != result[source]:
+                raise Conflict(f'Layout target already has different data: {target}')
+            result[target] = result.pop(source)
+            mapping[source] = target
+        if operation is None:
+            layout.add_git_excludes(result)
+        unknown = [path for path in files if path.split('/')[0] in ('records', 'messages', 'channels') and path not in mapping]
+        return result, mapping, sorted(unknown)
     if any(path.startswith('.agentworkspace/') for path in files):
         raise Conflict('The new internal directory already has unclassified content; no files were moved.')
     mapping = {path: '.agentworkspace/' + path[len('.aw/'):] for path in files if path.startswith('.aw/')}
@@ -230,6 +261,27 @@ def _channel_files(root):
     return result
 
 
+def _desktop_turn_files(root):
+    """Inspect candidate legacy files; ownership still comes from shared facts."""
+    directory = root / 'records'
+    result = {}
+    if (not directory.is_dir() or directory.is_symlink()
+            or getattr(directory.lstat(), 'st_file_attributes', 0) & 0x400):
+        return result
+    for binding in directory.iterdir():
+        if (not binding.is_dir() or binding.is_symlink()
+                or getattr(binding.lstat(), 'st_file_attributes', 0) & 0x400):
+            continue
+        turns = binding / 'desktop-turns'
+        if (not turns.is_dir() or turns.is_symlink()
+                or getattr(turns.lstat(), 'st_file_attributes', 0) & 0x400):
+            continue
+        for path in turns.glob('*.json'):
+            if path.is_file() and not path.is_symlink() and not getattr(path.lstat(), 'st_file_attributes', 0) & 0x400:
+                result[path.relative_to(root).as_posix()] = path.read_bytes()
+    return result
+
+
 def plan(app, workspace, agent_ids=None):
     if agent_ids is not None and (not isinstance(agent_ids, list) or not all(isinstance(value, str) for value in agent_ids)):
         raise Error('Select Agent IDs as a list, or omit it for the Workspace.')
@@ -273,15 +325,18 @@ def plan(app, workspace, agent_ids=None):
         owned = owned_instance_files(files, shared, name)
         for directory in registry.get(name, []):
             root = Path(directory).expanduser().resolve()
-            if layout.version(root, 'instance'):
-                continue
-            identity = read_json(root / '.aw/identity.json')
+            current_version = layout.version(root, 'instance')
+            identity = read_json(layout.instance_path(root, 'identity.json'))
             if not isinstance(identity, dict) or identity.get('agent') != name or identity.get('workspace') != app.local()['workspaces'][workspace]['locator']:
                 raise Conflict('The registered copy identity does not match this migration scope.')
-            local = _local_files(root, owned)
-            channels = _channel_files(root)
-            confirmed = owned_instance_files(channels, shared, name, local_files=local)
-            owned.update(path for path in confirmed if files.get(path) == channels[path])
+            if not current_version:
+                local = _local_files(root, owned)
+                channels = _channel_files(root)
+                confirmed = owned_instance_files(channels, shared, name, local_files=local)
+                owned.update(path for path in confirmed if files.get(path) == channels[path])
+            desktop = _desktop_turn_files(root)
+            confirmed_desktop = owned_instance_files(desktop, shared, name)
+            owned.update(path for path in confirmed_desktop if path not in files or files[path] == desktop[path])
         _, paths, unknown = instance_files(files, owned=owned)
         instances.append({'agent_id': name, 'branch': known[name]['branch'], 'revision': snapshot.revision,
                           'layout_version': layout.version(snapshot, 'instance'), 'paths': paths,
@@ -335,7 +390,7 @@ def _prepare(app, workspace, request_id, agent_ids, migrate_shared, compatible_w
         snapshot = store.snapshot(revision=instance['revision'])
         original_files = snapshot.all()
         projected, mapping, _ = instance_files(original_files, owned=instance['owned_records'], operation=request_id)
-        if instance['layout_version'] == 0:
+        if instance['layout_version'] == 0 or mapping:
             tasks.append({'branch': instance['branch'], 'base': snapshot.revision,
                           'changes': _encoded(_changes(snapshot, projected)), 'commit': None,
                           'publication_attempted': False, 'published': False})
@@ -343,34 +398,47 @@ def _prepare(app, workspace, request_id, agent_ids, migrate_shared, compatible_w
             root = Path(directory).expanduser().resolve()
             current_version = layout.version(root, 'instance')
             if current_version:
-                identity = read_json(layout.instance_path(root, 'identity.json'))
-                context = read_json(layout.local_path(root, 'context.json'))
-                if (not isinstance(identity, dict) or identity.get('agent') != instance['agent_id'] or identity.get('workspace') != original['locator']
-                        or not isinstance(context, dict) or context.get('agent') != instance['agent_id'] or context.get('locator') != original['locator']
-                        or instance['layout_version'] != 1):
+                if instance['layout_version'] != 1:
                     raise Conflict('The new local layout does not match the registered branch; inspect its original migration.')
-                continue
-            if (root / '.agentworkspace').exists() and any((root / '.agentworkspace').iterdir()):
+            elif (root / '.agentworkspace').exists() and any((root / '.agentworkspace').iterdir()):
                 raise Conflict('The new internal directory already has content; preserve it before migration.')
-            identity = read_json(root / '.aw/identity.json')
-            context = read_json(root / '.aw-local/context.json')
+            identity = read_json(layout.instance_path(root, 'identity.json'))
+            context_path = layout.local_path(root, 'context.json')
+            context = read_json(context_path)
             if (not isinstance(identity, dict) or identity.get('agent') != instance['agent_id'] or identity.get('workspace') != original['locator']
                     or not isinstance(context, dict) or context.get('agent') != instance['agent_id'] or context.get('locator') != original['locator']):
                 raise Conflict('Registered local copy does not match the migration identity.')
-            base = store.snapshot(revision=context['revision'])
-            # A stale copy may differ only by accidentally tracked local data, which this operation removes.
-            if {p: v for p, v in base.entries.items() if not local_asset_path(p)} != {p: v for p, v in snapshot.entries.items() if not local_asset_path(p)}:
-                raise Conflict('The instance branch changed since this copy was synchronized; preserve and resolve the original differences first.')
             with layout.lock(root, 'runner.lock', wait=0):
                 pass
             with layout.lock(root, 'files.lock', wait=0):
-                software_operation = read_json(root / '.aw-local/software-update.json', {})
+                context_raw = context_path.read_bytes()
+                context = _object(context_raw)
+                if context is None or context.get('agent') != instance['agent_id'] or context.get('locator') != original['locator']:
+                    raise Conflict('The local copy context changed during planning.')
+                software_operation = read_json(layout.local_path(root, 'software-update.json'), {})
                 if software_operation.get('state') == 'pending':
                     raise Conflict('Complete the original software material update before migrating this copy.')
-                local_files = _local_files(root, instance['owned_records'])
-                local_files.update(_channel_files(root))
+                desktop = _desktop_turn_files(root)
+                if current_version:
+                    local_files = {layout.MARKER: _safe_file(root, layout.MARKER).read_bytes()}
+                    for source in desktop:
+                        target = _safe_file(root, '.agentworkspace/' + source)
+                        if target.is_file():
+                            local_files['.agentworkspace/' + source] = target.read_bytes()
+                else:
+                    local_files = _local_files(root, instance['owned_records'])
+                    local_files.update(_channel_files(root))
+                local_files.update(desktop)
                 confirmed = owned_instance_files(local_files, shared, instance['agent_id'], local_files=local_files)
-                local_projected, local_mapping, local_unknown = instance_files(local_files, owned=set(instance['owned_records']) | confirmed, operation=request_id)
+                # A saved Desktop record does not prove a locally replaced JSON still belongs to AW.
+                local_owned = (set(instance['owned_records']) - set(desktop)) | confirmed
+                local_projected, local_mapping, local_unknown = instance_files(local_files, owned=local_owned, operation=request_id)
+                if current_version and not local_mapping and not mapping:
+                    continue
+                base = store.snapshot(revision=context['revision'])
+                # A stale copy may differ only by accidentally tracked local data, which this operation removes.
+                if {p: v for p, v in base.entries.items() if not local_asset_path(p)} != {p: v for p, v in snapshot.entries.items() if not local_asset_path(p)}:
+                    raise Conflict('The instance branch changed since this copy was synchronized; preserve and resolve the original differences first.')
             moves = []
             for source, target in local_mapping.items():
                 data = local_projected[target]
@@ -394,16 +462,25 @@ def _prepare(app, workspace, request_id, agent_ids, migrate_shared, compatible_w
             context['exclude'] = list(dict.fromkeys([*context.get('exclude', []), '.agentworkspace/local']))
             roots.append({'directory': str(root), 'agent_id': instance['agent_id'], 'branch': instance['branch'],
                           'moves': moves, 'source_files': sorted(path for path in local_files if path.startswith(('.aw/', '.aw-local/'))),
-                          'context': context, 'context_before': digest(local_files['.aw-local/context.json']),
-                          'context_original': base64.b64encode(local_files['.aw-local/context.json']).decode('ascii'),
+                          'context': context, 'context_before': digest(context_raw),
+                          'context_original': base64.b64encode(context_raw).decode('ascii'),
+                          'context_source': context_path.relative_to(root).as_posix(),
                           'gitignore_before': digest(local_files['.gitignore']) if '.gitignore' in local_files else None,
                           'gitignore_original': base64.b64encode(local_files['.gitignore']).decode('ascii') if '.gitignore' in local_files else None,
-                          'gitignore': base64.b64encode(local_projected['.gitignore']).decode('ascii'),
-                          'marker': base64.b64encode(projected[layout.MARKER]).decode('ascii'), 'files_complete': False, 'complete': False})
+                          'gitignore': base64.b64encode(local_projected['.gitignore']).decode('ascii') if not current_version else None,
+                          'marker': base64.b64encode(local_files[layout.MARKER] if current_version else projected[layout.MARKER]).decode('ascii'),
+                          'marker_before': base64.b64encode(local_files[layout.MARKER]).decode('ascii') if current_version else None,
+                          'files_complete': False, 'complete': False})
             roots[-1]['unclassified_files'] = local_unknown
     return {'version': 1, 'id': request_id, 'workspace': workspace, 'locator': original['locator'],
             'scope': {'agent_ids': agent_ids, 'migrate_shared': migrate_shared},
             'plan': original, 'writer_confirmation': compatible_writers, 'started_at': now(),
+            'layout_sources': [{'branch': item['branch'], 'revision': item['revision'],
+                               'marker': _object(store.snapshot(revision=item['revision']).bytes(layout.MARKER)),
+                               'marker_digest': digest(store.snapshot(revision=item['revision']).bytes(layout.MARKER))}
+                              for item in original['instances'] if item['layout_version'] == 1
+                              and (any(task['branch'] == item['branch'] for task in tasks)
+                                   or any(entry['branch'] == item['branch'] for entry in roots))],
             'tasks': tasks, 'roots': roots, 'state': 'pending'}
 
 
@@ -441,11 +518,12 @@ def _publish(store, operation, task, receipt):
     write_json(receipt, operation)
 
 
-def _validate_root(entry, root):
+def _validate_root(entry, root, desired_context=None):
     # Validate every pending move before changing the marker or deleting any source.
-    current = _local_files(root, ())
-    if sorted(path for path in current if path.startswith(('.aw/', '.aw-local/'))) != entry['source_files']:
-        raise Conflict('Platform files were added or removed after planning; no local files were moved.')
+    if entry.get('marker_before') is None:
+        current = _local_files(root, ())
+        if sorted(path for path in current if path.startswith(('.aw/', '.aw-local/'))) != entry['source_files']:
+            raise Conflict('Platform files were added or removed after planning; no local files were moved.')
     for move in entry['moves']:
         source = _safe_file(root, move['source']) if move['source'] else None
         target = _safe_file(root, move['target'])
@@ -456,12 +534,16 @@ def _validate_root(entry, root):
             raise Conflict('The original migration source and destination are both missing.')
         if target.exists() and digest(target.read_bytes()) != move['after']:
             raise Conflict('A migration destination changed; no local files were replaced.')
-    context = _safe_file(root, '.aw-local/context.json')
-    if not context.exists() or digest(context.read_bytes()) != entry['context_before']:
+    context = _safe_file(root, entry.get('context_source', '.aw-local/context.json'))
+    allowed_contexts = {entry['context_before']}
+    if desired_context is not None:
+        allowed_contexts.add(digest(desired_context))
+    if not context.exists() or digest(context.read_bytes()) not in allowed_contexts:
         raise Conflict('The local copy context changed after planning; no local files were moved.')
-    ignore = _safe_file(root, '.gitignore')
-    if (digest(ignore.read_bytes()) if ignore.exists() else None) != entry['gitignore_before']:
-        raise Conflict('The Git ignore file changed after planning; no local files were moved.')
+    if entry.get('marker_before') is None:
+        ignore = _safe_file(root, '.gitignore')
+        if (digest(ignore.read_bytes()) if ignore.exists() else None) != entry['gitignore_before']:
+            raise Conflict('The Git ignore file changed after planning; no local files were moved.')
 
 
 def _write_root(app, operation, entry, receipt, directory):
@@ -472,16 +554,24 @@ def _write_root(app, operation, entry, receipt, directory):
     # layout.lock to re-resolve after acquiring; the empty lock files stay in place.
     names = {'runner.lock', 'files.lock', 'profile.lock', 'inputs.lock',
              'records.lock', 'transfer.lock', 'stop-launch.lock'}
-    old = _safe_file(root, '.aw-local')
-    if old.exists():
-        names.update(path.relative_to(old).as_posix() for path in old.rglob('*.lock'))
+    if entry.get('marker_before') is None:
+        old = _safe_file(root, '.aw-local')
+        if old.exists():
+            names.update(path.relative_to(old).as_posix() for path in old.rglob('*.lock'))
+    current = _safe_file(root, '.agentworkspace/local')
     with ExitStack() as locks:
-        for name in sorted(names):
-            locks.enter_context(locked(_safe_file(root, '.aw-local/' + name), wait=0))
+        if entry.get('marker_before') is None:
+            for name in sorted(names):
+                locks.enter_context(locked(_safe_file(root, '.aw-local/' + name), wait=0))
         # Acquire legacy locks first: a busy runner/writer creates no new layout.
         for name in sorted(names):
             path = '.agentworkspace/local/' + layout.local_relpath(name)
             locks.enter_context(locked(_safe_file(root, path), wait=0))
+        if current.exists():
+            standard = {layout.local_relpath(name) for name in names}
+            for path in sorted(current.rglob('*.lock')):
+                if path.relative_to(current).as_posix() not in standard:
+                    locks.enter_context(locked(_safe_file(root, path.relative_to(root).as_posix()), wait=0))
         _write_root_locked(app, operation, entry, receipt, directory)
 
 
@@ -494,7 +584,7 @@ def _write_root_locked(app, operation, entry, receipt, directory):
         raise Conflict('Migration copy is no longer registered at the original address.')
     old_identity = _safe_file(root, '.aw/identity.json')
     new_identity = _safe_file(root, '.agentworkspace/identity.json')
-    identity = read_json(old_identity if old_identity.exists() else new_identity)
+    identity = read_json(new_identity if entry.get('marker_before') is not None or not old_identity.exists() else old_identity)
     if not isinstance(identity, dict) or identity.get('agent') != entry['agent_id'] or identity.get('workspace') != operation['locator']:
         raise Conflict('The original copy identity changed; no migration files were replaced.')
     ready_marker = base64.b64decode(entry['marker'], validate=True)
@@ -505,7 +595,16 @@ def _write_root_locked(app, operation, entry, receipt, directory):
             raise Error('The original migration cannot replace an unsupported layout marker.')
         if actual_marker.get('state', 'ready') not in ('ready', 'migrating'):
             raise Conflict('The local migration marker has an unsupported state.')
-    if actual_marker is None:
+    context = dict(entry['context'])
+    task = next((task for task in operation['tasks'] if task['branch'] == entry['branch']), None)
+    context['revision'] = task['commit'] if task else next(item['revision'] for item in operation['plan']['instances'] if item['branch'] == entry['branch'])
+    desired_context = encode(context)
+    if entry.get('marker_before') is not None:
+        if not marker_path.exists() or marker_path.read_bytes() != base64.b64decode(entry['marker_before'], validate=True):
+            raise Conflict('The original ready layout marker changed; the supplement cannot replace it.')
+        if not entry['files_complete']:
+            _validate_root(entry, root, desired_context)
+    elif actual_marker is None:
         _validate_root(entry, root)
         write_json(marker_path, {'version': 1, 'kind': 'instance', 'state': 'migrating', 'migration': operation['id']})
     elif actual_marker.get('migration') != operation['id']:
@@ -546,43 +645,41 @@ def _write_root_locked(app, operation, entry, receipt, directory):
                 raise Conflict('The source changed after copying; both files were preserved.')
             source.unlink()
     context_path = _safe_file(root, '.agentworkspace/local/operations/context.json')
-    original_context = _safe_file(root, '.aw-local/context.json')
-    context = dict(entry['context'])
-    task = next((task for task in operation['tasks'] if task['branch'] == entry['branch']), None)
-    context['revision'] = task['commit'] if task else next(item['revision'] for item in operation['plan']['instances'] if item['branch'] == entry['branch'])
-    desired_context = encode(context)
+    original_context = _safe_file(root, entry.get('context_source', '.aw-local/context.json'))
     actual_context = digest(context_path.read_bytes()) if context_path.exists() else None
     if actual_context not in (None, entry['context_before'], digest(desired_context)):
         raise Conflict('The local copy context changed during migration.')
-    if original_context.exists() and digest(original_context.read_bytes()) != entry['context_before']:
+    if (original_context.exists() and digest(original_context.read_bytes()) != entry['context_before']
+            and (original_context != context_path or original_context.read_bytes() != desired_context)):
         raise Conflict('The original local copy context changed during migration.')
     if not original_context.exists() and not context_path.exists():
         raise Conflict('The original and migrated copy contexts are both missing.')
-    context_backup = _safe_file(directory, backup_relative + '/.aw-local/context.json')
+    context_backup = _safe_file(directory, backup_relative + '/' + entry.get('context_source', '.aw-local/context.json'))
     original_data = base64.b64decode(entry['context_original'], validate=True)
     if context_backup.exists() and context_backup.read_bytes() != original_data:
         raise Conflict('The original local context backup changed.')
     if not context_backup.exists():
         write_bytes(context_backup, original_data)
     write_bytes(context_path, desired_context)
-    if original_context.exists():
+    if original_context != context_path and original_context.exists():
         if digest(original_context.read_bytes()) != entry['context_before']:
             raise Conflict('The original context changed after copying; both files were preserved.')
         original_context.unlink()
-    ignore_path = _safe_file(root, '.gitignore')
-    ignore = base64.b64decode(entry['gitignore'], validate=True)
-    actual = digest(ignore_path.read_bytes()) if ignore_path.exists() else None
-    if actual not in (entry['gitignore_before'], digest(ignore)):
-        raise Conflict('The user Git ignore file changed during migration; it was preserved.')
-    if entry['gitignore_original'] is not None:
-        original_ignore = base64.b64decode(entry['gitignore_original'], validate=True)
-        ignore_backup = _safe_file(directory, backup_relative + '/.gitignore')
-        if ignore_backup.exists() and ignore_backup.read_bytes() != original_ignore:
-            raise Conflict('The original Git ignore backup changed.')
-        if not ignore_backup.exists():
-            write_bytes(ignore_backup, original_ignore)
-    write_bytes(ignore_path, ignore)
-    empty_candidates = {root / '.aw-local'}
+    if entry['gitignore'] is not None:
+        ignore_path = _safe_file(root, '.gitignore')
+        ignore = base64.b64decode(entry['gitignore'], validate=True)
+        actual = digest(ignore_path.read_bytes()) if ignore_path.exists() else None
+        if actual not in (entry['gitignore_before'], digest(ignore)):
+            raise Conflict('The user Git ignore file changed during migration; it was preserved.')
+        if entry['gitignore_original'] is not None:
+            original_ignore = base64.b64decode(entry['gitignore_original'], validate=True)
+            ignore_backup = _safe_file(directory, backup_relative + '/.gitignore')
+            if ignore_backup.exists() and ignore_backup.read_bytes() != original_ignore:
+                raise Conflict('The original Git ignore backup changed.')
+            if not ignore_backup.exists():
+                write_bytes(ignore_backup, original_ignore)
+        write_bytes(ignore_path, ignore)
+    empty_candidates = {root / '.aw-local'} if entry.get('marker_before') is None else set()
     for move in entry['moves']:
         if move['source']:
             parent = _safe_file(root, move['source']).parent
@@ -594,7 +691,8 @@ def _write_root_locked(app, operation, entry, receipt, directory):
             path.rmdir()
     entry['files_complete'] = True
     write_json(receipt, operation)
-    write_bytes(marker_path, ready_marker)
+    if marker_path.read_bytes() != ready_marker:
+        write_bytes(marker_path, ready_marker)
     entry['complete'] = True
     write_json(receipt, operation)
 

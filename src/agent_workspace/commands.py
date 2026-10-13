@@ -16,11 +16,13 @@ READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "ag
              "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
              "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log"}
 
+SOFTWARE_OPERATIONS = {"backend.start", "backend.stop", "backend.restart", "backend.status", "backend.log", "backend.run"}
+
 USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
-                   "maintenance.grant", "maintenance.schedule", "maintenance.repair", "backend.start", "backend.stop", "backend.restart", "backend.attach", "backend.cancel", "runtime.reconcile-create"}
+                   "maintenance.grant", "maintenance.schedule", "maintenance.repair", "backend.attach", "backend.cancel", "runtime.reconcile-create"}
 CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile", "direct-message.record"}
 
 
@@ -233,7 +235,7 @@ def execute(app, command, arguments, *, actor=None):
         raise Error(f"Invalid arguments for {command}: unsupported snapshot argument.")
     if command == "agent.start" and "expected_handoff" in args:
         raise Error("expected_handoff is an internal automatic-continuation condition, not command input.")
-    if actor:
+    if actor and command not in SOFTWARE_OPERATIONS:
         workspace, aid, binding = actor
         if command == "agent.takeover":
             raise Error("Force takeover is an explicit user operation, not an Agent or caretaker operation.")
@@ -261,6 +263,6 @@ def execute(app, command, arguments, *, actor=None):
         signature.bind(**args)
     except TypeError as exc:
         raise Error(f"Invalid arguments for {command}: {exc}") from exc
-    if actor and command not in READ_ONLY:
+    if actor and command not in READ_ONLY and command not in SOFTWARE_OPERATIONS:
         app.require_binding(workspace, aid, binding, allow_stopping=command in ("checkpoint.create", "agent.stop"))
     return handler(**args)

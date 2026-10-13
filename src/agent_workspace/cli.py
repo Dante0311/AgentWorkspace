@@ -8,7 +8,7 @@ import sys
 
 from . import __version__
 from .app import App
-from .commands import execute
+from .commands import SOFTWARE_OPERATIONS, execute
 from .util import Error
 
 
@@ -246,13 +246,15 @@ def main(argv=None):
     app = App(home)
     try:
         actor = None
-        if os.environ.get("AW_BINDING") and os.environ.get("AW_AGENT"):
+        operation = options.get("command") if domain == "call" else domain + "." + str(action)
+        software_operation = operation in SOFTWARE_OPERATIONS or domain == "serve"
+        # Local software control uses the host's tool permissions, not an Agent's execution entry.
+        if not software_operation and os.environ.get("AW_BINDING") and os.environ.get("AW_AGENT"):
             if not os.environ.get("AW_WORKSPACE"):
                 raise Error("An inherited model identity requires AW_WORKSPACE.")
             actor = (os.environ["AW_WORKSPACE"], os.environ["AW_AGENT"], os.environ["AW_BINDING"])
-        if actor is None:
+        if actor is None and not software_operation:
             from .runtime import desktop_directory_actor
-            operation = options.get("command") if domain == "call" else domain + "." + str(action)
             actor = desktop_directory_actor(app, operation)
         if actor and not workspace:
             workspace = actor[0]
@@ -285,7 +287,7 @@ def main(argv=None):
             return 0
         if domain == "call":
             command, args = options["command"], parse_json(options["arguments"])
-            if options.get("desktop_agent"):
+            if options.get("desktop_agent") and not software_operation:
                 from .runtime import desktop_actor
                 desktop_identity = desktop_actor(app, workspace, options["desktop_agent"])
                 if actor and actor != desktop_identity:
@@ -324,7 +326,7 @@ def main(argv=None):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)
-        # A model's inherited identity never silently becomes an administrator.
+        # Agent business operations retain their inherited identity and target permissions.
         result = execute(app, command, args, actor=actor)
         print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
         if isinstance(result, dict) and result.get("state") in ("pending", "outcome_unknown"):

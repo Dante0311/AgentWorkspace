@@ -62,17 +62,17 @@ def test_empty_home_actual_process_lifecycle_and_cli(tmp_path, monkeypatch, caps
         wait_for(lambda: backend.status(app), lambda state: state["running"] is False)
 
 
-def test_model_cannot_control_whole_home(pair, monkeypatch, capsys):
+def test_model_cannot_control_another_agents_runner(pair, monkeypatch, capsys):
     app, ids = pair
     actor = ("sea", "alice", ids["alice"])
-    for command in ("backend.start", "backend.stop", "backend.restart", "backend.attach", "backend.cancel"):
+    for command in ("backend.attach", "backend.cancel"):
         with pytest.raises(Error, match="user-management"):
             execute(app, command, {}, actor=actor)
     assert execute(app, "backend.status", {}, actor=actor)["running"] is False
     monkeypatch.setenv("AW_WORKSPACE", "sea")
     monkeypatch.setenv("AW_AGENT", "alice")
     monkeypatch.setenv("AW_BINDING", ids["alice"])
-    assert cli.main(["--home", str(app.home), "backend", "run"]) == 2
+    assert cli.main(["--home", str(app.home), "runtime", "run", "alice"]) == 2
     assert not json.loads(capsys.readouterr().err)["ok"]
 
 

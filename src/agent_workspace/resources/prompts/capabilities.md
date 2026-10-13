@@ -2,7 +2,7 @@
 
 这是当前安装的 AgentWorkspace 的能力说明，不是执行授权，也不代表上游产品永久没有相应接口。设计中的目标不等于本版本已支持。
 
-近期优先 Codex Desktop 与 ChatGPT Web。Web 当前手动收件，浏览器插件由用户另行开发，取得真实接口后再接入；tclaude 尚待验证。其他 Harness、模型供应商与企业微信保留已有底层能力，暂缓继续扩展。Windows x64 npm 包包含 Python 后端、网页和七个 Skills，不包含全部可选 SDK。
+近期优先 Codex Desktop 与 ChatGPT Web。Web 当前手动收件；已有 Web Courier MVP 已纳入开发与独立 E2E，首批为人工确认的单条正式 Message，尚未完成 AW 接入和真实浏览器验收。tclaude 尚待验证。其他 Harness、模型供应商与企业微信保留已有底层能力，暂缓继续扩展。Windows x64 npm 包包含 Python 后端、网页和七个 Skills，不包含全部可选 SDK。
 
 ## 状态怎么读
 

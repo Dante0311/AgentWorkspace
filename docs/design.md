@@ -1,6 +1,6 @@
 # Agent Workspace：V1 设计基线
 
-状态：**CURRENT DIRECTION / 当前产品设计**。2026-10-12 以 Aster 的单实例使用与目录设计为参考，整理 AW 的目录、Git 分支、统一升级和管理权限。**本次仅整理设计；`.agentworkspace/` 新布局和平台资源随软件统一更新尚待实现，没有据此迁移现有数据。**
+状态：**CURRENT DIRECTION / 当前产品设计**。2026-10-12 以 Aster 的单实例使用与目录设计为参考，整理 AW 的目录、Git 分支、统一升级和管理权限；10 月 13 日经用户确认进入实现，并将已有 Web Courier MVP 纳入开发与 E2E。**本文件说明目标合同；具体实现和验证范围见 implementation.md，没有据此迁移日常环境的现有数据。**
 
 近期仍先满足用户自己的 Codex Desktop 与 ChatGPT Web 协作，保留已有底层能力。npm 预览版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`；版本号不证明具体环境已验收。现有命令、路径与验证范围见 [implementation.md](implementation.md)，历史结果保留在[原验证记录](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/validation.md)。
 
@@ -10,7 +10,7 @@
 
 命令名表示操作职责；完整参数、数据类型、内部文件细节和接入接口在实现时确定，目录归属以第 3.1 与第 9.1 节为准。文中的例子不是已可执行的命令教程。项目迁仓与软件实现分开，迁出不等于已验证、发布或成为 Playbook 的稳定公共规则。
 
-**近期主线：安装软件 → 接入 Workspace 与 Agent → 在 Codex Desktop 或 ChatGPT Web 中协作 → 保存资料并按需换执行会话。** Codex Desktop 复用现有真实接口；ChatGPT Web 当前手动收件，浏览器插件由用户另行开发，取得真实接口后再接入。tclaude 待实际验证；广泛 Harness、模型供应商和企业微信本轮暂缓。已有配置、CLI 接入、交接和维护能力保留，不继续把全面兼容作为本轮交付条件。统一聊天界面留到 V3。
+**近期主线：安装软件 → 接入 Workspace 与 Agent → 在 Codex Desktop 或 ChatGPT Web 中协作 → 保存资料并按需换执行会话。** Codex Desktop 复用现有真实接口；ChatGPT Web 保留手动收件，并基于已有 Web Courier MVP 实现第 6.6 节的单条接入与真实验收。tclaude 待实际验证；广泛 Harness、模型供应商和企业微信本轮暂缓。已有配置、CLI 接入、交接和维护能力保留，不继续把全面兼容作为本轮交付条件。统一聊天界面留到 V3。
 
 **Workspace 自带三个真实管家实例：Steward、Sentinel、Maintainer。** 管家处理用户的 Workspace 事务，巡检与维修是其下属职责；它不是业务中央调度者。小组与用户 Agent 共用创建、配置、通信和交接能力。
 
@@ -343,7 +343,7 @@ create 不自动通知、启动模型或安排执行。deliver 不代替合并�
 
 直发可选留档与回执保存在 `.agentworkspace/direct-messages/`，标明 `codex` 等来源类型，与正式 Message、索引和 ACK 分开，不参加未 ACK 扫描、FIFO 或后台重试。留档或回执失败不影响原生交流，也不自动补发正式 Message；没有记录不证明发送失败。工作台可以合并显示历史，但必须区分原生直发与 AW Message，并分别显示实际可观察结果。
 
-下述信封、ACK、FIFO、Git 发布与有限通知重试继续用于正式 AW Message。ChatGPT Web 当前通过 Skill 手动查询、确认和回复；浏览器插件取得真实接口后再接入，不提前宣称自动投递可用。
+下述信封、ACK、FIFO、Git 发布与有限通知重试继续用于正式 AW Message。ChatGPT Web 保留通过 Skill 手动查询、确认和回复；Web Courier 接入复用同一消息过程，开发检查不能代替真实浏览器验收。
 
 ### 6.1 信封与确认
 
@@ -425,6 +425,18 @@ watch 是统一后台中该入口的定时任务，不另起一份消息后台�
 AW MCP/CLI 是优先入口，不是实施协议的必要条件。随包 message Skill 提供精确字段、路径和仅有仓库工具时的操作说明，也附可选的标准库 Python/Git 辅助脚本；无 AW 或无 Python 的环境仍可按协议读取、确认和回复。手动写入只使用本会话已明确获授的实例和 Binding，在同一 HEAD 核对实例 current、Binding 归属/phase、索引目标及已有 ACK；写前重新核对，用预期 HEAD 的原子比较保护提交并读回。不得复制其他入口、修改身份记录或伪造 AW receipt。工具不能安全比较预期版本或没有写权限时只准备材料，明确未发布。
 
 手动回复是真实 from/to 的新 Message，使用新稳定 ID、实际时间和原消息引用。未知发布先核对原 ID、字节与提交；只有明确拒绝或尚未开始的缺失发布可以在重新核对资格后补齐，不盲目重放。跨仓库不是原子事务，入口撤销后本会话停止补写，保留原部分结果供获准端处理。具体步骤见随包 [Message 协议](../src/agent_workspace/resources/skills/message/references/protocol.md)和[仓库操作](../src/agent_workspace/resources/skills/message/references/manual.md)。
+
+### 6.6 ChatGPT Web Courier 的首批接入
+
+2026-10-13 用户确认将已有浏览器插件纳入产品开发与独立 E2E。保留来源包，在产品仓 `extensions/web-courier/` 维护源码和正式测试，详细来源、调查与验收证据放在 AW-Workspace。Communication / Maintenance 负责插件和消息接入，相关 Owner 配合，E2E 独立报告实际浏览器结果。
+
+首批只做用户明确确认的一条正式 Message：配置 Workspace、Agent、当前 Binding 和目标网页会话，从 AW 后台取得原通知包，再由扩展填入并单次发送。通知前后核对原目标与执行资格；旧网页仍打开不授予资格。多行正文与合法未知字段保留，不用重新拼写的摘要替代原通知。
+
+扩展连接只获指定目标所需的消息权限；不把全权管理凭据或任意执行入口暴露给网页。复用现有后台及认证边界，不能删除 Origin 检查以换取连通，也不另建插件平台、消息队列或恢复循环。具体配对和接口由实现依据真实浏览器能力确定。
+
+发送前持久保存原消息、目标和本次尝试；worker 退出、发送回报丢失或刷新后只核对原记录，不清空记录或更换 ID 再次点击。已有草稿、附件、忙碌或页面状态不明确时保留现场。首批不实现 insert 时明确拒绝，不降为 normal。无人值守轮询、多会话调度与自动登录不属于本批范围。
+
+网页观察到消息、刷新后仍可见、AW 实际 ACK 与业务完成分别报告。只有真正接收方按第 6.1 节保存的 ACK 才能推进正式消息过程；扩展的网页回执不代 Agent 确认。源码测试、本机接口测试、真实扩展加载、真实网页发送和实际 AW 收件分别验收，缺少环境前提时明确记为未执行。
 
 ## 7. 检查点、原始记录与资产接续
 
@@ -603,7 +615,7 @@ Harness 自己做推理、工具循环和会话内压缩，平台不再套一个
 
 ### 10.2 近期使用环境与真实接入
 
-近期优先 **Codex Desktop 与 ChatGPT Web**。Codex Desktop 复用现有真实控制入口、会话绑定和 Runner；ChatGPT Web 当前通过仓库工具与 message Skill 手动收件、确认和回复。用户另行开发浏览器插件，取得真实接口后再做具体接入，不提前建设通用浏览器插件平台。tclaude 尚待实际验证。
+近期优先 **Codex Desktop 与 ChatGPT Web**。Codex Desktop 复用现有真实控制入口、会话绑定和 Runner；ChatGPT Web 保留通过仓库工具与 message Skill 手动收件、确认和回复，并按第 6.6 节接入已有 Web Courier。只实现实际需要的浏览器连接，不建设通用插件平台。tclaude 尚待实际验证。
 
 现有 Codex CLI、Claude/CodeBuddy SDK 与模型配置能力保留，广泛其他 Harness 和模型供应商本轮暂缓，不将旧六类入口矩阵作为本轮完成条件。对本轮声明支持的操作，分别取得真实绑定、材料加载、投递、事件和接续证据。启动进程、打开窗口、填入 composer 或请求成功不等于会话已绑定、材料已加载或 Agent 已就绪。
 

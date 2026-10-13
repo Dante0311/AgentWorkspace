@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "AW 网页投递员 · 单条测试版",
-  "version": "0.1.0",
-  "description": "只在指定通信测试会话中，经人工确认投递一条固定测试消息。无远程服务、无自动轮询。",
+  "name": "AW 网页投递员",
+  "version": "0.2.0",
+  "description": "通过限定的本机 AW 连接，人工确认向登记的 ChatGPT 会话投递一条原 Message 通知。",
   "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://127.0.0.1/*"],
   "background": {"service_worker": "worker.js", "type": "module"},
   "action": {"default_title": "AW 网页投递员", "default_popup": "popup.html"},
   "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'"}

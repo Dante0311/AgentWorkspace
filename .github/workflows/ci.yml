@@ -59,6 +59,8 @@ jobs:
           package-manager-cache: false
       - name: Install build frontend
         run: python -m pip install build
+      - name: Test Web Courier worker and page behavior with fixtures
+        run: node --test extensions/web-courier/tests/*.test.mjs
       - name: Compile and build sdist and wheel
         run: |
           python -m compileall -q src
@@ -66,6 +68,8 @@ jobs:
           python -m build
       - name: Build Windows npm artifact with bundled runtime
         run: python scripts/build_npm.py dist
+      - name: Package the unpacked Chrome extension and its instructions
+        run: Compress-Archive -LiteralPath extensions/web-courier/extension,extensions/web-courier/README.md -DestinationPath dist/web-courier.zip
       - name: Test npm installation and replacement outside checkout
         run: |
           python scripts/smoke_npm.py dist 2>&1 | Tee-Object -FilePath smoke-npm-windows.log

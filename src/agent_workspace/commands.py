@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout
+from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout, web_courier
 from .messages import Messages
 from .direct_messages import DirectMessages
 from .util import Conflict, Error, digest, inside, read_json, relpath, user_asset_path, write_bytes, write_json
@@ -14,7 +14,7 @@ READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "ag
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
              "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status", "layout.plan"}
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status", "layout.plan", "web-courier.status"}
 
 SOFTWARE_OPERATIONS = {"backend.start", "backend.stop", "backend.restart", "backend.status", "backend.log", "backend.run",
                        "software.status", "software.update"}
@@ -147,6 +147,9 @@ def command_map(app):
         "backend.log": partial(backend.log, app), "backend.attach": partial(backend.attach, app),
         "backend.cancel": partial(backend.cancel, app),
         "software.status": partial(software.status, app), "software.update": partial(software.update, app),
+        "web-courier.connect": partial(web_courier.connect, app),
+        "web-courier.status": partial(web_courier.status, app),
+        "web-courier.revoke": partial(web_courier.revoke, app),
         "layout.plan": app.layout_plan, "layout.migrate": app.layout_migrate,
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
@@ -233,6 +236,8 @@ def execute(app, command, arguments, *, actor=None):
             raise Error("Force takeover is an explicit user operation, not an Agent or caretaker operation.")
         if command == "layout.migrate":
             raise Error("Layout migration is an explicit user operation; run it from the user management terminal.")
+        if command in ("web-courier.connect", "web-courier.revoke"):
+            raise Error("Web Courier connections are explicit user operations; use the user management terminal.")
         # Signatures supply defaults, never authorization. A new agent's ID is a target.
         if "workspace" in signature.parameters:
             args.setdefault("workspace", workspace)

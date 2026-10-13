@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import * as core from '../extension/core.mjs';
-const source=fs.readFileSync(new URL('../extension/worker.js',import.meta.url),'utf8').replace(/^import .*\n/,'');
+const source=fs.readFileSync(new URL('../extension/worker.js',import.meta.url),'utf8').replace(/^import .*\r?\n/,'');
 const ID='a'.repeat(32), TARGET='https://chatgpt.com/c/11111111-1111-4111-8111-111111111111';
 const C='awWebCourierConnectionV1', R='awWebCourierAttemptV1';
 const config={backend_url:'http://127.0.0.1:8765',connection_id:'courier-test',workspace:'test',agent_id:'receiver',binding:'binding-test',target_url:TARGET,extension_id:ID,token:'t'.repeat(43)};

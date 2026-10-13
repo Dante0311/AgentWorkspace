@@ -2,31 +2,34 @@
 
 版本仍为 `0.1.0a1` 开发预览。本文随产品源码维护当前能力、限制与验证层次；产品目标以 [design.md](design.md) 为准，操作见 [usage.md](usage.md) 和 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
 
-**2026-10-13 正在实现和集成：** [新目录设计](design.md#31-用户工作根与-aw-内部目录)已进入开发。当前源码已接入按版本选择的 `.agentworkspace/` 路径、实例模板配置映射、注册副本的统一材料更新和相关 Message 路径；旧布局迁移与后台共同恢复仍在集成验证。日常安装与现有数据尚未升级或迁移，历史结果不代表本轮候选已验收。软件维护不要求逐 Agent 在线授权，业务写入仍核对现有执行资格。
+**2026-10-13 开发候选：** 当前源码已接入按版本选择的 `.agentworkspace/` 路径、显式可恢复迁移、实例模板配置映射、注册副本的统一材料更新、后台共同恢复和 Web Courier 的受限单条通知接口。日常安装与现有数据尚未升级或迁移。源码回归、安装检查与真实 Desktop/浏览器 E2E 分开记录，历史结果不代表本轮候选已验收。软件维护不要求逐 Agent 在线授权，业务写入仍核对现有执行资格。
 
 团队的问题登记、调查、验收脚本和详细报告在 [AW-Workspace 开发仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md)维护。历史结果只证明对应提交和测试范围，不替代当前版本的验收。
 
-近期优先用户自己的 Codex Desktop 与 ChatGPT Web。Web 当前使用手动 Message 协议；已有 Web Courier MVP 已纳入开发与 E2E，首批目标是人工确认的一条正式 Message，尚未完成 AW 接入和真实浏览器验收。tclaude 待实际验证。已有 CLI/SDK、模型配置和企业微信接口继续保留，但不作为本轮扩展目标。工作台集中显示 Agent 与环境、消息历史和本机后台；创建、配置和交接通过 CLI、Skills 与原生客户端操作。
+近期优先用户自己的 Codex Desktop 与 ChatGPT Web。Web 保留手动 Message 协议；Web Courier 候选经受限本机连接取得一条原通知，由用户确认后点击一次，网页观察与真实 AW ACK 分别记录。模拟 DOM 与隔离 HTTP 不代替真实 Chrome 加载、ChatGPT 页面及接收工具验收。tclaude 待实际验证。已有 CLI/SDK、模型配置和企业微信接口继续保留，但不作为本轮扩展目标。工作台集中显示 Agent 与环境、消息历史和本机后台；创建、配置和交接通过 CLI、Skills 与原生客户端操作。
 
 ## 模块
 
 | 文件 | 当前职责 |
 | --- | --- |
 | `app.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding 历史、本地副本观察、Work 和 Git 访问。 |
+| `layout.py`、`migration.py` | 按整体布局版本解析路径，显式迁移共享记录与副本，保留原请求和未知结果，并在复制期间持续互斥。 |
+| `software.py` | 统一检查和更新本机注册副本的内置材料；保护用户修改，继续原中断更新，不发布业务检查点。 |
 | `onboarding.py` | 只发现和引导的首次使用、只读 Git 检查、三份管家定义/实例和本机准备。 |
 | `harness_config.py` | Codex/Claude 原生模型选项查询、三种受管入口的实例独立模型配置；凭据只保存引用。 |
-| `model_profiles.py` | 实例根 Codex 模型选择、本机旧配置迁移、每入口采用快照、适用目录与请求事实。 |
+| `model_profiles.py` | `.agentworkspace/config.json` 中的 Codex 模型选择、本机旧配置迁移、每入口采用快照、适用目录与请求事实。 |
 | `runtime.py`、`rpc.py`、`native_sdk.py` | 实际原生入口、持续事件、工具边界、初始接入、独占 Runner 与停工观测。 |
-| `backend.py` | 每个 AW_HOME 的本机服务、现有 Runner 线程和维护线程，以及启停、重启和限定日志读取。 |
+| `backend.py` | 每个 AW_HOME 的本机服务、Runner、消息检查与维护线程，原会话共同恢复，以及启停、重启和限定日志读取。 |
 | `transfer.py` | 原绑定和固定后继的持久 handoff/relay，结果未知不重新创建会话。 |
 | `shared.py`、`skills.py` | 同一共享提交的职责材料读取，以及共享 Skill 发现、安装、来源比较与受保护更新。 |
 | `desktop_projects.py` | 实例主目录匹配的原生项目发现/复用，按实际接口能力执行显式分区准备。 |
 | `messages.py` | Message/ACK、Git 发布补齐、FIFO 与当前入口通知；通知保留完整原始 JSON，正文异常时使用可信索引。 |
 | `direct_messages.py` | 可选原生直发记录的保存、读取及补充缺失回执；不执行原生发送，不接入正式 Message 投递。 |
+| `web_courier.py`、`extensions/web-courier/` | 与当前 manual Binding 和网页会话对应的受限连接、原通知单次尝试、网页观察与 ACK 查询；不另建消息队列。 |
 | `maintenance.py` | 作用域授权、健康观测、安装位置归属明确的巡检、有限维修和结果复查。 |
 | `bridges.py`、`wecom.py` | 可选外部渠道、文本收发与组件看护。 |
 | `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和七个 Skill；内置 Skill 的 references/scripts 及固定通知模板随包分发。 |
-| `npm/`、`scripts/build_npm.py`、CI | 自带 Python 运行时的 Windows x64 npm 包、实际包安装与替换检查；wheel/sdist 和旧安装器保留为底层构建及开发工具。 |
+| `npm/`、`scripts/build_npm.py`、CI | 自带 Python 运行时的 Windows x64 npm 包、实际安装与替换检查、Web Courier 模拟测试和扩展 ZIP；wheel/sdist 和旧安装器保留为底层构建及开发工具。 |
 
 没有引入通用调度平台、模型网关、ACP 依赖或新的 Agent Loop。SDK 是按需安装的原生客户端，不是我们自研 Harness。元数据探测与实际会话共用凭据路由；Claude 握手返回模型选项，无需发送提示词，自有服务不使用内置目录。
 
@@ -34,7 +37,7 @@
 
 安装 npm 包并启动本机后台 → 创建/接入 Workspace 与 Agent → 通过原生客户端和 Skills 进入真实会话 → 协作并查看历史 → 保存检查点、确认正常交出 → 后继继续同一 Agent。
 
-本机后台按 AW_HOME 持有唯一服务锁，在同一进程内管理现有 Runner 与维护线程。重启只恢复能核对原 Binding、执行位置和原生会话的观察；缺少来源、旧 controller 未释放或创建结果未知时保留原因，不重建聊天或重发输入。后台停止请求与实际进程退出分别显示，停止后台不等于 Agent 已交出，也不证明原生聊天停止。
+本机后台按 AW_HOME 持有唯一服务锁，在同一进程内管理现有 Runner、消息检查与维护线程。重启复用能核对原 Binding、执行位置和原生会话的入口；从未尝试的 queued 输入仍按已有授权继续，已提交或结果未知的输入不重放。缺少来源、旧 controller 未释放或创建结果未知时保留原因，不重建聊天。用户暂停和巡检启停选择保留。后台停止请求与实际进程退出分别显示，停止后台不等于 Agent 已交出，也不证明原生聊天停止。
 
 Agent 身份、执行会话、运行环境与本地副本分开表示。`agent.show` 保留所有已登记副本的本机观察，顶层当前观察必须匹配同一 Binding、原生会话和已知执行位置；旧副本不会覆盖当前会话。`agent.history` 返回同一共享快照中的 Binding 历史。新 Binding 保存实际安装位置与目录，旧记录缺失的来源保持未知；这些本机位置记录本身不证明两个聊天同机。
 
@@ -44,7 +47,7 @@ Agent 身份、执行会话、运行环境与本地副本分开表示。`agent.s
 
 `runtime.launch-show` 只读展示原创建回执中的有限字段。用户可通过 `runtime.reconcile-create` 认领原回执的真实 threadId，程序只读核对原 ID、本机目录、状态和已采用模型，再登记同一会话。丢失真实 ID、原 controller 未释放或来源不明时保留未知或拒绝；不会凭同目录候选猜测，不创建或发送原生输入。原 bind 回报丢失可读回同一结果，已有 boot 输入保持原字节。成功不自动开始观察，须由用户显式 `runtime.start`。隔离 Git 和只读原生协议夹具通过，真实 Desktop 故障恢复仍待实测。
 
-`agent.fork --resume` 核对原来源、检查点、名称和目标 ID，复用已保存的目标分支与登记，只补目录等缺失步骤，不覆盖已有用户修改。原分支 `.aw/fork.json` 保存来源，本机原发表凭据阻止未知写入被重放；它不是另一份 Agent 身份登记。隔离 Git 已验证分支、登记和目录阶段的失败继续。旧 Fork 未包含来源记录时不支持新 resume，已登记的旧目标仍可 `agent connect`，本轮不自动迁移历史分支。
+`agent.fork --resume` 核对原来源、检查点、名称和目标 ID，复用已保存的目标分支与登记，只补目录等缺失步骤，不覆盖已有用户修改。新版分支 `.agentworkspace/fork.json` 保存来源，本机原发表凭据阻止未知写入被重放；它不是另一份 Agent 身份登记。隔离 Git 已验证分支、登记和目录阶段的失败继续。旧 Fork 未包含来源记录时不支持新 resume，已登记的旧目标仍可 `agent connect`，本轮不改写封存的历史分支。
 
 Codex Desktop 和受管 CLI 使用[实例模型配置](instance-model-profiles.md)，创建、恢复与 normal 输入显式带模型和推理强度；实例文件的后续编辑不改变当前入口的采用值。缺项与已知不兼容值拒绝，未知能力记录未确认。这项参数合同由 Windows 的配置、Git 与协议测试验证；真实 Desktop 设置效果仍需受控复验，未升级日常安装。
 
@@ -58,7 +61,7 @@ Message 通知使用一份随包 JSON 模板，附完整存储原文并保留未
 
 message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确协议、仓库工具步骤及可选的独立 Python/Git 脚本。脚本不依赖 AW，不创建身份或入口；对原操作保留字节、条件提交、部分成功与结果未知，不将私有操作文件冒充 AW receipt。新实例获得完整 Skill 树，工具升级沿用现有资源哈希保护，用户修改或新增同路径材料时停止覆盖。
 
-每次发送与回复由 Skill 核对双方当前有效入口和当次本机 Codex 观察，再选择原生直发或正式 Message。`direct-message.record/list/show` 将可选直发历史单独保存在调用方 Workspace 的 `direct-messages/`，不双写收件方空间，不进入正式索引、ACK、FIFO 或重试。保存失败不影响交流；原生发送结果未知只核对原发送。保存和读取接口已有隔离 Git 验证，真实客户端中的发送及模型遵循新版 Skill 仍需按最终版本实测。
+每次发送与回复由 Skill 核对双方当前有效入口和当次本机 Codex 观察，再选择原生直发或正式 Message。`direct-message.record/list/show` 将可选直发历史单独保存在调用方 Workspace 的 `.agentworkspace/direct-messages/`，不双写收件方空间，不进入正式索引、ACK、FIFO 或重试。保存失败不影响交流；原生发送结果未知只核对原发送。保存和读取接口已有隔离 Git 验证，真实客户端中的发送及模型遵循新版 Skill 仍需按最终版本实测。
 
 ## 验证层次
 
@@ -90,7 +93,7 @@ message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确�
 
 Codex 项目准备按可靠 ID 和实例主目录发现、复用已有项目，分区只在实际控制接口支持时显式处理并读回。原生项目创建、文件夹编辑仍需手动准备，不把保存引用或协议夹具当成桌面操作通过。
 
-Windows 测试按文件分四片，保留选择清单与 JUnit。安装检查请求正常服务停机并等待本进程的 HTTP/巡检线程；清理仅对已确认的普通只读文件恢复写位并重试一次。AW 自有的裸仓库初始化明确禁用不需要的符号链接能力探测，修复本机系统临时目录中可复现的探测残留。该条件下的独立安装与清理已通过，但不据此推定所有历史 WinError 145 的根因。
+Windows 测试按文件分八片，保留选择清单与 JUnit。安装检查请求正常服务停机并等待本进程的 HTTP/巡检线程；清理仅对已确认的普通只读文件恢复写位并重试一次。AW 自有的裸仓库初始化明确禁用不需要的符号链接能力探测，修复本机系统临时目录中可复现的探测残留。该条件下的独立安装与清理曾通过，但不据此推定所有历史 WinError 145 的根因，也不代替当前包的安装检查。
 
 原包 `57446de` 的开发结果和失败证据见 [归档报告](https://github.com/Dante0311/AW-Workspace/blob/5ec6e5e99dcc68b8ec58e701a7ff9d7b119974e8/development/archive/2026-10-10-unified-57446de/docs/evidence/2026-10-09-shared-materials/README.md)。这些结果只对应原包；当前候选的 Windows、浏览器、原生 Desktop 和真实模型效果分别报告。
 

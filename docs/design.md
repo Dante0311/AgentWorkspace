@@ -395,7 +395,7 @@ Message 按目标实例的当前 Binding 调用 Harness 接入能力，持续投
 
 进入对方仓库不等于已确认通知。需要真实权限和目标分支允许的提交方式，好友配置不绕过它们。不可直达时 Bridge 可选，不是必需通信基础设施。
 
-新布局的共享记录路径为 `.agentworkspace/messages/<id>.json`、`.agentworkspace/message-index/<id>.json` 与 `.agentworkspace/acks/<id>.json`。索引包含 `id/from/to/created_at/delivery`，独立于正文定位通知。地址中的 Workspace 使用 `.agentworkspace/workspace.json` 的 locator，不以本机别名、仓库地址或目录替代。Message 与索引的原字节首次保存后固定；跨仓库补齐不重新生成时间或序列化正文。当前版本仍使用旧路径，迁移与手动协议的同步更新按第 9.3 节处理。
+新布局的共享记录路径为 `.agentworkspace/messages/<id>.json`、`.agentworkspace/message-index/<id>.json` 与 `.agentworkspace/acks/<id>.json`。索引包含 `id/from/to/created_at/delivery`，独立于正文定位通知。地址中的 Workspace 使用 `.agentworkspace/workspace.json` 的 locator，不以本机别名、仓库地址或目录替代。Message 与索引的原字节首次保存后固定；跨仓库补齐不重新生成时间或序列化正文。程序按布局版本选择整套路径，旧仓在显式迁移前继续使用旧路径；迁移与手动协议的同步更新按第 9.3 节处理。
 
 ### 6.4 队列与有效入口
 
@@ -778,7 +778,7 @@ Agent 页面展示当前有效入口对应的环境、会话和本地副本，�
 
 npm 是正式用户安装路线，Windows x64 优先，Node.js 22+。包名 `git-native-agent-workspace`，当前 npm 预览版本 `0.1.0-alpha.1`；沿用 Python 后端，随包携带固定 Python 3.13 运行时、现有 wheel、网页与七个 Skills，用户无需系统 Python。Git 和原生客户端仍由用户自行安装登录。wheel 保留为开发和底层构建，不与 npm 并列为第二条用户路线。
 
-现有交付使用 Actions/本地 `.tgz` 并通过 `npm install -g` 文件安装，未发布 Registry。包保持 `private=true` / `UNLICENSED`，不得以打包工作推定公开发布或许可证授权。现有停止、替换包和启动命令见 [README](../README.md#使用流程)，构建来源与校验值分别提供；平台资源随软件更新和新目录迁移仍待实现，当前手工命令不代表已经具备完整升级流程。
+现有交付使用 Actions/本地 `.tgz` 并通过 `npm install -g` 文件安装，未发布 Registry。包保持 `private=true` / `UNLICENSED`，不得以打包工作推定公开发布或许可证授权。停止、替换包和启动命令见 [README](../README.md#使用流程)，构建来源与校验值分别提供。平台材料按第 12.1 节统一更新；目录迁移仍须按第 9.3 节显式选择范围并核对原请求，不隐藏在安装动作中。具体实现和验收范围见 [implementation.md](implementation.md)。
 
 ## 13. 首版边界与验收
 

@@ -87,6 +87,18 @@ aw -w sea agent bind helper --binding BINDING --session REAL_NEW_SESSION_ID
 
 手动入口不具备自动推送能力，使用 `message receive` 主动收件。连接云端模型需要使用方配置实际可达的工具接入；本包提供 MCP stdio 与本机 HTTP，不包含公网代理、TLS 部署或自动创建 ChatGPT 云会话。
 
+可选的 [Web Courier 扩展](../extensions/web-courier/README.md)用于人工确认投递一条正式 Message。先准备实际 ChatGPT 会话、对应的 active manual Binding 和可用的收件工具，再在 Chrome 加载构建包内的扩展。它不替代接收方执行 `message receive` 或通过 Git 发布真实 ACK。
+
+在用户管理终端中，为实际会话与扩展 ID 创建受限连接；端口必须与该 `AW_HOME` 的后台实际监听端口一致：
+
+```sh
+aw -w sea web-courier connect web-agent --binding CURRENT_BINDING --target-url "https://chatgpt.com/c/CONVERSATION_ID" --extension-id EXTENSION_ID --request-id courier-one --port 8765
+aw web-courier status courier-one
+aw web-courier revoke courier-one --request-id revoke-courier-one
+```
+
+只将 connect 返回的连接 JSON 粘贴到扩展设置，不把后台管理 Token 交给扩展。status 不返回连接密钥，并分别显示网页观察和真实 ACK。原发送返回丢失或页面结果未知时只查询原记录，不再次点击；撤销保留连接与尝试记录。首批只支持单条 normal Message，真实 Chrome 加载、登录和页面效果由具体候选的 E2E 结果说明。
+
 MCP 启动命令是 `aw mcp`。给对应会话的进程配置 `AW_HOME`、`AW_WORKSPACE`、`AW_AGENT`、`AW_BINDING`，使工具以实际运行绑定核对身份。`aw_execute` 接受 `{command, arguments}`，例如：
 
 ```json

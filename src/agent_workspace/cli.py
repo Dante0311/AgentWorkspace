@@ -44,6 +44,17 @@ def parser():
 
     actions("software", ["status", "update"])
 
+    courier = actions("web-courier", ["connect", "status", "revoke"])
+    courier["connect"].add_argument("agent_id")
+    courier["connect"].add_argument("--binding", dest="expected_binding", required=True)
+    courier["connect"].add_argument("--target-url", required=True)
+    courier["connect"].add_argument("--extension-id", required=True)
+    courier["connect"].add_argument("--request-id", required=True)
+    courier["connect"].add_argument("--port", type=int, default=8765)
+    for key in ("status", "revoke"):
+        courier[key].add_argument("connection_id")
+    courier["revoke"].add_argument("--request-id", required=True)
+
     migration = actions("layout", ["plan", "migrate"])
     for sub in migration.values():
         sub.add_argument("--agent", dest="agent_ids", action="append",
@@ -335,7 +346,7 @@ def main(argv=None):
             if not workspace:
                 raise Error("Select the Runner's --workspace.")
             args["workspace"] = workspace
-        if not command.startswith(("setup.", "session.", "backend.", "software.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+        if not command.startswith(("setup.", "session.", "backend.", "software.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile", "web-courier.status", "web-courier.revoke"):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)

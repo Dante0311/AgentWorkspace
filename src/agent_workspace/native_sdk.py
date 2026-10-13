@@ -17,7 +17,7 @@ import sys
 import threading
 
 from . import layout
-from .util import Conflict, Error, Unavailable, locked, now, uid, write_json
+from .util import Conflict, Error, Unavailable, now, uid, write_json
 
 
 SDK_TYPES = {
@@ -199,7 +199,9 @@ class NativeSDK:
                         "local_submission_id": submission, "event": data}
                 if completion:
                     item["completion"] = completion
-                with locked(layout.local_path(self.root, "records.lock")):
+                with layout.lock(self.root, "records.lock"):
+                    self.record = layout.instance_path(self.root, "records") / self.binding / "runtime.jsonl"
+                    self.record.parent.mkdir(parents=True, exist_ok=True)
                     with self.record.open("a", encoding="utf-8") as stream:
                         stream.write(json.dumps(item, ensure_ascii=False) + "\n")
                         stream.flush()

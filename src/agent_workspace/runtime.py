@@ -21,7 +21,7 @@ from .rpc import Rpc
 from .native_sdk import NativeSDK, SDK_TYPES, sdk_options
 from . import layout
 from .util import (Conflict, Error, LockBusy, RetryableRead, Unavailable, Uncertain, encode,
-                   locked, now, read_json, slug, uid, write_bytes, write_json)
+                   now, read_json, slug, uid, write_bytes, write_json)
 
 
 TOOL_SCHEMA = {"type": "object", "properties": {"command": {"type": "string"},
@@ -120,7 +120,7 @@ def configure_desktop(app, workspace, agent_id, command=None, directory=None):
     if not pipe or not thread:
         raise Error("Run capture-desktop inside the real Desktop session; both CODEX environment values are required.")
     model_profiles.migrate(root)
-    with locked(layout.local_path(root, "files.lock")):
+    with layout.lock(root, "files.lock"):
         value = read_json(layout.local_path(root, "runtime.json"), {})
         value.update(kind="desktop", pipe_path=pipe, caller_thread=thread)
         if command:
@@ -217,7 +217,9 @@ class Codex:
         self.profile_validation = model_profiles.check_catalog(self.profile, models, complete=not cursor)
 
     def event(self, value):
-        with locked(layout.local_path(self.root, "records.lock")):
+        with layout.lock(self.root, "records.lock"):
+            self.record = layout.instance_path(self.root, "records") / self.binding / "runtime.jsonl"
+            self.record.parent.mkdir(parents=True, exist_ok=True)
             with self.record.open("ab") as stream:
                 stream.write(encode(value).replace(b"\n", b" ") + b"\n")
                 stream.flush()
@@ -393,7 +395,7 @@ def reconcile_create(app, workspace, agent_id, binding, session, directory=None)
     root = app.root(workspace, agent_id, directory or execution["directory"])
     if root != Path(execution["directory"]).resolve():
         raise Conflict("The original execution belongs to another local copy.")
-    with locked(layout.local_path(root, "runner.lock"), wait=0):
+    with layout.lock(root, "runner.lock", wait=0):
         if entry.get("controller"):
             raise Conflict("The original controller remains; inspect it or use explicit takeover.")
         if read_json(layout.local_path(root, "entry.json"), {}).get("binding") != binding:
@@ -641,9 +643,9 @@ def continue_stop(app, workspace, agent_id, binding, directory=None, *, expected
     request = {"binding": binding, "checkpoint": entry["checkpoint"], "session": entry["session"]}
     # A held OS lock is evidence of a live local runner, unlike an old PID file.
     # The child takes this same lock before connecting to any native interface.
-    with locked(layout.local_path(root, "stop-launch.lock")):
+    with layout.lock(root, "stop-launch.lock"):
         try:
-            with locked(layout.local_path(root, "runner.lock"), wait=0):
+            with layout.lock(root, "runner.lock", wait=0):
                 pass
         except LockBusy:
             return {**request, "state": "runner_present"}
@@ -728,14 +730,17 @@ def start(app, workspace, agent_id, directory=None, open_app=False, binding_id=N
         prefix = ("这是新会话接入。先登记这个新会话的真实 ID，成功前不要执行其他工作。不要使用历史 ID。\n"
                   "参数数组：" + json.dumps(bind_args, ensure_ascii=False) + "\nCodex 中真实 ID 可从 CODEX_THREAD_ID 读取。\n\n")
         prompt = prefix + prompt
-        write_bytes(layout.local_path(root, "entry-prompt.md"), prompt.encode())
-        result.update(state="awaiting_new_session_bind", prompt_file=str(layout.local_path(root, "entry-prompt.md")), prompt=prompt)
+        with layout.lock(root, "files.lock"):
+            prompt_path = layout.local_path(root, "entry-prompt.md")
+            write_bytes(prompt_path, prompt.encode())
+            result.update(state="awaiting_new_session_bind", prompt_file=str(prompt_path), prompt=prompt)
         if result["kind"] == "desktop":
             result["open_url"] = "codex://new?" + urllib.parse.urlencode({"path": str(root), "prompt": prompt})
             if open_app:
                 result["app_open_requested"] = webbrowser.open(result["open_url"])
         return result
-    write_json(layout.local_path(root, "launch.json"), {"binding": binding, "attempted": False})
+    with layout.lock(root, "files.lock"):
+        write_json(layout.local_path(root, "launch.json"), {"binding": binding, "attempted": False})
     return {**result, **spawn_runner(app, workspace, agent_id, str(root))}
 
 
@@ -748,9 +753,9 @@ def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="u
     if not isinstance(text, str) or not text.strip() or delivery not in ("normal", "insert"):
         raise Error("Input requires non-empty text and normal/insert delivery.")
     identifier = slug(request_id or uid("i"))
-    path = layout.local_path(root, "inputs") / f"{identifier}.json"
     # Serialize producers, not model turns. IDs identify requests; they do not order them.
-    with locked(layout.local_path(root, "inputs.lock")):
+    with layout.lock(root, "inputs.lock"):
+        path = layout.local_path(root, "inputs") / f"{identifier}.json"
         app.require_binding(workspace, agent_id, agent["current"])
         previous = read_json(path)
         if previous:
@@ -776,8 +781,9 @@ def receive_input(app, workspace, agent_id, binding, request_id, directory=None)
     if desktop_actor(app, workspace, agent_id) != (workspace, agent_id, binding):
         raise Conflict("Input belongs to another execution entry.")
     root = app.root(workspace, agent_id, directory)
-    path = layout.local_path(root, "inputs") / (slug(request_id) + ".json")
-    with locked(path.with_suffix(".lock")):
+    identifier = slug(request_id)
+    with layout.lock(root, "files.lock"):
+        path = layout.local_path(root, "inputs") / (identifier + ".json")
         item = read_json(path)
         if not item or item["binding"] != binding or item["state"] not in ("dispatching", "submitted"):
             raise Conflict("This input is not awaiting this Desktop session.")
@@ -802,11 +808,12 @@ def handoff_request(app, workspace, agent_id, *, renew=False, directory=None):
     root = app.root(workspace, agent_id, directory)
     agent = app.agent(workspace, agent_id)
     app.require_binding(workspace, agent_id, agent["current"])
-    control = read_json(layout.local_path(root, "control.json"), {})
-    write_json(layout.local_path(root, "control.json"), {**control, "handoff": agent["current"]})
-    write_json(layout.local_path(root, "watch.json"), {"enabled": False, "reason": "handoff_requested"})
-    if renew:
-        write_json(layout.local_path(root, "renew.json"), {"binding": agent["current"], "requested": True})
+    with layout.lock(root, "files.lock"):
+        control = read_json(layout.local_path(root, "control.json"), {})
+        write_json(layout.local_path(root, "control.json"), {**control, "handoff": agent["current"]})
+        write_json(layout.local_path(root, "watch.json"), {"enabled": False, "reason": "handoff_requested"})
+        if renew:
+            write_json(layout.local_path(root, "renew.json"), {"binding": agent["current"], "requested": True})
     guidance = (layout.instance_path(root, "prompts/handoff.md")).read_text(encoding="utf-8")
     text = ("本次明确请求当前入口 " + agent["current"] + " 正常交出。请使用这个 Binding 执行 handoff Skill，"
             "保存实际检查点、请求 agent.stop 后结束当前轮次，不自行启动后继。\n\n" + guidance)
@@ -827,7 +834,8 @@ def watch(app, workspace, agent_id, operation, interval=5, directory=None):
     if operation == "start":
         app.require_binding(workspace, agent_id, binding)
     result = {"enabled": operation == "start", "interval": interval, "binding": binding, "changed_at": now()}
-    write_json(path, result)
+    with layout.lock(root, "files.lock"):
+        write_json(layout.local_path(root, "watch.json"), result)
     if operation == "start":
         result["backend"] = backend.start(app)
     return result
@@ -926,7 +934,7 @@ class Runner:
         raise failures[0]
 
     def run(self):
-        with locked(layout.local_path(self.root, "runner.lock"), wait=0):
+        with layout.lock(self.root, "runner.lock", wait=0):
             failure = None
             try:
                 self._run_owned()
@@ -961,9 +969,10 @@ class Runner:
         if failure is not None:
             state = ("native_stop_unconfirmed" if self.controller is not None and self.adapter is not None
                      and not self.adapter_closed else "failed")
-            self.status(state=state, reason=str(failure), error_code=getattr(failure, "code", None),
-                        cleanup_errors=self.cleanup_errors, stop_observation=pending_stop,
-                        entry_automatically_released=False)
+            with layout.lock(self.root, "files.lock"):
+                self.status(state=state, reason=str(failure), error_code=getattr(failure, "code", None),
+                            cleanup_errors=self.cleanup_errors, stop_observation=pending_stop,
+                            entry_automatically_released=False)
             raise failure
         if pending_stop is not None:
             return
@@ -982,8 +991,9 @@ class Runner:
             renew = read_json(layout.local_path(self.root, "renew.json"))
             result = start(self.app, self.workspace, self.agent_id, str(self.root),
                            open_app=self.runtime_kind == "desktop", expected_handoff=handoff)
-            write_json(layout.local_path(self.root, "renew-result.json"), result)
-            write_json(layout.local_path(self.root, "renew.json"), {**renew, "requested": False})
+            with layout.lock(self.root, "files.lock"):
+                write_json(layout.local_path(self.root, "renew-result.json"), result)
+                write_json(layout.local_path(self.root, "renew.json"), {**renew, "requested": False})
 
     def _normal_handoff_ready(self):
         snap, owner, entry = self._read_state("successor_qualification")
@@ -1375,7 +1385,7 @@ class Runner:
                     prompt = item["text"]
                 response = self.adapter.notify(prompt, item["delivery"])
             except Exception as exc:
-                with locked(path.with_suffix(".lock")):
+                with layout.lock(self.root, "files.lock"):
                     latest = read_json(path) if isinstance(self.adapter, Desktop) else item
                     received = latest.get("result", {}).get("turn", {}).get("id")
                     latest.update(state="submitted" if received else "outcome_unknown", error=str(exc))
@@ -1384,7 +1394,7 @@ class Runner:
                         latest["model_profile"] = model_receipt
                     write_json(path, latest)
                 raise
-            with locked(path.with_suffix(".lock")):
+            with layout.lock(self.root, "files.lock"):
                 latest = read_json(path) if isinstance(self.adapter, Desktop) else item
                 latest.update(state="submitted", result={**response, **latest.get("result", {})})
                 model_receipt = getattr(self.adapter, "model_receipt", None)

@@ -9,7 +9,7 @@ import threading
 import time
 
 from . import layout
-from .util import Conflict, Error, child_command, digest, locked, now, read_json, slug, uid, write_json
+from .util import Conflict, Error, child_command, digest, now, read_json, slug, uid, write_json
 
 
 def configure(app, workspace, agent_id, name, value, directory=None, expected_generation=None):
@@ -19,8 +19,8 @@ def configure(app, workspace, agent_id, name, value, directory=None, expected_ge
         raise Error("A bridge command is an explicit argv array.")
     if value.get("max_restarts", 5) < 0:
         raise Error("Unbounded bridge restarts are not supported.")
-    path = layout.local_path(root, "bridges") / f"{name}.json"
-    with locked(path.with_suffix(".lock")):
+    with layout.lock(root, "files.lock"):
+        path = layout.local_path(root, "bridges") / f"{name}.json"
         previous = read_json(path, {})
         if expected_generation is not None and previous.get("generation") != expected_generation:
             raise Conflict("Bridge configuration changed; inspect it before retrying.")
@@ -33,14 +33,14 @@ def send(app, workspace, agent_id, binding, name, target, text, request_id=None,
     app.require_binding(workspace, agent_id, binding)
     root = app.root(workspace, agent_id, directory)
     name = slug(name)
-    config = read_json(layout.local_path(root, "bridges") / f"{name}.json")
-    if not config or not config.get("enabled"):
-        raise Error("Channel is not enabled.")
     identifier = slug(request_id or uid("s"))
-    path = layout.local_path(root, "bridge-sends") / f"{identifier}.json"
     value = {"id": identifier, "binding": binding, "bridge": name, "target": target, "text": text,
              "state": "queued", "created_at": now()}
-    with locked(path.with_suffix(".lock")):
+    with layout.lock(root, "files.lock"):
+        config = read_json(layout.local_path(root, "bridges") / f"{name}.json")
+        if not config or not config.get("enabled"):
+            raise Error("Channel is not enabled.")
+        path = layout.local_path(root, "bridge-sends") / f"{identifier}.json"
         previous = read_json(path)
         if previous:
             if any(previous[k] != value[k] for k in ("binding", "bridge", "target", "text")):

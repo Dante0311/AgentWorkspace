@@ -10,7 +10,7 @@ import shutil
 import os
 
 from . import layout, software
-from .util import Conflict, Error, locked, now, read_json, slug, uid, write_json
+from .util import Conflict, Error, now, read_json, slug, uid, write_json
 from . import model_profiles
 
 
@@ -54,9 +54,9 @@ def request(app, workspace, agent_id, target_config, request_id=None, directory=
     if not isinstance(target_config, dict):
         raise Error("target_config must be a native runtime configuration object.")
     root = app.root(workspace, agent_id, directory)
-    path = layout.local_path(root, "transfer.json")
     identifier = slug(request_id or uid("transfer-"))
-    with locked(layout.local_path(root, "transfer.lock")):
+    with layout.lock(root, "transfer.lock"):
+        path = layout.local_path(root, "transfer.json")
         archived = read_json(layout.local_path(root, "transfers") / (identifier + ".json"))
         if archived:
             if archived["target_config"] != target_config:
@@ -89,8 +89,8 @@ def request(app, workspace, agent_id, target_config, request_id=None, directory=
 def advance(app, workspace, agent_id, directory=None):
     from .runtime import start
     root = app.root(workspace, agent_id, directory)
-    path = layout.local_path(root, "transfer.json")
-    with locked(layout.local_path(root, "transfer.lock")):
+    with layout.lock(root, "transfer.lock"):
+        path = layout.local_path(root, "transfer.json")
         record = read_json(path)
         if not record:
             raise Error("No transfer has been requested.")
@@ -124,7 +124,7 @@ def advance(app, workspace, agent_id, directory=None):
             target_config.update(model_profiles.validate(record["target_model_profile"]))
         preflight(app, workspace, agent_id, target_config, root)
         # This lock also proves the original local runner has finished its cleanup.
-        with locked(layout.local_path(root, "runner.lock"), wait=0):
+        with layout.lock(root, "runner.lock", wait=0):
             app.configure(workspace, agent_id, target_config, str(root))
             record["state"] = "launching"
             write_json(path, record)
@@ -160,11 +160,8 @@ def persist_completion(root, entry):
     Share the launch lock: a fast boot must not be overwritten by advance()'s
     final starting write. An older runner must not modify a later transfer.
     """
-    path = layout.local_path(root, "transfer.json")
-    record = read_json(path)
-    if not record or record["state"] == "completed" or record["target_binding"] != entry["id"]:
-        return
-    with locked(layout.local_path(root, "transfer.lock")):
+    with layout.lock(root, "transfer.lock"):
+        path = layout.local_path(root, "transfer.json")
         record = read_json(path)
         if not record or record["state"] == "completed" or record["target_binding"] != entry["id"]:
             return

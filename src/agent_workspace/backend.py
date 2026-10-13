@@ -276,13 +276,15 @@ class Backend:
             runner.run()
         except Exception:
             # A task failure belongs to this Runner; it must not terminate other Agents.
-            log_path = layout.local_path(runner.root, "runner.log")
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with log_path.open("a", encoding="utf-8") as log:
-                log.write(now() + "\n" + traceback.format_exc() + "\n")
+            with layout.lock(runner.root, "files.lock"):
+                log_path = layout.local_path(runner.root, "runner.log")
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as log:
+                    log.write(now() + "\n" + traceback.format_exc() + "\n")
         else:
             if runner.stop_event.is_set():
-                runner.status(state="monitor_stopped", entry_automatically_released=False)
+                with layout.lock(runner.root, "files.lock"):
+                    runner.status(state="monitor_stopped", entry_automatically_released=False)
 
     def cancel(self, root, binding):
         with self.lock:

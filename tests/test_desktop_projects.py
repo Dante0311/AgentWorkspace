@@ -1,4 +1,5 @@
 """Desktop references never masquerade as native project or Binding changes."""
+from agent_workspace import layout
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ def test_plan_is_read_only_and_names_are_reused_per_agent(app):
     assert first['project']['section_name'] == 'AW · sea'
     assert first['native_project_verified'] is False and first['revision'] is None
     assert first == dp.plan(app, 'sea', 'reviewer')
-    assert not (root / '.aw-local/desktop-projects').exists()
+    assert not (layout.local_path(root, 'desktop-projects')).exists()
     assert app.store('sea').head('main') == before
 
 

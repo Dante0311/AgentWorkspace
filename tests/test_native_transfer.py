@@ -1,4 +1,5 @@
 """Real native clients and platform lifecycle against isolated loopback model APIs."""
+from agent_workspace import layout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -165,7 +166,7 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
             if predicate():
                 return
             time.sleep(.05)
-        pytest.fail(f'Native transfer failed: {failures}; {read_json(root / ".aw-local/status.json")}')
+        pytest.fail(f'Native transfer failed: {failures}; {read_json(layout.local_path(root, "status.json"))}')
 
     monkeypatch.setattr(runtime, 'spawn_runner', spawn)
     try:
@@ -181,14 +182,15 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
         app.configure('sea', 'native-transfer', profile(source))
         runtime.start(app, 'sea', 'native-transfer')
         old = app.agent('sea', 'native-transfer')['current']
-        wait_until(lambda: read_json(root / f'.aw-local/inputs/boot-{old}.json', {}).get('checkpoint_revision'))
+        wait_until(lambda: read_json(layout.local_path(root, 'inputs') / f'boot-{old}.json', {}).get('checkpoint_revision'))
         phase['handoff'] = True
         operation = transfer.request(app, 'sea', 'native-transfer', profile(target), request_id='native-transfer')
-        wait_until(lambda: read_json(root / '.aw-local/transfer.json')['state'] == 'completed')
+        wait_until(lambda: read_json(layout.local_path(root, 'transfer.json'))['state'] == 'completed')
         current = app.show('sea', 'native-transfer')['binding']
         assert len(runners) == 2 and phase['step'] == 2
         assert current['id'] == operation['target_binding'] and current['kind'] == target
-        assert app.store('sea').snapshot().json(f'bindings/{old}.json')['phase'] == 'released'
+        snap = app.store('sea').snapshot()
+        assert snap.json(layout.shared_path(snap, f'bindings/{old}.json'))['phase'] == 'released'
         assert not threads[0].is_alive()
         with pytest.raises(Conflict):
             app.require_binding('sea', 'native-transfer', old)
@@ -211,7 +213,7 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
         assert len(runners) == 2
         if source == target == 'codex':
             # E2E-004: no status/continue call is used to make completion durable.
-            receipt_path = root / '.aw-local/transfer.json'
+            receipt_path = layout.local_path(root, 'transfer.json')
             finished = read_json(receipt_path)
             first_record = dict(finished)
             for cycle in (1, 2):
@@ -230,9 +232,9 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
                 assert read_json(receipt_path) == finished
                 assert transfer.status(app, 'sea', 'native-transfer') == finished
                 assert transfer.advance(app, 'sea', 'native-transfer') == finished
-                stop = read_json(root / f'.aw-local/inputs/successor-stop-{cycle}.json')
+                stop = read_json(layout.local_path(root, 'inputs') / f'successor-stop-{cycle}.json')
                 assert stop['state'] == 'completed'
-                events = [json.loads(line) for line in (root / 'records' / binding / 'runtime.jsonl').read_text().splitlines()]
+                events = [json.loads(line) for line in (layout.instance_path(root, 'records') / binding / 'runtime.jsonl').read_text().splitlines()]
                 assert any(e.get('method') == 'turn/completed' and e['params']['turn']['id'] == stop['result']['turn']['id']
                            and e['params']['turn']['status'] == 'completed' for e in events)
                 assert (root / 'user-note.md').read_text() == 'User-owned asset survives handoff.'
@@ -242,7 +244,7 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
                     phase['stop'] = False
                     runtime.start(app, 'sea', 'native-transfer')
                     fresh = app.agent('sea', 'native-transfer')['current']
-                    wait_until(lambda: read_json(root / f'.aw-local/inputs/boot-{fresh}.json', {}).get('checkpoint_revision'))
+                    wait_until(lambda: read_json(layout.local_path(root, 'inputs') / f'boot-{fresh}.json', {}).get('checkpoint_revision'))
                     phase['step'] = 0
                     handoff_tools[0]['arguments']['checkpoint_id'] = 'transfer-cp-next'
                     handoff_tools[1]['arguments']['checkpoint'] = 'transfer-cp-next'
@@ -254,7 +256,7 @@ def test_native_transfer_and_message(app, tmp_path, monkeypatch, source, target)
             assert len(runners) == 4  # Two explicit starts, two fixed successors, no extras.
             assert all(not thread.is_alive() for thread in threads)
             for r in runners:
-                handoff = read_json(root / f'.aw-local/inputs/handoff-{r.binding}.json')
+                handoff = read_json(layout.local_path(root, 'inputs') / f'handoff-{r.binding}.json')
                 if handoff:
                     assert handoff['state'] == 'completed'
     finally:

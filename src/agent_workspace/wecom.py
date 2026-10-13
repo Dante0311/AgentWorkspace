@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import sys
 
+from . import layout
 from .util import Error, read_json
 
 
@@ -37,7 +38,7 @@ async def serve():
         return 78
     root = Path(os.environ["AW_INSTANCE_ROOT"])
     name = os.environ["AW_BRIDGE_NAME"]
-    config = read_json(root / ".aw-local/bridges" / f"{name}.json")
+    config = read_json(layout.local_path(root, "bridges") / f"{name}.json")
     bot_id = os.environ.get(config.get("bot_id_env", "WECOM_BOT_ID"))
     secret = os.environ.get(config.get("secret_env", "WECOM_BOT_SECRET"))
     allowed = set(config.get("allowed_chat_ids", []))

@@ -1,3 +1,4 @@
+from agent_workspace import layout
 import json
 from pathlib import Path
 import sys
@@ -47,7 +48,7 @@ def test_desktop_create_verifies_saved_project_and_never_repeats_unknown(desktop
     state['unknown'] = True
     with pytest.raises(Unavailable):
         adapter.create('one-binding')
-    assert read_json(root / '.aw-local/launch.json')['attempted']
+    assert read_json(layout.local_path(root, 'launch.json'))['attempted']
     with pytest.raises(Conflict):
         adapter.create('one-binding')
     assert state['creates'] == 1
@@ -61,7 +62,7 @@ def test_desktop_creation_preserves_wrong_directory_receipt(desktop, tmp_path):
     state['cwd'] = str(tmp_path / 'another-folder')
     with pytest.raises(Unavailable, match='directory'):
         adapter.create('one-binding')
-    assert read_json(root / '.aw-local/launch.json')['result']['threadId'] == 'native-chat'
+    assert read_json(layout.local_path(root, 'launch.json'))['result']['threadId'] == 'native-chat'
 
 
 def test_desktop_project_must_be_unique_and_match_explicit_selection(desktop):
@@ -80,7 +81,7 @@ def test_manual_desktop_bootstrap_allows_only_capture_and_bind(app, desktop, mon
     assert runtime.desktop_directory_actor(app, 'agent.bind') is None
     with pytest.raises(Conflict):
         runtime.desktop_directory_actor(app, 'asset.write')
-    write_json(root / '.aw-local/launch.json', {'attempted': True})
+    write_json(layout.local_path(root, 'launch.json'), {'attempted': True})
     with pytest.raises(Conflict):
         runtime.desktop_directory_actor(app, 'agent.bind')
 
@@ -100,7 +101,7 @@ def test_desktop_input_receipt_uses_native_identity_and_turn(app, desktop, monke
     binding = app.reserve('sea', 'alice')['binding']
     app.bind('sea', 'alice', binding, 'native-chat')
     item = runtime.queue_input(app, 'sea', 'alice', 'actual requested work', request_id='input-one')
-    path = root / '.aw-local/inputs/input-one.json'
+    path = layout.local_path(root, 'inputs/input-one.json')
     write_json(path, {**item, 'state': 'dispatching'})
     monkeypatch.setenv('CODEX_THREAD_ID', 'another-chat')
     with pytest.raises(Conflict):
@@ -125,7 +126,7 @@ def test_desktop_completion_requires_received_turn_not_idle_or_another_turn(app,
     runner = runtime.Runner(app, 'sea', 'alice')
     runner.binding, runner.adapter = binding, adapter
     item = runtime.queue_input(app, 'sea', 'alice', 'init', purpose='initial', request_id='boot-' + binding)
-    path = root / '.aw-local/inputs' / (item['id'] + '.json')
+    path = layout.local_path(root, 'inputs') / (item['id'] + '.json')
     write_json(path, {**item, 'state': 'submitted', 'result': {'threadId': 'native-chat'}})
     state['turns'] = [{'id': 'unrelated', 'status': 'completed'}]
     runner._complete_inputs()
@@ -137,7 +138,7 @@ def test_desktop_completion_requires_received_turn_not_idle_or_another_turn(app,
     runner._complete_inputs()
     assert read_json(path)['state'] == 'completed'
     assert read_json(path)['checkpoint_revision']
-    observation = read_json(root / 'records' / binding / 'desktop-turns/our-turn.json')
+    observation = read_json(layout.instance_path(root, 'records') / binding / 'desktop-turns/our-turn.json')
     assert observation['turn'] == {'id': 'our-turn', 'status': 'completed'}
 
 
@@ -149,7 +150,7 @@ def test_desktop_dispatch_error_preserves_a_concurrent_native_receipt(app, deskt
     runner = runtime.Runner(app, 'sea', 'alice')
     runner.binding, runner.adapter = binding, adapter
     item = runtime.queue_input(app, 'sea', 'alice', 'work', request_id='concurrent-receipt')
-    path = root / '.aw-local/inputs/concurrent-receipt.json'
+    path = layout.local_path(root, 'inputs/concurrent-receipt.json')
     calls = []
 
     def accepted_then_disconnected(prompt, delivery):

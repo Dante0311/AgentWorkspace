@@ -6,6 +6,7 @@ from importlib.resources import files
 from pathlib import Path
 import json
 
+from . import layout
 from .util import Conflict, Error, Unavailable, Uncertain, digest, locked, now, read_json, slug, write_json
 
 
@@ -16,7 +17,7 @@ def _path(app, workspace, agent_id, harness):
     if harness not in HARNESSES:
         raise Error("Choose codex, claude or workbuddy for a desktop project reference.")
     root = app.root(workspace, agent_id)
-    return root, root / ".aw-local/desktop-projects" / (harness + ".json")
+    return root, layout.local_path(root, "desktop-projects") / (harness + ".json")
 
 
 def plan(app, workspace, agent_id, harness="codex"):
@@ -120,7 +121,7 @@ def discover(app, workspace, agent_id):
     from .runtime import Desktop
     result = plan(app, workspace, agent_id)
     root = app.root(workspace, agent_id)
-    config = read_json(root / '.aw-local/runtime.json', {})
+    config = read_json(layout.local_path(root, 'runtime.json'), {})
     if config.get('kind') != 'desktop' or not all(config.get(k) for k in ('command', 'pipe_path', 'caller_thread')):
         return {**result, 'state': 'connection_required', 'projects': [], 'sections': [],
                 'capabilities': {}, 'native_project_verified': False}
@@ -140,7 +141,7 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
     if not isinstance(create_section, bool) or (create_section and section_id):
         raise Error('Choose an existing section or explicitly request a new one, not both.')
     root, preferences = _path(app, workspace, agent_id, 'codex')
-    receipt = root / '.aw-local/desktop-preparations' / (request_id + '.json')
+    receipt = layout.local_path(root, 'desktop-preparations') / (request_id + '.json')
     fingerprint = {'project_id': project_id, 'section_id': section_id,
                    'create_section': create_section, 'revision': revision}
     # Serializes shared section names across this installation's Workspace members.
@@ -158,7 +159,7 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
             raise Conflict('Desktop preferences changed; reread before adopting a project.')
         if app.agent(workspace, agent_id)['current']:
             raise Conflict('Handoff before changing the project of an active instance.')
-        config_path = root / '.aw-local/runtime.json'
+        config_path = layout.local_path(root, 'runtime.json')
         original = config_path.read_bytes() if config_path.exists() else b'{}'
         config = json.loads(original)
         if config.get('kind') != 'desktop':

@@ -1,3 +1,4 @@
+from agent_workspace import layout
 import json
 from pathlib import Path
 import sys
@@ -45,7 +46,7 @@ def test_codex_protocol_records_actual_fixture_events(app):
         app.bind('sea','alice',b,adapter.session)
         assert adapter.notify('explicit test input','normal')['turn']['id']=='t1'
         assert adapter.completed.get(timeout=3)['status']=='completed'
-        assert 'turn/completed' in root.joinpath('records',b,'runtime.jsonl').read_text()
+        assert 'turn/completed' in (layout.instance_path(root, 'records') / b / 'runtime.jsonl').read_text()
         assert not app.work_list('sea')
     finally:
         adapter.close()
@@ -57,7 +58,7 @@ def test_runner_bootstrap_and_initial_checkpoint(app):
     b=app.reserve('sea','alice')['binding']
     runner=runtime.Runner(app,'sea','alice')
     errors=[]
-    initial_path = root / '.aw-local/inputs' / f'boot-{b}.json'
+    initial_path = layout.local_path(root, 'inputs') / f'boot-{b}.json'
 
     def target():
         try:
@@ -67,11 +68,11 @@ def test_runner_bootstrap_and_initial_checkpoint(app):
 
     def diagnostics():
         rpc = getattr(runner.adapter, 'rpc', None)
-        events = root / 'records' / b / 'runtime.jsonl'
+        events = layout.instance_path(root, 'records') / b / 'runtime.jsonl'
         return json.dumps({
             'errors': errors,
             'runner_alive': t.is_alive(),
-            'status': read_json(root / '.aw-local/status.json'),
+            'status': read_json(layout.local_path(root, 'status.json')),
             'initial_input': read_json(initial_path),
             'rpc_stderr': getattr(rpc, 'stderr_tail', ''),
             'events_tail': events.read_text(encoding='utf-8', errors='replace')[-4000:] if events.exists() else '',
@@ -98,8 +99,9 @@ def test_runner_bootstrap_and_initial_checkpoint(app):
     assert not errors and not t.is_alive(), diagnostics()
 
 
-def test_watch_stop_does_not_release_entry(pair):
+def test_watch_stop_does_not_release_entry(pair,monkeypatch):
     app,ids=pair
+    monkeypatch.setattr(runtime.backend, 'start', lambda app: {'ready': False, 'state': 'stopped'})
     runtime.watch(app,'sea','alice','start',interval=1)
     assert runtime.watch(app,'sea','alice','status')['enabled']
     runtime.watch(app,'sea','alice','stop')
@@ -138,10 +140,10 @@ def test_bridge_explicit_send_and_disable(pair):
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             manager.tick();time.sleep(.02)
-            record=read_json(root/'.aw-local/bridge-sends/send-one.json')
+            record=read_json(layout.local_path(root, 'bridge-sends/send-one.json'))
             if record['state']=='sent':break
         assert record['state']=='sent'
-        assert not list((root/'.aw-local/inputs').glob('*.json'))
+        assert not list((layout.local_path(root, 'inputs')).glob('*.json'))
         bridges.configure(app,'sea','alice','chat',{'command':[sys.executable,str(BRIDGE)],'enabled':False})
         manager.tick();assert not manager.processes
     finally: manager.stop_all()
@@ -153,7 +155,7 @@ def test_bridge_crash_backoff_and_handoff_no_restart(pair):
     manager=bridges.BridgeManager(app,'sea','alice',ids['alice'],root)
     try:
         manager.tick();manager.processes['bad'].wait(timeout=3);manager.tick()
-        assert read_json(root/'.aw-local/bridges/status/bad.json')['restarts']==1
+        assert read_json(layout.local_path(root, 'bridges/status/bad.json'))['restarts']==1
         manager.tick();assert not manager.processes
         cp=app.checkpoint('sea','alice','handoff',binding=ids['alice'])
         app.stop('sea','alice',ids['alice'],cp['id'])
@@ -165,20 +167,20 @@ def test_bridge_crash_backoff_and_handoff_no_restart(pair):
 @pytest.mark.parametrize('renew', [False, True])
 def test_handoff_request_disables_automatic_restarts_immediately(pair, renew):
     app,ids=pair;root=app.root('sea','alice')
-    runtime.watch(app,'sea','alice','start')
+    write_json(layout.local_path(root, 'watch.json'), {'enabled':True,'binding':ids['alice'],'interval':5})
     request=runtime.handoff_request(app,'sea','alice',renew=renew)
-    assert read_json(root/'.aw-local/control.json')['handoff']==ids['alice']
-    assert not read_json(root/'.aw-local/watch.json')['enabled']
+    assert read_json(layout.local_path(root, 'control.json'))['handoff']==ids['alice']
+    assert not read_json(layout.local_path(root, 'watch.json'))['enabled']
     assert app.agent('sea','alice')['current']==ids['alice']
     assert request['purpose']=='handoff' and request['binding']==ids['alice']
     assert request['id']=='handoff-'+ids['alice']
-    guidance=(root/'.aw/prompts/handoff.md').read_text(encoding='utf-8')
+    guidance=(layout.instance_path(root, 'prompts/handoff.md')).read_text(encoding='utf-8')
     instruction, saved_guidance=request['text'].split('\n\n',1)
     assert ids['alice'] in instruction and saved_guidance==guidance
     repeated=runtime.handoff_request(app,'sea','alice',renew=renew)
     assert repeated==request
     if renew:
-        assert read_json(root/'.aw-local/renew.json')=={'binding':ids['alice'],'requested':True}
+        assert read_json(layout.local_path(root, 'renew.json'))=={'binding':ids['alice'],'requested':True}
 
 
 def test_shared_controller_prevents_duplicate_runner(app,tmp_path):
@@ -194,13 +196,14 @@ def test_shared_controller_prevents_duplicate_runner(app,tmp_path):
     thread=threading.Thread(target=run);thread.start()
     try:
         for _ in range(50):
-            entry=app.store('sea').snapshot().json(f'bindings/{binding}.json')
+            snap=app.store('sea').snapshot()
+            entry=snap.json(layout.shared_path(snap, f'bindings/{binding}.json'))
             if entry.get('controller'):break
             time.sleep(.05)
         other=App(tmp_path/'other');other.workspace_connect('sea',app.store('sea').address)
         other.connect_agent('sea','alice',str(tmp_path/'copy'))
         other.configure('sea','alice',config)
-        write_json(other.root('sea','alice')/'.aw-local/entry.json',{'binding':binding,'config':config})
+        write_json(layout.local_path(other.root('sea','alice'), 'entry.json'),{'binding':binding,'config':config})
         with pytest.raises(Conflict,match='runner'):
             runtime.Runner(other,'sea','alice').run()
     finally:runner.stop_event.set();thread.join(timeout=6)
@@ -235,4 +238,5 @@ def test_relay_material_identifies_old_entry_and_preserves_pending_work(app):
     assert old in context
     assert json.loads(saved)['record']['content'] == content
     assert app.agent('sea', 'alice')['current'] == current
-    assert app.store('sea').snapshot().json(f'bindings/{current}.json')['phase'] == 'starting'
+    snap = app.store('sea').snapshot()
+    assert snap.json(layout.shared_path(snap, f'bindings/{current}.json'))['phase'] == 'starting'

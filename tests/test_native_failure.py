@@ -1,4 +1,5 @@
 """Native errors must not leave a healthy-looking runner or repeat an input."""
+from agent_workspace import layout
 import importlib
 import json
 import queue
@@ -97,7 +98,7 @@ def test_runner_reports_disconnected_sdk_even_without_inputs_or_watch(app, monke
     monkeypatch.setattr(runner.stop_event, "wait", wait)
     with pytest.raises(Unavailable, match='disconnected'):
         runner.run()
-    state = read_json(app.root('sea', 'alice') / '.aw-local/status.json')
+    state = read_json(layout.local_path(app.root('sea', 'alice'), 'status.json'))
     assert state['state'] == 'failed' and not state['entry_automatically_released']
     entry = app.show('sea', 'alice')['binding']
     assert entry['id'] == binding and entry['phase'] == phase

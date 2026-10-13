@@ -1,4 +1,5 @@
 """Isolated home lifecycle and real Runner threads; Desktop is a protocol fixture."""
+from agent_workspace import layout
 import json
 import os
 from pathlib import Path
@@ -88,9 +89,9 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
         app.bind("sea", name, binding, "native-" + name)
         runtime.queue_input(app, "sea", name, "keep queued while busy", request_id="queued-original")
         runtime.queue_input(app, "sea", name, "uncertain original", request_id="unknown-original")
-        unknown = root / ".aw-local/inputs/unknown-original.json"
+        unknown = layout.local_path(root, "inputs/unknown-original.json")
         write_json(unknown, {**read_json(unknown), "state": "outcome_unknown", "turn_id": "original-turn"})
-        roots[name], bindings[name], configured[name] = root, binding, read_json(root / ".aw-local/runtime.json")
+        roots[name], bindings[name], configured[name] = root, binding, read_json(layout.local_path(root, "runtime.json"))
     attached, closed, observed = [], [], {name: threading.Event() for name in roots}
 
     class DesktopPeer:
@@ -126,7 +127,7 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
     app.backend = manager
     try:
         # One damaged local copy must not prevent another Agent from resuming.
-        control = roots["alice"] / ".aw-local/control.json"
+        control = layout.local_path(roots["alice"], "control.json")
         control.write_text("invalid JSON", encoding="utf-8")
         manager._restore()
         assert observed["bob"].wait(90)
@@ -137,7 +138,7 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
         assert observed["alice"].wait(90)
         assert {item[2] for item in attached} == {os.getpid()}
         assert runtime.spawn_runner(app, "sea", "bob")["state"] == "runner_present"
-        (roots["alice"] / ".aw-local/status.json").write_text("not JSON", encoding="utf-8")
+        (layout.local_path(roots["alice"], "status.json")).write_text("not JSON", encoding="utf-8")
         state = manager.status()
         assert state["ready"] and len(state["runners"]) == 2
         assert next(item for item in state["runners"] if item["agent_id"] == "alice")["runtime"]["state"] == "unknown"
@@ -153,10 +154,10 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
     assert all(not task["thread"].is_alive() for task in manager.threads)
     snap = app.store("sea").snapshot()
     for name, binding in bindings.items():
-        entry = snap.json(f"bindings/{binding}.json")
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         assert entry["phase"] == "active" and entry["session"] == "native-" + name and not entry.get("controller")
-        assert read_json(roots[name] / ".aw-local/inputs/queued-original.json")["state"] == "queued"
-        assert read_json(roots[name] / ".aw-local/inputs/unknown-original.json")["state"] == "outcome_unknown"
+        assert read_json(layout.local_path(roots[name], "inputs/queued-original.json"))["state"] == "queued"
+        assert read_json(layout.local_path(roots[name], "inputs/unknown-original.json"))["state"] == "outcome_unknown"
     # Whole-backend stop is reversible. An explicit per-Agent cancellation is retained.
     observed["bob"].clear()
     renewed = backend.Backend(app, http)
@@ -179,18 +180,18 @@ def test_restore_does_not_repeat_unknown_creation_or_guess_execution(app, monkey
     binding = app.reserve("sea", "alice")["binding"]
     root = app.root("sea", "alice")
     receipt = {"binding": binding, "attempted": True, "result": {"clientThreadId": "original-client"}}
-    write_json(root / ".aw-local/launch.json", receipt)
+    write_json(layout.local_path(root, "launch.json"), receipt)
     manager = backend.Backend(app, SimpleNamespace(server_port=12345))
     monkeypatch.setattr(manager, "attach", lambda *args, **kwargs: pytest.fail("Unqualified record must not restart"))
     manager._restore()
-    assert not manager.runners and read_json(root / ".aw-local/launch.json") == receipt
+    assert not manager.runners and read_json(layout.local_path(root, "launch.json")) == receipt
     assert any("No confirmed native session" in note["reason"] for note in manager.resume_notes)
     store = app.store("sea")
     snap = store.snapshot()
-    entry = snap.json(f"bindings/{binding}.json")
+    entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
     entry.pop("execution")
-    store.change("main", {f"bindings/{binding}.json": encode(entry)},
-                 {f"bindings/{binding}.json": snap.entries[f"bindings/{binding}.json"]}, "Legacy execution fixture")
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
+    store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Legacy execution fixture")
     manager._restore()
     assert any("Execution source is missing" in note["reason"] for note in manager.resume_notes)
 
@@ -234,8 +235,8 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
         del app.backend
     assert creations == [binding]
     snap = app.store("sea").snapshot()
-    assert snap.json(f"bindings/{binding}.json")["session"] == "explicit-original-chat"
-    boot = read_json(root / ".aw-local/inputs" / f"boot-{binding}.json")
+    assert snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))["session"] == "explicit-original-chat"
+    boot = read_json(layout.local_path(root, "inputs") / f"boot-{binding}.json")
     assert boot["state"] == "queued" and boot["binding"] == binding
 
 
@@ -243,7 +244,7 @@ def test_log_is_bounded_registered_and_redacts_control_credentials(app):
     app.create("sea", "alice")
     root = app.root("sea", "alice")
     write_json(app.home / "backend/connection.json", {"token": "original-control-token"})
-    path = root / ".aw-local/runner.log"
+    path = layout.local_path(root, "runner.log")
     path.write_text("old\noriginal-control-token Bearer secret-value https://user:password@host/path#token=secret\nlast\n", encoding="utf-8")
     result = execute(app, "backend.log", {"workspace": "sea", "agent_id": "alice", "lines": 2})
     assert result["truncated"] and result["source"]["directory"] == str(root)

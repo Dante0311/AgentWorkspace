@@ -70,7 +70,7 @@ def test_missing_material_fails_before_binding_or_transfer(app):
     with pytest.raises(Error, match='missing'):
         runtime.start(app, 'sea', 'a')
     assert app.agent('sea', 'a')['current'] is None
-    assert not (app.root('sea', 'a') / '.aw-local/launch.json').exists()
+    assert not (app.root('sea', 'a') / '.agentworkspace/local/operations/launch.json').exists()
     from agent_workspace.transfer import preflight
     with pytest.raises(Error, match='missing'):
         preflight(app, 'sea', 'a', {'kind': 'manual'}, app.root('sea', 'a'))

@@ -69,9 +69,10 @@ def test_caretaker_must_use_scoped_repair_not_direct_reconcile(pending):
     actor = ('sea', 'maintainer', binding)
     store = app.store('sea')
     snap = store.snapshot()
-    meta = snap.json('workspace.json')
+    path = '.agentworkspace/workspace.json'
+    meta = snap.json(path)
     meta['caretakers'] = {'maintainer': 'maintainer'}
-    store.change('main', {'workspace.json': encode(meta)}, {'workspace.json': snap.entries['workspace.json']}, 'Test caretaker')
+    store.change('main', {path: encode(meta)}, {path: snap.entries[path]}, 'Test caretaker')
     args = {'agent_id': owner, 'action': 'publication-reconcile', 'operation_id': operation, 'request_id': 'repair-original'}
     with pytest.raises(Error):
         commands.execute(app, 'maintenance.repair', args, actor=actor)

@@ -118,6 +118,51 @@ def test_inherited_tracked_local_files_block_public_save_and_store_writes(app, t
     assert not (app.root('sea', 'alice') / '.agentworkspace/local/operations/pending.json').exists()
 
 
+@pytest.mark.parametrize('legacy', [False, True])
+def test_existing_shared_archives_survive_agent_creation(app, tmp_path, legacy):
+    if legacy:
+        app = legacy_app(tmp_path / 'legacy')
+    store = app.store('sea')
+    archives = {'development/archive/proof/.aw-local/old-receipt.json': b'Archived test evidence',
+                'development/archive/proof/.agentworkspace/local/old-state.json': b'Archived state'}
+    publish_unchecked(store, 'main', archives, tmp_path)
+    before = store.snapshot()
+
+    created = app.create('sea', 'receiver', agent_id='receiver', request_id='archive-receiver')
+    branch = store.head('instance/receiver')
+    repeated = app.create('sea', 'receiver', agent_id='receiver', request_id='archive-receiver')
+    after = store.snapshot()
+
+    assert created['id'] == repeated['id'] == 'receiver'
+    assert store.head('instance/receiver') == branch
+    assert app.agent('sea', 'receiver')['creation']['request_id'] == 'archive-receiver'
+    for path, content in archives.items():
+        assert after.entries[path] == before.entries[path]
+        assert after.bytes(path) == content
+
+
+@pytest.mark.parametrize('path', ['.aw-local/runtime.json', '.agentworkspace/local/runtime/status.json',
+                                  'maintenance/.aw-local/private.json'])
+def test_shared_platform_local_data_still_blocks_inherited_writes(app, tmp_path, path):
+    store = app.store('sea')
+    head = publish_unchecked(store, 'main', {path: b'Live local state'}, tmp_path)
+    with pytest.raises(Error):
+        store.change('main', {'note.md': b'new'}, {'note.md': None}, 'Would inherit live local data')
+    assert store.head('main') == head
+
+
+@pytest.mark.parametrize('existing', [False, True])
+def test_shared_archive_exception_does_not_allow_publishing_local_data(app, tmp_path, existing):
+    store = app.store('sea')
+    path = 'development/archive/proof/.aw-local/state.json'
+    if existing:
+        publish_unchecked(store, 'main', {path: b'Existing archive'}, tmp_path)
+    before = store.snapshot()
+    with pytest.raises(Error):
+        store.change('main', {path: b'New local state'}, {path: before.entries.get(path)}, 'Publish local state')
+    assert store.head('main') == before.revision
+
+
 def test_unknown_shared_layout_blocks_writes_without_erasing_the_marker(app, tmp_path):
     store = app.store('sea')
     head = publish_unchecked(store, 'main', {layout.MARKER: encode({'version': 99, 'kind': 'workspace'})}, tmp_path)

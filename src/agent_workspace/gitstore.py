@@ -25,17 +25,23 @@ from .util import (Conflict, Error, LockBusy, RetryableRead, Uncertain, command_
 def _validate_commit(store, parent, changes):
     previous = store.snapshot(revision=parent) if parent else None
     original_marker = previous.bytes(layout.MARKER) if previous else None
+    shared = bool(previous and 'workspace.json' in previous.entries and '.aw/identity.json' not in previous.entries)
     if original_marker is not None:
         document = json.loads(original_marker)
         layout.version({layout.MARKER: original_marker}, document.get('kind') if isinstance(document, dict) else None)
+        shared = document['kind'] == 'workspace'
     current_marker = changes.get(layout.MARKER, original_marker)
     if current_marker is not None:
         document = json.loads(current_marker)
         layout.version({layout.MARKER: current_marker}, document.get('kind') if isinstance(document, dict) else None)
+        shared = shared and document['kind'] == 'workspace'
+    platform_roots = layout.SHARED_ROOTS | {'.aw', '.aw-local', '.agentworkspace'}
     paths = set(previous.entries if previous else ()) | set(changes)
     for path in paths:
         if path not in changes or changes[path] is not None:
-            relpath(path)  # Also inspect inherited tracked files, not only new additions.
+            # Shared repositories may retain historical user archives outside AW's data roots.
+            inherited_archive = shared and path not in changes and path.split('/', 1)[0].casefold() not in platform_roots
+            relpath(path, allow_local=inherited_archive)
 
 
 def git_env(env=None):

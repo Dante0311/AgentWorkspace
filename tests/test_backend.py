@@ -227,7 +227,7 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
         with pytest.raises(Conflict, match="original Binding changed"):
             backend.attach(app, "sea", "alice", expected_binding="older-original")
         assert not manager.runners
-        result = runtime.spawn_runner(app, "sea", "alice")
+        result = execute(app, "runtime.start", {"workspace": "sea", "agent_id": "alice"})
         assert result["binding"] == binding and result["pid"] == os.getpid()
         assert observed.wait(90)
     finally:

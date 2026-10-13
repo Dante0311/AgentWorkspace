@@ -31,6 +31,17 @@ aw backend stop
 
 旧布局的数据迁移单独确定 Workspace、实例和范围，不隐藏在 npm 安装中；只更新软件不会静默改写共享仓。当前没有自动下载新版软件；软件回退仍需要数据格式兼容。
 
+在用户管理终端先查看迁移范围；省略 `--agent` 会列出该 Workspace 的全部实例，重复该选项可指定多个实例：
+
+```sh
+aw -w demo layout plan --agent helper
+aw -w demo layout migrate --agent helper --request-id layout-move-001
+```
+
+第二条只执行选定实例的迁移。迁移共享 main 还须显式加 `--migrate-shared --compatible-writers @writers.json`。确认文件包含本次计划的 `shared_revision`、完整 `current_writers` 列表对应的 `bindings`、`confirmed: true` 和非空 `evidence`；只有核实所有相关写入端已停止或支持新格式后才能确认，单台电脑停止后台不足以代表其他写入端。迁移不更换 Agent、Binding 或消息 ID，不自动合并无法归属的同名用户文件。
+
+保留原 `request-id` 和返回记录。发表结果未知时先核对原操作，继续时使用原参数，只补原计划缺失的步骤；中途修改的文件保留并报告冲突，不能换一个 ID 从头搬迁。只读计划可供 Agent 查询，实际迁移属于用户显式管理操作。
+
 默认应用数据在 `~/.agent-workspace`，可用 `--home` 或 `AW_HOME` 指定。软件安装目录、Workspace 数据仓与产品代码仓应分开。检测和 Git 认证规则见 [首次配置](first-use.md)。
 
 wheel 与旧隔离安装脚本保留为 Python 开发和底层构建检查，不再是另一条正式用户安装路线。npm 预览包没有随包安装 Claude、CodeBuddy、企业微信的可选 SDK；这些既有能力的扩展验证不在本轮用户路径内。
@@ -156,15 +167,21 @@ aw -w demo maintenance grant maintainer
 | `bridge-retry` | 提供当前 Binding 和刚读取的 generation，桥接必须仍启用，且未主动停止或交接；不重发未知外部消息。 |
 | `sync-idle` | 实例没有有效入口，取得本机运行器锁后同步；保留文件版本冲突检查。 |
 | `continue-stop` | 指定原 `expected_binding` 和 `expected_checkpoint`，在当前目标授权内复用 Runtime 的停止确认入口。只继续原请求，不创建会话或后继；Runtime 重新核对原会话、checkpoint、controller 及本机归属。 |
+| `runtime-recover` | 指定原 `expected_binding`，复用后台的共同恢复入口；核对原执行目录、当前资格和会话，保留用户暂停，不新建会话或重放未知输入。 |
 
 ```sh
 aw -w demo maintenance repair helper --repair-action sync-idle --request-id repair-001
 aw -w demo maintenance repair helper --repair-action continue-stop --expected-binding ORIGINAL_BINDING --expected-checkpoint ORIGINAL_CHECKPOINT --request-id stop-repair-001
+aw -w demo maintenance repair helper --repair-action runtime-recover --expected-binding ORIGINAL_BINDING --request-id runtime-repair-001
 ```
 
 维修先保存动作结果，再独立复查。同一请求重试只补缺失/失败的复查，不能因为复查失败重做动作。`applied` 仅表示动作返回，必须查看 `result` 和 `verification`，不能据此宣称 Workspace 全部健康。`attempting`/`outcome_unknown` 保留原记录，不自动再执行。损坏记录会报告异常，不当缓存删除；一个实例的 JSON 读取失败不隐去其他实例的巡检结果。
 
 `continue-stop` 的 `result` 保存首次继续请求的返回值，`starting_stop_observer` 或 `runner_present` 表示确认过程已请求或已存在；原入口是否释放要看 `verification.stop.state`。重复同一维修请求只读回固定旧 Binding 的状态、checkpoint 和 session，不重新启动观察进程，也不会跟随新的 Binding；checkpoint 与原请求不符时报告 `request_changed`。即使首次动作结果未知，复查也保留该动作的未知状态；看到旧 Binding 已 `released` 不会擅自启动后继。真实 Desktop 的忙碌、空闲和未知判断仍由 Runtime 的原生观察负责，维护工具不直接调用 `finish_stop`。
+
+`runtime-recover` 的顶层 `state` 保留实际恢复结果：`recovery_paused` 表示尊重已有暂停，`recovery_blocked` 给出缺少来源、配置或其他前提，`starting_runner` 只是启动请求已接受，`runner_present` 只确认原 Runner 存在。`verification.runtime` 观察固定的原 Binding，不把这些状态改写成原生会话或业务正常。重复请求只补观察，不再次执行恢复。
+
+用户显式运行 `aw -w demo runtime start helper` 可以恢复此前停止的运行观察；已有会话与后台自动恢复使用同一套资格检查，新建中的入口仍使用原首次启动过程。自动恢复和 `runtime-recover` 不清除暂停，也不打开已停止的 Watch。从未发送且仍获授权的队列输入沿原规则继续，已提交或结果不明的输入不重发。
 
 ## 5. 当前能力与验收边界
 

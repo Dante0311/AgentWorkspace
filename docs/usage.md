@@ -261,6 +261,8 @@ aw -w sea agent promote helper --path AGENTS.md --destination definitions/build-
 
 实例的 `.agentworkspace/` 保存受管身份、配置、材料来源、提示词、检查点和平台记录；`.agentworkspace/local/` 保存当前环境资料，不进入实例 Git。`.agentworkspace/source.json` 只在确有来源时出现。`AGENTS.md`、原生 `.agents/skills/` 与用户自己的文档留在原位置。旧实例在明确迁移前继续使用旧布局，旧检查点仍从原提交读取。
 
+旧数据先用 `aw -w sea layout plan` 查看范围，再由用户显式迁移；实例迁移和共享 main 迁移分别选择，后者还需核实完整写入端集合。[迁移操作与原请求继续](runtime-and-maintenance.md#1-安装和依赖)说明参数、冲突和中断处理，不通过手工搬动目录混合两种布局。
+
 默认排除 `.git`、`.agentworkspace/local`、旧 `.aw-local`、`.local`、`secrets`、`.env*`、`__pycache__`。排除列表在本机 context.json 的 `exclude` 中明确可见；本机运行目录也由收集器强制排除，不只依赖 `.gitignore`。自定义排除是简单名称/路径 glob，不声称实现完整 `.gitignore` 语法。单文件 50 MiB 上限，外部大附件需明确引用。symlink/submodule 不自动穿透。已保存快照的范围和排除项会返回；外部产品、原生隐藏状态、未同步的本机发送事实不自动成为完整备份。
 
 本机待发送 journal 不会被 Fork 自动执行。需要保留其中的业务事实时，按用户选择写进检查点或实例材料；平台不自动重做，也不禁止查阅。

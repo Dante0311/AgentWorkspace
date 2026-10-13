@@ -7,14 +7,14 @@ import inspect
 from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout
 from .messages import Messages
 from .direct_messages import DirectMessages
-from .util import Conflict, Error, digest, inside, locked, read_json, relpath, user_asset_path, write_bytes, write_json
+from .util import Conflict, Error, digest, inside, read_json, relpath, user_asset_path, write_bytes, write_json
 
 
 READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.history", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
              "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status"}
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status", "layout.plan"}
 
 SOFTWARE_OPERATIONS = {"backend.start", "backend.stop", "backend.restart", "backend.status", "backend.log", "backend.run",
                        "software.status", "software.update"}
@@ -40,7 +40,7 @@ def assets(app, operation, workspace, agent_id, path=None, content=None, revisio
         target = inside(root, path)
         data = target.read_bytes()
         return {"path": path, "content": data.decode("utf-8"), "revision": digest(data)}
-    with locked(layout.local_path(root, "files.lock")):
+    with layout.lock(root, "files.lock"):
         target = user_asset_path(root, path, write=True)
         existing = target.read_bytes() if target.exists() else None
         if (digest(existing) if existing is not None else None) != revision:
@@ -83,8 +83,8 @@ def stop_entry(app, workspace, agent_id, binding, checkpoint, directory=None, co
 
 def runtime_stop(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
-    binding = app.agent(workspace, agent_id)["current"]
-    with locked(layout.local_path(root, "stop-launch.lock")):
+    with layout.lock(root, "stop-launch.lock"):
+        binding = app.agent(workspace, agent_id)["current"]
         control = layout.local_path(root, "control.json")
         write_json(control, {**read_json(control, {}), "stop": binding})
         signal = backend.cancel(app, workspace, agent_id, str(root), expected_binding=binding)
@@ -93,15 +93,15 @@ def runtime_stop(app, workspace, agent_id, directory=None):
 
 def runtime_launch(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
-    snap = app.store(workspace).snapshot()
-    binding = app.agent(workspace, agent_id, snap)["current"]
-    entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json")) if binding else None
-    if binding and entry["phase"] == "stopping":
-        return runtime.continue_stop(app, workspace, agent_id, binding, directory,
-                                     expected_checkpoint=entry["checkpoint"])
-    control = layout.local_path(root, "control.json")
-    write_json(control, {**read_json(control, {}), "stop": None})
-    return runtime.spawn_runner(app, workspace, agent_id, directory)
+    with layout.lock(root, "stop-launch.lock"):
+        snap = app.store(workspace).snapshot()
+        binding = app.agent(workspace, agent_id, snap)["current"]
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json")) if binding else None
+        control = layout.local_path(root, "control.json")
+        write_json(control, {**read_json(control, {}), "stop": None})
+    if entry and entry["phase"] == "starting":
+        return backend.attach(app, workspace, agent_id, str(root), expected_binding=binding)
+    return backend.recover(app, workspace, agent_id, str(root), expected_binding=binding)
 
 
 def message_poll(app, workspace, agent_id, binding, directory=None):
@@ -147,6 +147,7 @@ def command_map(app):
         "backend.log": partial(backend.log, app), "backend.attach": partial(backend.attach, app),
         "backend.cancel": partial(backend.cancel, app),
         "software.status": partial(software.status, app), "software.update": partial(software.update, app),
+        "layout.plan": app.layout_plan, "layout.migrate": app.layout_migrate,
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
         "agent.desktop-project": partial(desktop_projects.plan, app),
@@ -230,6 +231,8 @@ def execute(app, command, arguments, *, actor=None):
         workspace, aid, binding = actor
         if command == "agent.takeover":
             raise Error("Force takeover is an explicit user operation, not an Agent or caretaker operation.")
+        if command == "layout.migrate":
+            raise Error("Layout migration is an explicit user operation; run it from the user management terminal.")
         # Signatures supply defaults, never authorization. A new agent's ID is a target.
         if "workspace" in signature.parameters:
             args.setdefault("workspace", workspace)

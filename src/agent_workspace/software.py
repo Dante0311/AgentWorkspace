@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from . import __version__, layout
-from .util import Conflict, Error, Unavailable, digest, encode, inside, locked, now, read_json, write_bytes, write_json
+from .util import Conflict, Error, Unavailable, digest, encode, inside, now, read_json, write_bytes, write_json
 
 
 MANIFEST = '.agentworkspace/software.json'
@@ -88,7 +88,7 @@ def _finish(root, operation):
 
 def _update(root, fresh, revision):
     recovered = False
-    with locked(layout.local_path(root, 'files.lock')):
+    with layout.lock(root, 'files.lock'):
         operation = read_json(layout.local_path(root, OPERATION), {})
         if not isinstance(operation, dict):
             raise Error('The software update record is invalid.')

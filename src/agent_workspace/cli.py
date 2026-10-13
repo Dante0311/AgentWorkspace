@@ -44,6 +44,15 @@ def parser():
 
     actions("software", ["status", "update"])
 
+    migration = actions("layout", ["plan", "migrate"])
+    for sub in migration.values():
+        sub.add_argument("--agent", dest="agent_ids", action="append",
+                         help="Limit instance migration to these Agents; repeat to select more than one.")
+    migration["migrate"].add_argument("--request-id", required=True)
+    migration["migrate"].add_argument("--migrate-shared", action="store_true")
+    migration["migrate"].add_argument("--compatible-writers",
+                                     help="Explicit writer confirmation for the planned shared revision: JSON or @file.json.")
+
     session = actions("session", ["prepare", "open", "show", "run"])
     for key in ("open", "show", "run"):
         session[key].add_argument("request_id")
@@ -147,7 +156,7 @@ def parser():
     mt["grant"].add_argument("--command", dest="commands", action="append", default=[])
     mt["grant"].add_argument("--target", dest="targets", action="append", default=[])
     mt["repair"].add_argument("agent_id")
-    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle", "continue-stop"], required=True)
+    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover"], required=True)
     mt["repair"].add_argument("--request-id", required=True)
     for field in ("operation-id", "bridge", "expected-binding", "expected-generation", "expected-checkpoint"):
         mt["repair"].add_argument("--" + field)
@@ -305,6 +314,8 @@ def main(argv=None):
             for key in ("value", "target_config"):
                 if key in args:
                     args[key] = parse_json(args[key])
+            if args.get("compatible_writers") is not None:
+                args["compatible_writers"] = parse_json(args["compatible_writers"])
             if command == "maintenance.repair":
                 args["action"] = args.pop("repair_action")
             if command == "agent.capture-desktop" and args.get("command"):

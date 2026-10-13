@@ -65,21 +65,22 @@ def split_config(config):
     return local, choice, origins
 
 
-def validate(choice):
+def validate(choice, *, source='Codex configuration'):
     if not isinstance(choice, dict):
-        raise Error("runtime.json codex must be an object with explicit model and effort strings.")
+        raise Error(f"{source} must be an object with explicit model and effort strings.")
     for field in ("model", "effort"):
         value = choice.get(field)
         pattern = r"[A-Za-z0-9_./:@+\[\]-]+" if field == "model" else r"[A-Za-z0-9_./:@+-]+"
         if not isinstance(value, str) or not value or not re.fullmatch(pattern, value):
-            raise Error(f"runtime.json codex.{field} requires an explicit native identifier; no default is inherited.")
+            raise Error(f"{source}.{field} requires an explicit native identifier; no default is inherited.")
     return {field: choice[field] for field in ("model", "effort")}
 
 
 def _document(root):
-    document = read_json(layout.instance_path(root, 'config.json'), {})
+    path = layout.instance_path(root, 'config.json')
+    document = read_json(path, {})
     if not isinstance(document, dict):
-        raise Error("Instance runtime.json must be an object.")
+        raise Error(f"Instance {path.relative_to(root).as_posix()} must be an object.")
     return document
 
 
@@ -130,10 +131,10 @@ def selected(root):
     try:
         document = json.loads(data)
     except ValueError as exc:
-        raise Error("Instance runtime.json must contain valid JSON.") from exc
+        raise Error(f"Instance {path.relative_to(root).as_posix()} must contain valid JSON.") from exc
     if not isinstance(document, dict):
-        raise Error("Instance runtime.json must be an object.")
-    choice = validate(document.get("codex"))
+        raise Error(f"Instance {path.relative_to(root).as_posix()} must be an object.")
+    choice = validate(document.get("codex"), source=f'{path.relative_to(root).as_posix()} codex')
     return {**choice, "source": {"path": path.relative_to(root).as_posix(), "section": "codex",
             "sha256": digest(data)}}
 
@@ -155,7 +156,7 @@ def adopted(root, binding=None, *, session=None):
         return {**choice, "source": {"path": layout.local_path(root, 'entry.json').relative_to(root).as_posix(), "section": "config",
                 "sha256": digest((layout.local_path(root, "entry.json")).read_bytes())}}
     if session and record.get("binding"):
-        raise Error("This native session has no saved adopted Codex choice; handoff before applying runtime.json.")
+        raise Error(f"This native session has no saved adopted Codex choice; handoff before applying {layout.instance_path(root, 'config.json').relative_to(root).as_posix()}.")
     return selected(root)
 
 

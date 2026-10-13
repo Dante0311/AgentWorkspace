@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_workspace import model_profiles as profiles, runtime, transfer
+from agent_workspace import layout, model_profiles as profiles, runtime, transfer
 from agent_workspace.util import Conflict, Error, Unavailable, read_json, write_json
 
 
@@ -267,11 +267,11 @@ def test_template_copy_checkpoint_and_next_binding_are_independent(app):
                  {path: store.snapshot().entries[path]}, "Update role template")
     assert profiles.adopted(root, binding)["model"] == "template"
     assert profiles.selected(root)["model"] == "template"
-    write_json(root / "runtime.json", {"codex": {"model": "instance-edit", "effort": "low"}})
+    write_json(layout.instance_path(root, 'config.json'), {"codex": {"model": "instance-edit", "effort": "low"}})
     point = app.checkpoint("sea", "alice", "profile edit for successor", binding=binding)
     snapshot = store.snapshot("instance/alice", revision=point["revision"])
-    assert snapshot.json("runtime.json")["codex"]["model"] == "instance-edit"
-    assert not any(path.startswith(".aw-local/") for path in snapshot.entries)
+    assert snapshot.json(layout.instance_relpath(snapshot, 'config.json'))["codex"]["model"] == "instance-edit"
+    assert not any(path.startswith((".aw-local/", '.agentworkspace/local/')) for path in snapshot.entries)
     assert profiles.adopted(root, binding)["model"] == "template"
     app.stop("sea", "alice", binding, point["id"])
     app.finish_stop("sea", "alice", binding, observed_idle=True)

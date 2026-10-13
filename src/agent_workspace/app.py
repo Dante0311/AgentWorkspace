@@ -184,7 +184,7 @@ class App:
     def _resources(self, root=None):
         return layout.resource_files(root)
 
-    def _definition(self, workspace, definition, revision=None):
+    def _definition(self, workspace, definition, revision=None, *, root=None):
         prefix = relpath(definition).rstrip("/")
         snap = self.store(workspace).snapshot(revision=revision)
         selected = snap.all(prefix + "/")
@@ -196,8 +196,12 @@ class App:
             target = "AGENTS.md" if relative in ("definition.md", "AGENTS.md") else relative
             if target.startswith("skills/"):
                 target = ".agents/" + target
+            if target in ('runtime.json', '.agentworkspace/config.json'):
+                destination = root if root is not None else {layout.MARKER: layout.marker('instance')}
+                target = layout.instance_relpath(destination, 'config.json')
             relpath(target)
-            if target.startswith((".aw/", '.agentworkspace/')) or target == "source.json":
+            if (target.startswith('.aw/') or target == 'source.json'
+                    or target.startswith('.agentworkspace/') and target != '.agentworkspace/config.json'):
                 raise Error("Definition cannot replace platform metadata.")
             result[target] = data
             mapping[target] = {"path": origin, "hash": digest(data)}
@@ -903,7 +907,7 @@ class App:
             source = read_json(layout.instance_path(root, 'source.json'))
             if source is None:
                 raise Error("This agent has no shared source. Its own assets do not need an upstream.")
-            selected, new_source = self._definition(workspace, source["definition"], revision)
+            selected, new_source = self._definition(workspace, source["definition"], revision, root=root)
             for name in read_json(layout.instance_path(root, 'skill-sources.json'), {}):
                 prefix = f".agents/skills/{name}/".casefold()
                 if any(p.casefold().startswith(prefix) for p in selected):

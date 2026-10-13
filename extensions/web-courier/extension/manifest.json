@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "AW 网页投递员 · 单条测试版",
+  "version": "0.1.0",
+  "description": "只在指定通信测试会话中，经人工确认投递一条固定测试消息。无远程服务、无自动轮询。",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "background": {"service_worker": "worker.js", "type": "module"},
+  "action": {"default_title": "AW 网页投递员", "default_popup": "popup.html"},
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'"}
+}

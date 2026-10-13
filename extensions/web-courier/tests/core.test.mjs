@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {TARGET,isTarget,testText,canSend,canPrepare,reconcile} from '../extension/core.mjs';
+const id='AW-EXT-12345678-1234-1234-1234-123456789abc';
+test('exact target, including harmless URL query/hash',()=>{assert.ok(isTarget(TARGET));assert.ok(isTarget(TARGET+'?x=y#end'));assert.ok(isTarget(TARGET+'/'));});
+for(const bad of ['https://chatgpt.com','https://chatgpt.com/c/other',TARGET+'evil',TARGET.replace('https:','http:'),TARGET.replace('chatgpt.com','chatgpt.com.evil.test'),'not a URL',TARGET.replace('chatgpt.com','a:b@chatgpt.com')])test('reject '+bad,()=>assert.equal(isTarget(bad),false));
+test('body uses one unique ID exactly twice',()=>assert.equal(testText(id).split(id).length,3));
+test('invalid ID rejected',()=>assert.throws(()=>testText('x')));
+test('only planned can prepare, only prepared can send',()=>{assert.ok(canPrepare(null));assert.ok(canPrepare({phase:'planned'}));assert.ok(canSend({phase:'prepared'}));for(const phase of ['submitting','observed','reload_verified']){assert.equal(canSend({phase}),false);assert.equal(canPrepare({phase}),false);}});
+test('missing receipt never releases uncertainty',()=>{const r={phase:'submitting',submitEpoch:1};assert.equal(reconcile(r,{target:true,receipt:false,pageEpoch:2}),r);});
+test('wrong target cannot claim receipt',()=>{const r={phase:'submitting',submitEpoch:1};assert.equal(reconcile(r,{target:false,receipt:true,pageEpoch:2}),r);});
+test('bubble alone is not reload verification',()=>assert.equal(reconcile({phase:'submitting',submitEpoch:1},{target:true,receipt:true,pageEpoch:1}).phase,'observed'));
+test('new page document and full bubble confirms reload',()=>assert.equal(reconcile({phase:'submitting',submitEpoch:1},{target:true,receipt:true,pageEpoch:2}).phase,'reload_verified'));

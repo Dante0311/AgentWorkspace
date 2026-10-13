@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AW 网页投递员</title><link rel="stylesheet" href="popup.css"></head>
+<body><header><span class="tag">MVP · 0.1.0</span><h1>AW 网页投递员</h1><p>单条测试 · 人工确认 · 无后台轮询</p></header>
+<main><section><h2>固定目标：通信测试</h2><p class="muted">只操作指定会话，不按标题猜测目标。</p><a href="https://chatgpt.com/c/11111111-1111-4111-8111-111111111111" target="_blank" rel="noreferrer">打开通信测试 ↗</a></section>
+<section><h2>1. 检查页面</h2><button id="inspect">读取状态 / 核验回执</button><pre id="status" role="status" aria-live="polite">切到通信测试标签页后点击检查。</pre></section>
+<section><h2>2. 准备唯一测试消息</h2><p class="muted">只填入空输入框，不发送。已有草稿时停止。</p><button id="prepare" disabled>填入测试草稿</button><pre id="body">尚未生成</pre></section>
+<section><h2>3. 确认发送一次</h2><label><input id="confirm" type="checkbox">我确认向通信测试发送上述正文，会触发一次 ChatGPT 回复。</label><button id="send" class="primary" disabled>确认并发送一次</button></section>
+<section><h2>4. 刷新后核验</h2><p>看到回复完成后，手动刷新网页，再打开扩展点“读取状态 / 核验回执”。</p><p class="muted">页面回执不等于 AW ACK。发送结果不明时不会重发。此版尚未连接 AW。</p></section>
+<details><summary>诊断信息（仅本地）</summary><pre id="details">无</pre></details></main><script src="popup.js"></script></body></html>

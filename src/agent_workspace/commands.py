@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills
+from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software
 from .messages import Messages
 from .direct_messages import DirectMessages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
@@ -14,9 +14,10 @@ READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "ag
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
              "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log"}
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status"}
 
-SOFTWARE_OPERATIONS = {"backend.start", "backend.stop", "backend.restart", "backend.status", "backend.log", "backend.run"}
+SOFTWARE_OPERATIONS = {"backend.start", "backend.stop", "backend.restart", "backend.status", "backend.log", "backend.run",
+                       "software.status", "software.update"}
 
 USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
@@ -119,19 +120,7 @@ def message_poll(app, workspace, agent_id, binding, directory=None):
 
 
 def upgrade_tools(app, workspace, agent_id, directory=None):
-    root = app.root(workspace, agent_id, directory)
-    with locked(root / ".aw-local/files.lock"):
-        manifest = read_json(root / ".aw/software.json", {"files": {}})
-        fresh = app._resources()
-        for path, data in fresh.items():
-            if path == ".aw/software.json":
-                continue
-            local = inside(root, path)
-            if local.exists() and digest(local.read_bytes()) != manifest["files"].get(path):
-                raise Conflict(f"Modified platform resource: {path}. Preserve or reconcile it before upgrading.")
-        for path, data in fresh.items():
-            write_bytes(inside(root, path), data)
-    return {"resources_updated": list(fresh), "user_assets_changed": False, "snapshot_saved": False}
+    return software.update_instance(app, workspace, agent_id, directory)
 
 
 def bridge_switch(app, workspace, agent_id, name, enabled, directory=None):
@@ -156,6 +145,7 @@ def command_map(app):
         "backend.stop": partial(backend.stop, app), "backend.restart": partial(backend.restart, app),
         "backend.log": partial(backend.log, app), "backend.attach": partial(backend.attach, app),
         "backend.cancel": partial(backend.cancel, app),
+        "software.status": partial(software.status, app), "software.update": partial(software.update, app),
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
         "agent.desktop-project": partial(desktop_projects.plan, app),

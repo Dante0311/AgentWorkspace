@@ -42,6 +42,8 @@ def parser():
     service["log"].add_argument("--directory")
     service["log"].add_argument("--lines", type=int, default=100)
 
+    actions("software", ["status", "update"])
+
     session = actions("session", ["prepare", "open", "show", "run"])
     for key in ("open", "show", "run"):
         session[key].add_argument("request_id")
@@ -322,7 +324,7 @@ def main(argv=None):
             if not workspace:
                 raise Error("Select the Runner's --workspace.")
             args["workspace"] = workspace
-        if not command.startswith(("setup.", "session.", "backend.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+        if not command.startswith(("setup.", "session.", "backend.", "software.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)

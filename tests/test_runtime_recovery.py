@@ -276,7 +276,7 @@ def test_stopping_observer_waits_then_releases_only_original_request(desktop_own
     runtime.queue_input(app, "sea", "alice", "remain queued", request_id="untouched")
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
     store.change("main", {path: encode({**snap.json(path), "controller": "original-controller"})},
                  {path: snap.entries[path]}, "Record original fixture controller")
     point = request_stop(desktop_owner)
@@ -473,7 +473,7 @@ def test_changed_stop_facts_cannot_be_released(desktop_owner, monkeypatch, field
         changed = True
         store = app.store("sea")
         snap = store.snapshot()
-        path = f"bindings/{binding}.json"
+        path = layout.shared_path(snap, f"bindings/{binding}.json")
         entry = snap.json(path)
         entry[field] = "changed-after-observation"
         store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Change isolated stop fact")
@@ -490,8 +490,8 @@ def test_missing_checkpoint_prevents_observation_and_release(desktop_owner):
     app, _, binding, native = desktop_owner
     point = request_stop(desktop_owner)
     store = app.store("sea")
-    path = f"checkpoints/alice/{point['id']}.json"
     snap = store.snapshot()
+    path = layout.shared_path(snap, f"checkpoints/alice/{point['id']}.json")
     store.change("main", {path: None}, {path: snap.entries[path]}, "Remove isolated fixture checkpoint")
     with pytest.raises(Error):
         runtime.Runner(app, "sea", "alice", stop_binding=binding).run()
@@ -602,7 +602,7 @@ def test_controller_cleanup_retries_only_its_failed_preflight_read(desktop_owner
     runner.binding, runner.controller = binding, "original-controller"
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
     entry = snap.json(path)
     store.change("main", {path: encode({**entry, "controller": runner.controller})},
                  {path: snap.entries[path]}, "Isolated controller claim")

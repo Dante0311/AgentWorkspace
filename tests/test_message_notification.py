@@ -30,7 +30,7 @@ def test_notification_preserves_complete_stored_json_and_unknown_fields(pair, wi
     if not with_refs:
         body.pop("message_refs")
     raw = ("  " + json.dumps(body, ensure_ascii=False, indent=3) + " \n\n").encode("utf-8")
-    app.store("sea").change("main", {"messages/raw-message.json": raw}, {}, "isolated formatting fixture")
+    app.store("sea").change("main", {".agentworkspace/messages/raw-message.json": raw}, {}, "isolated formatting fixture")
     adapter = Adapter()
     assert messages.poll("sea", "bob", bindings["bob"], adapter=adapter)["state"] == "notified_waiting_ack"
     prompt = adapter.calls[0][0]
@@ -48,8 +48,8 @@ def test_missing_or_damaged_body_keeps_index_and_ack_path(pair, damaged):
     messages = Messages(app)
     messages.send("sea", "alice", bindings["alice"], "bob", "original", request_id="bad-body")
     store = app.store("sea")
-    store.change("main", {"messages/bad-body.json": damaged}, {}, "isolated body fault")
-    index = store.snapshot().bytes("message-index/bad-body.json")
+    store.change("main", {".agentworkspace/messages/bad-body.json": damaged}, {}, "isolated body fault")
+    index = store.snapshot().bytes(".agentworkspace/message-index/bad-body.json")
     adapter = Adapter()
     assert messages.poll("sea", "bob", bindings["bob"], adapter=adapter)["state"] == "notified_waiting_ack"
     prompt = adapter.calls[0][0]
@@ -57,7 +57,7 @@ def test_missing_or_damaged_body_keeps_index_and_ack_path(pair, damaged):
     assert prompt.split("<aw-message-index-json>\n", 1)[1].rsplit("\n</aw-message-index-json>", 1)[0].encode() == index
     received = messages.receive("sea", "bob", bindings["bob"], "bad-body")
     assert received["publication"]["state"] == "published"
-    assert store.snapshot().json("acks/bad-body.json") == {"message_id": "bad-body"}
+    assert store.snapshot().json(".agentworkspace/acks/bad-body.json") == {"message_id": "bad-body"}
     assert messages.poll("sea", "bob", bindings["bob"], adapter=adapter)["state"] == "empty"
 
 
@@ -68,7 +68,7 @@ def test_temporary_body_read_failure_does_not_claim_notification_attempt(pair, m
     read = Snapshot.bytes
 
     def temporary_failure(snapshot, path):
-        if path == "messages/temporary.json":
+        if path == ".agentworkspace/messages/temporary.json":
             raise RetryableRead("isolated temporary blob read")
         return read(snapshot, path)
 
@@ -77,5 +77,5 @@ def test_temporary_body_read_failure_does_not_claim_notification_attempt(pair, m
     with pytest.raises(RetryableRead):
         messages.poll("sea", "bob", bindings["bob"], adapter=adapter)
     assert not adapter.calls
-    assert app.store("sea").snapshot().bytes("dispatch/bob.json") is None
-    assert app.store("sea").snapshot().bytes("acks/temporary.json") is None
+    assert app.store("sea").snapshot().bytes(".agentworkspace/dispatch/bob.json") is None
+    assert app.store("sea").snapshot().bytes(".agentworkspace/acks/temporary.json") is None

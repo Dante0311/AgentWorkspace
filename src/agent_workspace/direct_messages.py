@@ -1,6 +1,7 @@
 """Optional native-send history; never an AW Message delivery source."""
 from __future__ import annotations
 
+from .layout import expected as expected_layout, shared_path
 from .util import Conflict, Error, Uncertain, encode, now, slug, uid
 
 
@@ -21,7 +22,7 @@ class DirectMessages:
             store = self.app.store(workspace)
             snap = store.snapshot()
             self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
-            meta = snap.json("workspace.json")
+            meta = snap.json(shared_path(snap, "workspace.json"))
             if "/" in to:
                 alias, target_id = to.split("/", 1)
                 target, target_meta = self.app.friend_store(workspace, alias)
@@ -29,10 +30,10 @@ class DirectMessages:
                 target_id, target, target_meta = to, store, meta
             slug(target_id)
             target_snap = snap if target.address == store.address else target.snapshot()
-            receiver = target_snap.json(f"agents/{target_id}.json")
+            receiver = target_snap.json(shared_path(target_snap, f"agents/{target_id}.json"))
             if receiver is None or receiver["archived"]:
                 raise Error("Target agent does not exist or is archived.")
-            path = f"direct-messages/{identifier}.json"
+            path = shared_path(snap, f"direct-messages/{identifier}.json")
             body = {"id": identifier, "type": record_type,
                     "from": {"workspace": meta["locator"], "agent": agent_id},
                     "to": {"workspace": target_meta["locator"], "agent": target_id},
@@ -51,12 +52,14 @@ class DirectMessages:
                     raise Conflict(f"The direct record already contains a different {key}.")
                 body[key] = value
             if body != existing:
+                agent_path = shared_path(snap, f"agents/{agent_id}.json")
+                binding_path = shared_path(snap, f"bindings/{binding}.json")
                 expected = {path: snap.entries.get(path),
-                            f"agents/{agent_id}.json": snap.entries[f"agents/{agent_id}.json"],
-                            f"bindings/{binding}.json": snap.entries[f"bindings/{binding}.json"]}
+                            agent_path: snap.entries[agent_path], binding_path: snap.entries[binding_path]}
                 if target.address == store.address:
-                    expected[f"agents/{target_id}.json"] = target_snap.entries[f"agents/{target_id}.json"]
-                store.change("main", {path: encode(body)}, expected, f"Record native send {identifier}")
+                    target_path = shared_path(target_snap, f"agents/{target_id}.json")
+                    expected[target_path] = target_snap.entries[target_path]
+                store.change("main", {path: encode(body)}, expected_layout(snap, expected), f"Record native send {identifier}")
             return {"recorded": True, "record_id": identifier, "record": body}
         except (Error, OSError, TimeoutError, ValueError, TypeError) as exc:
             # Recording is optional. A failed/unknown write cannot undo a native send.
@@ -68,10 +71,11 @@ class DirectMessages:
         if direction not in ("in", "out"):
             raise Error("Direction must be in or out.")
         snap = self.app.store(workspace).snapshot()
-        locator = snap.json("workspace.json")["locator"]
+        locator = snap.json(shared_path(snap, "workspace.json"))["locator"]
+        prefix = shared_path(snap, "direct-messages") + "/"
         result = []
         for path in snap.entries:
-            if not path.startswith("direct-messages/"):
+            if not path.startswith(prefix):
                 continue
             record = snap.json(path)
             if agent_id:
@@ -83,4 +87,4 @@ class DirectMessages:
 
     def show(self, workspace, record_id):
         snap = self.app.store(workspace).snapshot()
-        return {"record": snap.json(f"direct-messages/{slug(record_id)}.json")}
+        return {"record": snap.json(shared_path(snap, f"direct-messages/{slug(record_id)}.json"))}

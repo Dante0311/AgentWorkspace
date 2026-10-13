@@ -2,7 +2,7 @@
 
 先按 message Skill 的发送判断核对资格。本文只说明留档；这些命令不发送原生输入，不证明双方同机，也不为本会话授予其他 Agent 的入口。
 
-记录保存在调用方 Workspace `main` 的 `direct-messages/<id>.json`，不双写对方 Workspace，不进入正式 `messages/`、`message-index/`、`acks/` 或 `dispatch/`。它是调用方保存的观察，不证明原生工具接受、真人已读或业务完成。换机后可读取已经发布的记录；没保存的交流不会出现在这里。
+记录保存在调用方 Workspace `main` 的 `.agentworkspace/direct-messages/<id>.json`，不双写对方 Workspace，不进入正式 `.agentworkspace/messages/`、`.agentworkspace/message-index/`、`.agentworkspace/acks/` 或 `.agentworkspace/dispatch/`。布局依据同一提交的 `.agentworkspace/layout.json`；无标记的旧提交仍读取原根目录 `direct-messages/`，新版缺失不回退旧路径。迁移保留原 ID 和字节，不重发原生输入。它是调用方保存的观察，不证明原生工具接受、真人已读或业务完成。换机后可读取已经发布的记录；没保存的交流不会出现在这里。
 
 `direct-message.record` 使用当前工具绑定的 `workspace/agent_id/binding`，传 `to/content/request_id`。`to` 与正式 Message 一样使用 Agent ID 或 `好友别名/Agent ID`。类型参数 `record_type` 当前为 `codex`。`result` 可保存实际原生工具返回的 JSON 对象；`receipt` 可保存实际收到的回执对象，两者都可省略。没有实际结果不要编造接受或已读；结果未知只保存未知事实并核对原发送。
 

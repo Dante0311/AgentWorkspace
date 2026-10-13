@@ -80,7 +80,7 @@ def test_repair_confirms_ack_written_before_lost_response_without_republishing(p
 
     def lost_response(store, branch, changes, expected, message, **kwargs):
         result = change(store, branch, changes, expected, message, **kwargs)
-        if 'acks/ack-unknown.json' in changes:
+        if '.agentworkspace/acks/ack-unknown.json' in changes:
             ack_writes.append(result)
             raise Uncertain('ACK accepted; response was lost')
         return result

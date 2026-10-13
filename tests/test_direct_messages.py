@@ -24,7 +24,7 @@ def test_history_and_optional_receipt_never_enter_formal_delivery(pair):
     assert history.show("sea", "direct-one") == {"record": record}
     assert history.show("sea", "absent") == {"record": None}
     after = app.store("sea").snapshot()
-    assert set(after.entries) - set(before.entries) == {"direct-messages/direct-one.json"}
+    assert set(after.entries) - set(before.entries) == {".agentworkspace/direct-messages/direct-one.json"}
     assert all(after.entries[path] == revision for path, revision in before.entries.items())
     assert Messages(app).list("sea", unacked=True) == []
     assert Messages(app).poll("sea", "bob", bindings["bob"])["state"] == "empty"
@@ -89,10 +89,10 @@ def test_logging_failure_is_optional_but_revoked_or_forged_writer_cannot_write(p
         execute(app, "direct-message.record", {
             "agent_id": "bob", "binding": bindings["bob"], "to": "alice", "content": "forged"},
             actor=("sea", "alice", bindings["alice"]))
-    agent = before.json("agents/alice.json")
+    agent = before.json(".agentworkspace/agents/alice.json")
     agent["current"] = None
-    app.store("sea").change("main", {"agents/alice.json": encode(agent)},
-                            {"agents/alice.json": before.entries["agents/alice.json"]}, "Revoke test writer")
+    app.store("sea").change("main", {".agentworkspace/agents/alice.json": encode(agent)},
+                            {".agentworkspace/agents/alice.json": before.entries[".agentworkspace/agents/alice.json"]}, "Revoke test writer")
     revoked = history.record("sea", "alice", bindings["alice"], "bob", "late history",
                              request_id="direct-revoked")
     assert revoked["recorded"] is False
@@ -109,9 +109,9 @@ def test_direct_history_preserves_existing_formal_message_and_ack(pair):
                           request_id="direct-beside-formal")["recorded"] is True
     assert formal.list("sea", "bob", unacked=True)[0]["id"] == "formal-one"
     after = app.store("sea").snapshot()
-    assert after.bytes("messages/formal-one.json") == before.bytes("messages/formal-one.json")
-    assert after.bytes("message-index/formal-one.json") == before.bytes("message-index/formal-one.json")
-    assert after.bytes("acks/formal-one.json") is None
+    assert after.bytes(".agentworkspace/messages/formal-one.json") == before.bytes(".agentworkspace/messages/formal-one.json")
+    assert after.bytes(".agentworkspace/message-index/formal-one.json") == before.bytes(".agentworkspace/message-index/formal-one.json")
+    assert after.bytes(".agentworkspace/acks/formal-one.json") is None
     received = formal.receive("sea", "bob", bindings["bob"], "formal-one")
     assert received["message"]["content"] == "formal"
     assert formal.show("sea", "formal-one")["ack"] == {"message_id": "formal-one"}
@@ -125,15 +125,15 @@ def test_entry_revoked_during_record_publication_cannot_publish(pair, monkeypatc
 
     def revoke_before_write(*args, **kwargs):
         snap = store.snapshot()
-        agent = snap.json("agents/alice.json")
+        agent = snap.json(".agentworkspace/agents/alice.json")
         agent["current"] = None
-        original_change("main", {"agents/alice.json": encode(agent)},
-                        {"agents/alice.json": snap.entries["agents/alice.json"]}, "Revoke before record write")
+        original_change("main", {".agentworkspace/agents/alice.json": encode(agent)},
+                        {".agentworkspace/agents/alice.json": snap.entries[".agentworkspace/agents/alice.json"]}, "Revoke before record write")
         return original_change(*args, **kwargs)
 
     monkeypatch.setattr(store, "change", revoke_before_write)
     result = DirectMessages(app).record("sea", "alice", bindings["alice"], "bob", "already sent",
                                         request_id="direct-race")
     assert result["recorded"] is False and result["code"] == "conflict"
-    assert store.snapshot().bytes("direct-messages/direct-race.json") is None
+    assert store.snapshot().bytes(".agentworkspace/direct-messages/direct-race.json") is None
     assert Messages(app).list("sea") == []

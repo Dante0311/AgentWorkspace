@@ -21,16 +21,16 @@ def test_send_show_receive_dedup(pair):
     assert received['message']['content'] == 'hello'
     assert messages.show('sea','m1')['ack'] == {'message_id':'m1'}
     assert messages.receive('sea','bob',ids['bob'],'m1')['already_acknowledged']
-    saved = app.root('sea','bob').joinpath('messages/m1.json').read_text()
+    saved = app.root('sea','bob').joinpath('.agentworkspace/messages/m1.json').read_text()
     assert str(app.home) not in saved and 'publication' not in json.loads(saved)
 
 
 def test_read_failure_still_ack(pair):
     app, ids = pair; messages = Messages(app)
     messages.send('sea','alice',ids['alice'],'bob','hello',request_id='m2')
-    app.store('sea').change('main', {'messages/m2.json':b'invalid json'}, {}, 'fault injection')
+    app.store('sea').change('main', {'.agentworkspace/messages/m2.json':b'invalid json'}, {}, 'fault injection')
     assert 'read_error' in messages.receive('sea','bob',ids['bob'],'m2')
-    assert app.store('sea').snapshot().json('acks/m2.json') == {'message_id':'m2'}
+    assert app.store('sea').snapshot().json('.agentworkspace/acks/m2.json') == {'message_id':'m2'}
 
 
 def test_poll_fifo_and_ack_gate(pair):
@@ -62,7 +62,7 @@ def test_old_entry_cannot_ack(pair):
     cp=app.checkpoint('sea','bob','handoff',binding=ids['bob'])
     app.stop('sea','bob',ids['bob'],cp['id']); app.finish_stop('sea','bob',ids['bob'],observed_idle=True)
     with pytest.raises(Conflict): messages.receive('sea','bob',ids['bob'],'m6')
-    assert app.store('sea').snapshot().bytes('acks/m6.json') is None
+    assert app.store('sea').snapshot().bytes('.agentworkspace/acks/m6.json') is None
 
 
 def setup_friend(app,tmp_path):
@@ -76,10 +76,10 @@ def test_cross_workspace_dual_write(pair,tmp_path):
     binding=app.reserve('sbp','helper')['binding']; app.bind('sbp','helper',binding,'external-session')
     messages=Messages(app); messages.send('sea','alice',ids['alice'],'sbp/helper','question',request_id='cross')
     a,b=app.store('sea').snapshot(),app.store('sbp').snapshot()
-    assert a.bytes('messages/cross.json')==b.bytes('messages/cross.json')
-    assert app.store('sbp').address not in a.bytes('workspace.json').decode()
+    assert a.bytes('.agentworkspace/messages/cross.json')==b.bytes('.agentworkspace/messages/cross.json')
+    assert app.store('sbp').address not in a.bytes('.agentworkspace/workspace.json').decode()
     messages.receive('sbp','helper',binding,'cross')
-    assert app.store('sea').snapshot().bytes('acks/cross.json')==app.store('sbp').snapshot().bytes('acks/cross.json')
+    assert app.store('sea').snapshot().bytes('.agentworkspace/acks/cross.json')==app.store('sbp').snapshot().bytes('.agentworkspace/acks/cross.json')
 
 
 def test_partial_write_original_bytes(pair,tmp_path,monkeypatch):
@@ -91,10 +91,10 @@ def test_partial_write_original_bytes(pair,tmp_path,monkeypatch):
     monkeypatch.setattr(module,'open_store',unavailable)
     result=Messages(app).send('sea','alice',ids['alice'],'sbp/helper','one',request_id='partial')
     assert result['state']!='published'
-    published=app.store('sea').snapshot().bytes('messages/partial.json')
+    published=app.store('sea').snapshot().bytes('.agentworkspace/messages/partial.json')
     monkeypatch.setattr(module,'open_store',original)
     assert Messages(app).reconcile('partial')['state']=='published'
-    assert published==app.store('sbp').snapshot().bytes('messages/partial.json')
+    assert published==app.store('sbp').snapshot().bytes('.agentworkspace/messages/partial.json')
 
 
 def test_archived_no_new_message(pair):

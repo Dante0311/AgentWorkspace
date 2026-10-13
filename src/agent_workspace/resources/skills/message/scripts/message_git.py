@@ -64,6 +64,7 @@ def operation_lock(path):
 class Repository:
     def __init__(self, path):
         self.path = str(Path(path).resolve())
+        self._layout_prefixes = {}
 
     def git(self, *args, data=None, env=None, check=True):
         settings = dict(os.environ, GIT_TERMINAL_PROMPT="0")
@@ -98,6 +99,22 @@ class Repository:
         value = self.read(head, path)
         return None if value is None else json.loads(value)
 
+    def protocol_path(self, head, name):
+        """Resolve the same ready workspace layout as AW, without importing AW."""
+        if head not in self._layout_prefixes:
+            marker = self.json(head, ".agentworkspace/layout.json")
+            if marker is None:
+                prefix = ""
+            else:
+                if (not isinstance(marker, dict) or marker.get("kind") != "workspace"
+                        or type(marker.get("version")) is not int or marker["version"] != 1):
+                    raise ProtocolError("Unsupported or invalid Workspace layout; do not write protocol records.")
+                if marker.get("state", "ready") != "ready":
+                    raise ProtocolError("Finish the original layout migration before accessing protocol records.")
+                prefix = ".agentworkspace/"
+            self._layout_prefixes[head] = prefix
+        return self._layout_prefixes[head] + name
+
     def commit(self, parent, records):
         # A separate index keeps the user's checkout/index untouched.
         with tempfile.TemporaryDirectory(prefix="message-index-") as directory:
@@ -122,9 +139,9 @@ class Repository:
 
 def actor_at(repo, head, agent, binding):
     agent, binding = identifier(agent), identifier(binding)
-    meta = repo.json(head, "workspace.json")
-    actor = repo.json(head, f"agents/{agent}.json")
-    entry = repo.json(head, f"bindings/{binding}.json")
+    meta = repo.json(head, repo.protocol_path(head, "workspace.json"))
+    actor = repo.json(head, repo.protocol_path(head, f"agents/{agent}.json"))
+    entry = repo.json(head, repo.protocol_path(head, f"bindings/{binding}.json"))
     if (not meta or not actor or actor.get("archived") or actor.get("current") != binding
             or not entry or entry.get("id") != binding or entry.get("agent") != agent or entry.get("phase") != "active"):
         raise ProtocolError("The explicitly granted Binding is not this instance's current active entry.")
@@ -132,7 +149,7 @@ def actor_at(repo, head, agent, binding):
 
 
 def notification_at(repo, head, meta, agent, message_id):
-    index = repo.json(head, f"message-index/{identifier(message_id)}.json")
+    index = repo.json(head, repo.protocol_path(head, f"message-index/{identifier(message_id)}.json"))
     if not index or index.get("id") != message_id or index.get("to") != {"workspace": meta["locator"], "agent": agent}:
         raise ProtocolError("The trusted notification index does not target this instance.")
     return index
@@ -144,7 +161,8 @@ def targets_for(own, meta, peer_path, locator):
     if not peer_path or not any(friend.get("locator") == locator for friend in meta.get("friends", {}).values()):
         raise ProtocolError("Cross-Workspace publication needs the explicit current friend repository.")
     peer = Repository(peer_path)
-    other = peer.json(peer.head(), "workspace.json")
+    head = peer.head()
+    other = peer.json(head, peer.protocol_path(head, "workspace.json"))
     if not other or other.get("locator") != locator:
         raise ProtocolError("The supplied peer repository has a different Workspace locator.")
     return [{"repo": own.path, "locator": meta["locator"]}, {"repo": peer.path, "locator": locator}]
@@ -152,13 +170,13 @@ def targets_for(own, meta, peer_path, locator):
 
 def prepare(args, own, head, meta, index):
     if args.action == "receive":
-        existing = own.read(head, f"acks/{args.id}.json")
+        existing = own.read(head, own.protocol_path(head, f"acks/{args.id}.json"))
         if existing is not None:
             if json.loads(existing) != {"message_id": args.id}:
                 raise ProtocolError("Existing ACK is damaged or has different fields; do not replace it.")
             return {"message_id": args.id, "already_acknowledged": True,
                     "instruction": "Do not repeat business. Continue an incomplete original operation file separately."}
-    raw = own.read(head, f"messages/{args.id}.json")
+    raw = own.read(head, own.protocol_path(head, f"messages/{args.id}.json"))
     result = {"message_id": args.id}
     try:
         if raw is None:
@@ -173,7 +191,7 @@ def prepare(args, own, head, meta, index):
     except ValueError as exc:
         result["read_error"] = str(exc)
     if args.action == "show":
-        return {**result, "index": index, "ack": own.json(head, f"acks/{args.id}.json")}
+        return {**result, "index": index, "ack": own.json(head, own.protocol_path(head, f"acks/{args.id}.json"))}
     if args.action == "receive":
         payload = {"message_id": args.id}
         records = {f"acks/{args.id}.json": encode(payload)}
@@ -192,7 +210,7 @@ def prepare(args, own, head, meta, index):
         locator = payload["to"]["workspace"]
     return {"format": "message-git-operation-v1", "kind": "ack" if args.action == "receive" else "message",
             "actor": {"workspace": meta["locator"], "agent": args.agent, "binding": args.binding},
-            "source_id": args.id, "source_index": base64.b64encode(own.read(head, f"message-index/{args.id}.json")).decode(),
+            "source_id": args.id, "source_index": base64.b64encode(own.read(head, own.protocol_path(head, f"message-index/{args.id}.json"))).decode(),
             "records": {path: base64.b64encode(value).decode() for path, value in records.items()},
             "read_result": result, "targets": targets_for(own, meta, args.peer, locator), "state": "prepared"}
 
@@ -248,19 +266,20 @@ def publish(path, operation):
     for target in operation["targets"]:
         head = own.head()
         meta = actor_at(own, head, actor["agent"], actor["binding"])
-        if meta["locator"] != actor["workspace"] or own.read(head, f"message-index/{operation['source_id']}.json") != base64.b64decode(operation["source_index"]):
+        if meta["locator"] != actor["workspace"] or own.read(head, own.protocol_path(head, f"message-index/{operation['source_id']}.json")) != base64.b64decode(operation["source_index"]):
             raise ProtocolError("The original Workspace or notification index changed.")
         repo = own if target["repo"] == own.path else Repository(target["repo"])
         if repo is not own and not any(friend.get("locator") == target["locator"] for friend in meta.get("friends", {}).values()):
             raise ProtocolError("The original friend route was removed; no peer write is authorized.")
         parent = head if repo is own else repo.head()
-        if repo.json(parent, "workspace.json")["locator"] != target["locator"]:
+        if repo.json(parent, repo.protocol_path(parent, "workspace.json"))["locator"] != target["locator"]:
             raise ProtocolError("Target Workspace changed.")
         missing = {}
         for record, content in records.items():
-            existing = repo.read(parent, record)
+            target_path = repo.protocol_path(parent, record)
+            existing = repo.read(parent, target_path)
             if existing is None:
-                missing[record] = content
+                missing[target_path] = content
             elif existing != content:
                 raise ProtocolError("Original ID has different bytes; refusing overwrite.")
         if not missing:
@@ -274,7 +293,7 @@ def publish(path, operation):
         if operation["kind"] == "message":
             body = json.loads(next(content for record, content in records.items() if record.startswith("messages/")))
             if target["locator"] == body["to"]["workspace"]:
-                receiver = repo.json(parent, f"agents/{identifier(body['to']['agent'])}.json")
+                receiver = repo.json(parent, repo.protocol_path(parent, f"agents/{identifier(body['to']['agent'])}.json"))
                 if not receiver or receiver.get("archived"):
                     raise ProtocolError("Reply target is missing or archived.")
         commit = repo.commit(parent, missing)
@@ -288,7 +307,8 @@ def publish(path, operation):
             pushed = None
         try:
             current = repo.head()
-            confirmed = all(repo.read(current, record) == content for record, content in records.items())
+            confirmed = all(repo.read(current, repo.protocol_path(current, record)) == content
+                            for record, content in records.items())
         except (ProtocolError, subprocess.TimeoutExpired, OSError):
             confirmed = False
         if not confirmed:

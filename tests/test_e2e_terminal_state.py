@@ -1,4 +1,7 @@
-"""E2E-004/001 regressions: real Git/lifecycle, deterministic native-event boundary."""
+"""E2E-004/001 regressions: real Git/lifecycle, deterministic native-event boundary.
+
+App fixtures use their created layout; marker-free tmp_path fixtures stay legacy.
+"""
 import queue
 import sys
 from threading import Event
@@ -6,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_workspace import runtime, transfer
+from agent_workspace import layout, runtime, transfer
 from agent_workspace.util import Conflict, Error, Unavailable, read_json, write_json
 
 
@@ -101,7 +104,7 @@ def test_stop_drains_only_matched_terminal_events_before_release(app, monkeypatc
     binding, root = prepare_agent(app)
     install_native(app, monkeypatch, terminal=terminal, late=True, steer_receipt=steer_receipt)
     runner = runtime.Runner(app, "sea", "alice")
-    folder = root / ".aw-local/inputs"
+    folder = layout.local_path(root, "inputs")
 
     def action(step):
         if step == 3:
@@ -123,7 +126,7 @@ def test_stop_drains_only_matched_terminal_events_before_release(app, monkeypatc
     monkeypatch.setattr(app, "finish_stop", release)
     runner.run()
     assert app.show("sea", "alice")["binding"] is None
-    assert read_json(root / ".aw-local/status.json")["state"] == "released"
+    assert read_json(layout.local_path(root, "status.json"))["state"] == "released"
     for name, state in [("pending", "queued"), ("unknown", "outcome_unknown"),
                         ("unfinished", "submitted"), ("historical", "submitted")]:
         assert read_json(folder / (name + ".json"))["state"] == state
@@ -140,7 +143,7 @@ def test_transfer_is_persisted_by_runner_without_status_or_continue(app, monkeyp
     def action(step):
         if step == 3:
             # Read bytes directly. A status query must not be necessary for persistence.
-            value = read_json(root / ".aw-local/transfer.json")
+            value = read_json(layout.local_path(root, "transfer.json"))
             assert value["state"] == "completed"
             assert value["target_binding"] == record["target_binding"]
             assert value["session"] == "session-" + record["target_binding"]
@@ -152,7 +155,7 @@ def test_transfer_is_persisted_by_runner_without_status_or_continue(app, monkeyp
     assert transfer.status(app, "sea", "alice") == completed[0]
     assert transfer.advance(app, "sea", "alice") == completed[0]
     assert spawn.call_count == 1
-    assert read_json(root / ".aw-local/inputs/target-stop.json")["state"] == "completed"
+    assert read_json(layout.local_path(root, "inputs/target-stop.json"))["state"] == "completed"
 
     # A new legitimate entry can request a different transfer; the old ID is archived.
     next_binding = app.reserve("sea", "alice")["binding"]
@@ -171,13 +174,14 @@ def test_stop_during_boot_reuses_explicit_checkpoint_and_persists_completed_tran
     runner = runtime.Runner(app, "sea", "alice")
     runner.stop_event = Steps()
     runner.run()
-    boot = read_json(root / f".aw-local/inputs/boot-{binding}.json")
+    boot = read_json(layout.local_path(root, f"inputs/boot-{binding}.json"))
     assert boot["state"] == "completed"
     point = app.checkpoint_show("sea", "alice", "stop-" + binding)
     assert boot["checkpoint_revision"] == point["revision"]
     assert not any(p["id"] == "initial-" + binding for p in app.checkpoints("sea", "alice"))
-    assert read_json(root / ".aw-local/transfer.json")["state"] == "completed"
-    handoff = app.store("sea").snapshot().json(f"handoffs/{app.agent('sea', 'alice')['handoff']}.json")
+    assert read_json(layout.local_path(root, "transfer.json"))["state"] == "completed"
+    snap = app.store("sea").snapshot()
+    handoff = snap.json(layout.shared_path(snap, f"handoffs/{app.agent('sea', 'alice')['handoff']}.json"))
     assert handoff["checkpoint"] == point["id"]
 
 
@@ -188,8 +192,8 @@ def test_stopped_unsuccessful_boot_does_not_complete_transfer(app, monkeypatch, 
     runner = runtime.Runner(app, "sea", "alice")
     runner.stop_event = Steps()
     runner.run()
-    assert read_json(root / ".aw-local/transfer.json")["state"] != "completed"
-    boot = read_json(root / f".aw-local/inputs/boot-{record['target_binding']}.json")
+    assert read_json(layout.local_path(root, "transfer.json"))["state"] != "completed"
+    boot = read_json(layout.local_path(root, f"inputs/boot-{record['target_binding']}.json"))
     assert boot["state"] == ("failed" if terminal else "submitted")
     assert not boot.get("checkpoint_revision")
 
@@ -202,9 +206,9 @@ def test_checkpoint_failure_retains_completed_input_but_not_transfer_success(app
     runner.stop_event = Steps()
     with pytest.raises(Error, match="cannot publish"):
         runner.run()
-    boot = read_json(root / f".aw-local/inputs/boot-{record['target_binding']}.json")
+    boot = read_json(layout.local_path(root, f"inputs/boot-{record['target_binding']}.json"))
     assert boot["state"] == "completed" and not boot.get("checkpoint_revision")
-    assert read_json(root / ".aw-local/transfer.json")["state"] != "completed"
+    assert read_json(layout.local_path(root, "transfer.json"))["state"] != "completed"
 
 
 def test_unconfirmed_close_still_blocks_release(app, monkeypatch):
@@ -260,7 +264,7 @@ def test_fast_successor_completion_waits_for_launch_write(tmp_path):
 def test_completion_write_failure_retries_only_the_receipt(app, monkeypatch):
     record, root, spawn = prepare_successor(app, monkeypatch)
     real_write, failed = transfer.write_json, []
-    path = root / ".aw-local/transfer.json"
+    path = layout.local_path(root, "transfer.json")
     def write(target, value):
         if target == path and value.get("state") == "completed" and not failed:
             failed.append(True)
@@ -270,7 +274,7 @@ def test_completion_write_failure_retries_only_the_receipt(app, monkeypatch):
     # The existing Codex loop stops on an OSError; exercise the next safe bookkeeping
     # pass directly rather than pretending a disconnected model may be restarted.
     entry = {"id": record["target_binding"], "phase": "active", "session": "native"}
-    write_json(root / f".aw-local/inputs/boot-{record['target_binding']}.json",
+    write_json(layout.local_path(root, f"inputs/boot-{record['target_binding']}.json"),
                {"binding": record["target_binding"], "state": "completed", "checkpoint_revision": "saved"})
     with pytest.raises(OSError, match="temporarily"):
         transfer.persist_completion(root, entry)

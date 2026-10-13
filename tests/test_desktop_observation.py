@@ -54,7 +54,7 @@ def test_missing_or_remote_execution_does_not_probe_native(app, desktop, executi
     _, binding, _, _, constructor = desktop
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
     entry = snap.json(path)
     entry["execution"] = execution
     store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Fixture unavailable execution source")

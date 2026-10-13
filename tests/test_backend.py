@@ -245,6 +245,7 @@ def test_log_is_bounded_registered_and_redacts_control_credentials(app):
     root = app.root("sea", "alice")
     write_json(app.home / "backend/connection.json", {"token": "original-control-token"})
     path = layout.local_path(root, "runner.log")
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("old\noriginal-control-token Bearer secret-value https://user:password@host/path#token=secret\nlast\n", encoding="utf-8")
     result = execute(app, "backend.log", {"workspace": "sea", "agent_id": "alice", "lines": 2})
     assert result["truncated"] and result["source"]["directory"] == str(root)

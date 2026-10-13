@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_workspace import runtime
+from agent_workspace import layout, runtime
 from agent_workspace.commands import execute
 from agent_workspace.util import Conflict, Error, Unavailable, Uncertain, encode, read_json, write_json
 
@@ -17,7 +17,7 @@ def pending(app, monkeypatch):
     receipt = {"binding": binding, "attempted": True, "project_id": "original-project",
                "result": {"threadId": "original-chat", "hostId": "local", "clientThreadId": "original-client",
                           "token": "private-response-value"}}
-    write_json(root / ".aw-local/launch.json", receipt)
+    write_json(layout.local_path(root, "launch.json"), receipt)
     facts = {"thread": {"id": "original-chat", "hostId": "local", "cwd": str(root),
                         "status": {"type": "idle"}, "model": "fixture-model", "reasoningEffort": "low"}}
     peer = Mock()
@@ -34,7 +34,7 @@ def test_launch_show_is_read_only_and_limits_original_receipt(app, pending):
     assert result["current_phase"] == "starting" and result["attempted"]
     assert result["result"]["clientThreadId"] == "original-client"
     assert "token" not in result["result"]
-    assert read_json(root / ".aw-local/launch.json") == receipt
+    assert read_json(layout.local_path(root, "launch.json")) == receipt
     constructor.assert_not_called()
     peer.create.assert_not_called()
     peer.notify.assert_not_called()
@@ -50,13 +50,13 @@ def test_reconcile_original_chat_binds_once_preserves_unknown_boot_and_receipt(a
     assert result["association"] == "original_launch_thread_id"
     assert result["model_profile"]["effective"] == "native_reported"
     assert constructor.call_args.kwargs == {"read_only": True}
-    boot = root / ".aw-local/inputs" / f"boot-{binding}.json"
+    boot = layout.local_path(root, "inputs") / f"boot-{binding}.json"
     write_json(boot, {**read_json(boot), "state": "outcome_unknown", "result": {"turn": {"id": "original-turn"}}})
     original_bytes = boot.read_bytes()
     result = runtime.reconcile_create(app, "sea", "alice", binding, "original-chat")
     assert result["already_bound"] and result["initial_input_state"] == "outcome_unknown"
     assert boot.read_bytes() == original_bytes
-    saved = read_json(root / ".aw-local/launch.json")
+    saved = read_json(layout.local_path(root, "launch.json"))
     for key, value in receipt.items():
         assert saved[key] == value
     assert saved["reconciled"]["session"] == "original-chat"
@@ -79,7 +79,7 @@ def test_lost_bind_reply_rechecks_original_result_without_second_bind_or_create(
     monkeypatch.setattr(app, "bind", bind)
     with pytest.raises(Uncertain):
         runtime.reconcile_create(app, "sea", "alice", binding, "original-chat")
-    assert read_json(root / ".aw-local/launch.json")["reconciled"]["session"] == "original-chat"
+    assert read_json(layout.local_path(root, "launch.json"))["reconciled"]["session"] == "original-chat"
     result = runtime.reconcile_create(app, "sea", "alice", binding, "original-chat")
     assert result["already_bound"] and result["association"] == "original_launch_thread_id"
     assert result["initial_input_state"] == "queued" and bind.call_count == 1
@@ -90,11 +90,11 @@ def test_lost_bind_reply_rechecks_original_result_without_second_bind_or_create(
 def test_missing_original_thread_id_keeps_unknown_without_probing_candidate(app, pending):
     root, binding, receipt, _, _, constructor = pending
     receipt["result"] = {"clientThreadId": "original-client"}
-    write_json(root / ".aw-local/launch.json", receipt)
+    write_json(layout.local_path(root, "launch.json"), receipt)
     result = runtime.reconcile_create(app, "sea", "alice", binding, "candidate-in-same-directory")
     assert result["state"] == "outcome_unknown" and not result["original_create_result_confirmed"]
     assert not result["observation_started"]
-    assert read_json(root / ".aw-local/launch.json") == receipt
+    assert read_json(layout.local_path(root, "launch.json")) == receipt
     assert app.show("sea", "alice")["binding"]["phase"] == "starting"
     constructor.assert_not_called()
 
@@ -107,7 +107,7 @@ def test_unconfirmed_native_identity_directory_state_or_model_cannot_bind(app, p
         facts["thread"] = {**thread, field: value}
         with pytest.raises(Error):
             runtime.reconcile_create(app, "sea", "alice", binding, "original-chat")
-        assert read_json(root / ".aw-local/launch.json") == receipt
+        assert read_json(layout.local_path(root, "launch.json")) == receipt
     facts["thread"] = thread
     peer.read.side_effect = Unavailable("Original native connection unavailable")
     with pytest.raises(Unavailable):
@@ -123,13 +123,13 @@ def test_reconcile_refuses_unrelated_receipt_selection_or_controller(app, pendin
         runtime.reconcile_create(app, "sea", "alice", binding, "different-chat")
     with pytest.raises(Conflict):
         runtime.reconcile_create(app, "sea", "alice", "old-binding", "original-chat")
-    write_json(root / ".aw-local/launch.json", {"binding": binding, "attempted": False})
+    write_json(layout.local_path(root, "launch.json"), {"binding": binding, "attempted": False})
     with pytest.raises(Conflict):
         runtime.reconcile_create(app, "sea", "alice", binding, "original-chat")
-    write_json(root / ".aw-local/launch.json", receipt)
+    write_json(layout.local_path(root, "launch.json"), receipt)
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
     entry = snap.json(path)
     store.change("main", {path: encode({**entry, "controller": "original-controller"})},
                  {path: snap.entries[path]}, "Unreleased original controller fixture")
@@ -145,7 +145,7 @@ def test_reconcile_requires_original_execution_source(app, pending):
     _, binding, _, _, _, constructor = pending
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
     entry = snap.json(path)
     for execution in (None, {**entry["execution"], "installation_id": "other-home"}):
         store.change("main", {path: encode({**entry, "execution": execution})},

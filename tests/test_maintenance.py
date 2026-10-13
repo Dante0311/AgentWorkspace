@@ -172,6 +172,52 @@ def test_maintenance_notification_does_not_follow_a_changed_binding(team):
     assert not list((app.root("sea", "sentinel") / ".aw-local/inputs").glob("*.json"))
 
 
+@pytest.mark.parametrize("entry_state", ["not_started", "stopping", "released"])
+def test_background_check_survives_an_unavailable_sentinel(team, monkeypatch, entry_state):
+    app, _ = team
+    if entry_state != "not_started":
+        binding = app.reserve("sea", "sentinel")["binding"]
+        app.bind("sea", "sentinel", binding, "sentinel-session")
+        point = app.checkpoint("sea", "sentinel", "isolated stop", binding=binding)
+        app.stop("sea", "sentinel", binding, point["id"])
+        if entry_state == "released":
+            app.finish_stop("sea", "sentinel", binding, observed_idle=True)
+    clock = [1000.0]
+    monkeypatch.setattr(maintenance.time, "time", lambda: clock[0])
+    check = Mock(return_value={"state": "degraded", "issues": [{"code": "test-fault"}]})
+    monkeypatch.setattr(maintenance, "doctor", check)
+    maintenance.schedule(app, "sea", True, interval=30, notify=True)
+    first = maintenance.tick(app, "sea")
+    assert first["state"] == "checked" and first["report"]["issues"]
+    assert first["notice"]["state"] == "pending" and first["notice"]["unavailable_reason"]
+    clock[0] += 31
+    second = maintenance.tick(app, "sea")
+    assert second["state"] == "checked" and check.call_count == 2
+    assert second["notice"]["id"] == first["notice"]["id"]
+    assert not list((app.root("sea", "sentinel") / ".aw-local/inputs").glob("*.json"))
+    assert maintenance.status(app, "sea")["local_run"]["report"] == second["report"]
+
+
+def test_background_check_preserves_notice_when_binding_changes_before_queue(team, monkeypatch):
+    app, _ = team
+    binding = app.reserve("sea", "sentinel")["binding"]
+    app.bind("sea", "sentinel", binding, "sentinel-session")
+    point = app.checkpoint("sea", "sentinel", "isolated stop", binding=binding)
+    monkeypatch.setattr(maintenance, "doctor", lambda *args: {
+        "state": "degraded", "issues": [{"code": "test-fault"}]})
+    queue = runtime.queue_input
+    def revoke_before_queue(*args, **kwargs):
+        app.stop("sea", "sentinel", binding, point["id"])
+        return queue(*args, **kwargs)
+    monkeypatch.setattr(runtime, "queue_input", revoke_before_queue)
+    maintenance.schedule(app, "sea", True, notify=True)
+    result = maintenance.tick(app, "sea")
+    assert result["state"] == "checked"
+    assert result["notice"]["state"] == "pending"
+    assert result["notice"]["unavailable_reason"]
+    assert not list((app.root("sea", "sentinel") / ".aw-local/inputs").glob("*.json"))
+
+
 def test_doctor_reports_unresolved_effects_and_pending_checkpoint(team):
     app, actor = team
     root = app.root("sea", "steward")

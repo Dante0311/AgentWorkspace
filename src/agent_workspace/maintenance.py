@@ -371,12 +371,20 @@ def tick(app, workspace):
                 if current != shared:
                     return {"state": "schedule_changed", "report": report}
                 from .runtime import queue_input
-                app.require_binding(workspace, sentinel, binding)
-                queue_input(app, workspace, sentinel,
-                            "Workspace 巡检发现异常。读取 maintenance.status；需要诊断时发送 Message 给登记的 Maintainer。"
-                            "只在授权范围内修复；禁止重放不明业务。",
-                            purpose="maintenance", request_id=run["notice"]["id"], expected_binding=binding)
-                run["notice"]["state"] = "queued"
+                try:
+                    app.require_binding(workspace, sentinel, binding)
+                    queue_input(app, workspace, sentinel,
+                                "Workspace 巡检发现异常。读取 maintenance.status；需要诊断时发送 Message 给登记的 Maintainer。"
+                                "只在授权范围内修复；禁止重放不明业务。",
+                                purpose="maintenance", request_id=run["notice"]["id"], expected_binding=binding)
+                except Conflict as exc:
+                    # A model notification is optional; retain the completed check and original request.
+                    run["notice"]["unavailable_reason"] = str(exc)
+                else:
+                    run["notice"]["state"] = "queued"
+                    run["notice"].pop("unavailable_reason", None)
+            elif not sentinel or not binding:
+                run["notice"]["unavailable_reason"] = "No current Sentinel entry; the background check is still available."
         write_json(root / "run.json", run)
         return run
 

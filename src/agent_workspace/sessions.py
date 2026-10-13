@@ -14,6 +14,7 @@ import subprocess
 import sys
 
 from .harness_config import codex_config, sdk_config
+from . import layout
 from .native_sdk import sdk_environment
 from .util import Conflict, Error, Unavailable, locked, now, read_json, slug, uid, write_json
 
@@ -29,7 +30,9 @@ def _directory(value):
     if not path.is_dir():
         raise Error("The work directory must be an existing folder; it will not be created or copied.")
     for parent in (path, *path.parents):
-        if (parent / ".aw-local/context.json").exists():
+        marker = read_json(parent / layout.MARKER, {})
+        if ((isinstance(marker, dict) and marker.get("kind") == "instance")
+                or (parent / ".aw-local/context.json").exists()):
             raise Conflict("This is an Agent instance directory; use agent start/relay, not an ordinary session.")
     return path
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import partial
 import inspect
 
-from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software
+from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout
 from .messages import Messages
 from .direct_messages import DirectMessages
 from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
@@ -40,11 +40,14 @@ def assets(app, operation, workspace, agent_id, path=None, content=None, revisio
     if operation == "read":
         data = target.read_bytes()
         return {"path": path, "content": data.decode("utf-8"), "revision": digest(data)}
-    with locked(root / ".aw-local/files.lock"):
+    with locked(layout.local_path(root, "files.lock")):
         # Check both the normalized name and its destination, including directory symlinks.
         resolved = relpath(target.resolve().relative_to(root.resolve()).as_posix())
         for candidate in (path, resolved):
-            if candidate.split("/", 1)[0].casefold() == ".aw" or candidate.casefold() == "source.json":
+            parts = candidate.casefold().split("/")
+            internal = parts[0] == ".agentworkspace"
+            editable = len(parts) > 1 and (parts[1:] == ["config.json"] or parts[1] in ("records", "messages"))
+            if parts[0] == ".aw" or candidate.casefold() == "source.json" or (internal and not editable):
                 raise Error("Use platform operations to change managed metadata; asset.write edits user assets.")
         existing = target.read_bytes() if target.exists() else None
         if (digest(existing) if existing is not None else None) != revision:
@@ -55,11 +58,12 @@ def assets(app, operation, workspace, agent_id, path=None, content=None, revisio
 
 def bind_entry(app, workspace, agent_id, binding, session, directory=None):
     root = app.root(workspace, agent_id, directory)
-    entry = app.store(workspace).snapshot().json(f"bindings/{binding}.json")
+    snap = app.store(workspace).snapshot()
+    entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
     if entry is None:
         raise Error("Binding not found.")
     if entry["kind"] == "desktop":
-        config = read_json(root / ".aw-local/runtime.json", {})
+        config = read_json(layout.local_path(root, "runtime.json"), {})
         adapter = runtime.Desktop(root, config, session)
         try:
             if adapter.status() == "unknown":
@@ -72,7 +76,8 @@ def bind_entry(app, workspace, agent_id, binding, session, directory=None):
 def stop_entry(app, workspace, agent_id, binding, checkpoint, directory=None, confirm_stopped=False):
     result = app.stop(workspace, agent_id, binding, checkpoint, directory)
     if confirm_stopped:
-        entry = app.store(workspace).snapshot().json(f"bindings/{binding}.json")
+        snap = app.store(workspace).snapshot()
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         if entry["kind"] != "manual":
             raise Error("Desktop/CLI stop must be observed by its adapter, not overridden by a flag.")
         result = app.finish_stop(workspace, agent_id, binding, observed_idle=True)
@@ -86,8 +91,9 @@ def stop_entry(app, workspace, agent_id, binding, checkpoint, directory=None, co
 def runtime_stop(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
     binding = app.agent(workspace, agent_id)["current"]
-    with locked(root / ".aw-local/stop-launch.lock"):
-        write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": binding})
+    with locked(layout.local_path(root, "stop-launch.lock")):
+        control = layout.local_path(root, "control.json")
+        write_json(control, {**read_json(control, {}), "stop": binding})
         signal = backend.cancel(app, workspace, agent_id, str(root), expected_binding=binding)
     return {"monitor_stop_requested": True, "binding": binding, "execution_right_released": False, **signal}
 
@@ -96,10 +102,12 @@ def runtime_launch(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
     snap = app.store(workspace).snapshot()
     binding = app.agent(workspace, agent_id, snap)["current"]
-    if binding and snap.json(f"bindings/{binding}.json")["phase"] == "stopping":
+    entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json")) if binding else None
+    if binding and entry["phase"] == "stopping":
         return runtime.continue_stop(app, workspace, agent_id, binding, directory,
-                                     expected_checkpoint=snap.json(f"bindings/{binding}.json")["checkpoint"])
-    write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": None})
+                                     expected_checkpoint=entry["checkpoint"])
+    control = layout.local_path(root, "control.json")
+    write_json(control, {**read_json(control, {}), "stop": None})
     return runtime.spawn_runner(app, workspace, agent_id, directory)
 
 
@@ -107,7 +115,7 @@ def message_poll(app, workspace, agent_id, binding, directory=None):
     root = app.root(workspace, agent_id, directory)
     item, entry = app.require_binding(workspace, agent_id, binding)
     if entry["kind"] == "desktop":
-        adapter = runtime.Desktop(root, read_json(root / ".aw-local/runtime.json"), entry["session"])
+        adapter = runtime.Desktop(root, read_json(layout.local_path(root, "runtime.json")), entry["session"])
         try:
             return Messages(app).poll(workspace, agent_id, binding, adapter=adapter, directory=directory)
         finally:
@@ -125,7 +133,7 @@ def upgrade_tools(app, workspace, agent_id, directory=None):
 
 def bridge_switch(app, workspace, agent_id, name, enabled, directory=None):
     root = app.root(workspace, agent_id, directory)
-    path = root / ".aw-local/bridges" / f"{name}.json"
+    path = layout.local_path(root, f"bridges/{name}.json")
     value = read_json(path)
     if value is None:
         raise Error("Bridge is not configured.")
@@ -134,7 +142,7 @@ def bridge_switch(app, workspace, agent_id, name, enabled, directory=None):
 
 def bridge_status(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
-    return {p.stem: read_json(p) for p in (root / ".aw-local/bridges/status").glob("*.json")}
+    return {p.stem: read_json(p) for p in layout.local_path(root, "bridges/status").glob("*.json")}
 
 
 def command_map(app):

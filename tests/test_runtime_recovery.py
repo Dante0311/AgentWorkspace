@@ -560,8 +560,8 @@ def test_stop_preflight_read_retry_reobserves_original_request(desktop_owner, mo
     monkeypatch.setattr(bridges.BridgeManager, "tick", Mock(side_effect=AssertionError("no bridge events during stop")))
     runner.run()
     snap = app.store("sea").snapshot()
-    handoffs = [path for path in snap.entries if path.startswith("handoffs/")]
-    assert handoffs == ["handoffs/h" + binding[1:] + ".json"]
+    handoffs = [path for path in snap.entries if path.startswith(layout.shared_path(snap, "handoffs/"))]
+    assert handoffs == [layout.shared_path(snap, "handoffs/h" + binding[1:] + ".json")]
     assert app.agent("sea", "alice", snap)["current"] is None
     assert len(calls) == 2 and calls[0] == calls[1]
     assert calls[0]["expected_session"] == "original-chat"

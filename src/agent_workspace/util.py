@@ -55,13 +55,32 @@ def slug(value: str) -> str:
     return value
 
 
-def relpath(value: str) -> str:
+def relpath(value: str, *, allow_local=False) -> str:
     path = PurePosixPath(value)
     if not value or path.is_absolute() or ".." in path.parts or "\\" in value or "\0" in value:
         raise Error(f"Not a safe relative path: {value!r}")
-    if any(part.lower() in (".git", ".aw-local") for part in path.parts):
+    if any(part.casefold() == '.git' for part in path.parts) or not allow_local and local_asset_path(str(path)):
         raise Error("Git internals and local runtime state are not publishable assets.")
     return str(path)
+
+
+def local_asset_path(value: str) -> bool:
+    parts = PurePosixPath(value).parts
+    lowered = [part.casefold() for part in parts]
+    return any(part in ('.git', '.aw-local') for part in lowered) or any(
+        first == '.agentworkspace' and second == 'local' for first, second in zip(lowered, lowered[1:]))
+
+
+def user_asset_path(root: Path, value: str, *, write=False) -> Path:
+    target = inside(root, value)
+    if write:
+        for path in (relpath(value), relpath(target.resolve().relative_to(root.resolve()).as_posix())):
+            lowered = path.casefold()
+            if (lowered.split('/', 1)[0] == '.aw' or lowered == 'source.json'
+                    or lowered == '.agentworkspace'
+                    or lowered.startswith('.agentworkspace/') and lowered != '.agentworkspace/config.json'):
+                raise Error('Use platform operations to change managed metadata; asset.write edits user assets.')
+    return target
 
 
 def inside(root: Path, value: str) -> Path:

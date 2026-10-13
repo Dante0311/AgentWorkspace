@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 
+from . import layout
 from .util import Conflict, Error, digest, locked, now, read_json, write_json
 
 
@@ -76,7 +77,7 @@ def validate(choice):
 
 
 def _document(root):
-    document = read_json(root / "runtime.json", {})
+    document = read_json(layout.instance_path(root, 'config.json'), {})
     if not isinstance(document, dict):
         raise Error("Instance runtime.json must be an object.")
     return document
@@ -89,8 +90,8 @@ def desired(root):
 
 def migrate(root):
     """Copy an old choice once. Subsequent local capture must not replace it."""
-    with locked(root / ".aw-local/files.lock"):
-        path = root / ".aw-local/runtime.json"
+    with locked(layout.local_path(root, "files.lock")):
+        path = layout.local_path(root, "runtime.json")
         config = read_json(path, {"kind": "manual"})
         if config.get("kind") not in CODEX_KINDS:
             return config
@@ -98,16 +99,16 @@ def migrate(root):
         document = _document(root)
         if choice:
             # Preserve even partial old choices. Launch validation names the missing field.
-            source = {"path": ".aw-local/runtime.json", "sha256": digest(path.read_bytes()), "fields": origins,
+            source = {"path": path.relative_to(root).as_posix(), "sha256": digest(path.read_bytes()), "fields": origins,
                       "choice": choice}
             # Keep the old facts even if a subsequent explicit configure replaces
             # the desired section before its first checkpoint is published.
-            history = read_json(root / ".aw-local/model-migration.json", [])
+            history = read_json(layout.local_path(root, "model-migration.json"), [])
             if source not in history:
-                write_json(root / ".aw-local/model-migration.json", [*history, source])
+                write_json(layout.local_path(root, "model-migration.json"), [*history, source])
             if "codex" not in document:
                 document["codex"] = {**choice, "migrated_from": source}
-                write_json(root / "runtime.json", document)
+                write_json(layout.instance_path(root, 'config.json'), document)
             write_json(path, local)
         return local
 
@@ -115,16 +116,16 @@ def migrate(root):
 def configure(root, config):
     migrate(root)
     local, choice, _ = split_config(config)
-    with locked(root / ".aw-local/files.lock"):
+    with locked(layout.local_path(root, "files.lock")):
         if choice:
             document = _document(root)
             document["codex"] = choice
-            write_json(root / "runtime.json", document)
-        write_json(root / ".aw-local/runtime.json", local)
+            write_json(layout.instance_path(root, 'config.json'), document)
+        write_json(layout.local_path(root, "runtime.json"), local)
 
 
 def selected(root):
-    path = root / "runtime.json"
+    path = layout.instance_path(root, 'config.json')
     data = path.read_bytes() if path.exists() else b"{}"
     try:
         document = json.loads(data)
@@ -133,13 +134,13 @@ def selected(root):
     if not isinstance(document, dict):
         raise Error("Instance runtime.json must be an object.")
     choice = validate(document.get("codex"))
-    return {**choice, "source": {"path": "runtime.json", "section": "codex",
+    return {**choice, "source": {"path": path.relative_to(root).as_posix(), "section": "codex",
             "sha256": digest(data)}}
 
 
 def adopted(root, binding=None, *, session=None):
     """An entry's snapshot wins over later changes to the desired asset."""
-    record = read_json(root / ".aw-local/entry.json", {})
+    record = read_json(layout.local_path(root, "entry.json"), {})
     if binding is not None and record.get("binding") not in (None, binding):
         raise Conflict("Model choice belongs to another execution entry.")
     saved = record.get("model_profile")
@@ -151,16 +152,16 @@ def adopted(root, binding=None, *, session=None):
     _, old_choice, _ = split_config(record.get("config", {}))
     if old_choice:
         choice = validate(old_choice)
-        return {**choice, "source": {"path": ".aw-local/entry.json", "section": "config",
-                "sha256": digest((root / ".aw-local/entry.json").read_bytes())}}
+        return {**choice, "source": {"path": layout.local_path(root, 'entry.json').relative_to(root).as_posix(), "section": "config",
+                "sha256": digest((layout.local_path(root, "entry.json")).read_bytes())}}
     if session and record.get("binding"):
         raise Error("This native session has no saved adopted Codex choice; handoff before applying runtime.json.")
     return selected(root)
 
 
 def pin(root, binding, profile):
-    with locked(root / ".aw-local/profile.lock"):
-        path = root / ".aw-local/entry.json"
+    with locked(layout.local_path(root, "profile.lock")):
+        path = layout.local_path(root, "entry.json")
         record = read_json(path, {})
         if record.get("binding") != binding:
             raise Conflict("Cannot adopt a model choice for another execution entry.")

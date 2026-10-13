@@ -17,7 +17,7 @@ INSTANCE_ROOT_FILES = {'source.json': 'source.json', 'config.json': 'runtime.jso
 LOCAL_OPERATIONS = frozenset(('context.json', 'launch.json', 'input-sequence.json',
                              'inputs', 'checkpoint-operations', 'fork-operations',
                              'skill-install', 'transfer.json', 'transfers',
-                             'renew.json', 'renew-result.json', 'model-migration.json'))
+                             'renew.json', 'renew-result.json', 'model-migration.json', 'software-update.json'))
 
 
 class MigrationRequired(Conflict):
@@ -29,9 +29,9 @@ def _relative(name):
             or any(ord(c) < 32 for c in name)):
         raise Error('Layout paths must be safe repository-relative paths.')
     path = PurePosixPath(name)
-    if path.is_absolute() or '..' in path.parts or '.git' in (p.lower() for p in path.parts):
+    if not path.parts or path.is_absolute() or '..' in path.parts or '.git' in (p.lower() for p in path.parts):
         raise Error('Layout path escapes its data root.')
-    return path.as_posix()
+    return path.as_posix() + ('/' if name.endswith('/') else '')
 
 
 def marker(kind, **facts):
@@ -42,6 +42,8 @@ def marker(kind, **facts):
 
 def version(source, kind):
     """Accept an instance root, pinned Snapshot, or prepared byte mapping."""
+    if kind not in ('workspace', 'instance'):
+        raise Error('Unknown layout kind.')
     if isinstance(source, (str, Path)):
         value = read_json(Path(source) / MARKER)
     elif isinstance(source, Mapping):
@@ -65,6 +67,11 @@ def shared_path(snapshot, name):
     if name != 'workspace.json' and name.split('/')[0] not in SHARED_ROOTS:
         raise Error('Use the shared path resolver only for AW platform records.')
     return f'.agentworkspace/{name}' if version(snapshot, 'workspace') else name
+
+
+def expected(snapshot, objects):
+    """Bind conditional writes to the same layout as their original read."""
+    return {**objects, MARKER: snapshot.entries.get(MARKER)}
 
 
 def instance_relpath(source, name):
@@ -107,6 +114,14 @@ def local_path(root, name):
 def require_current(root):
     if version(root, 'instance') == 0:
         raise MigrationRequired('Migrate this legacy copy before updating current AW resources.')
+
+
+def add_git_excludes(content):
+    original = content.get('.gitignore', b'')
+    lines = original.decode('utf-8').splitlines()
+    missing = [value for value in ('/.agentworkspace/local/', '/.aw-local/') if value not in lines]
+    if missing:
+        content['.gitignore'] = original + (b'\n' if original and not original.endswith(b'\n') else b'') + ('\n'.join(missing) + '\n').encode()
 
 
 def resource_files(root=None):

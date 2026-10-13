@@ -17,8 +17,25 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import layout
 from .util import (Conflict, Error, LockBusy, RetryableRead, Uncertain, command_detail,
                    digest, encode, locked, relpath, run)
+
+
+def _validate_commit(store, parent, changes):
+    previous = store.snapshot(revision=parent) if parent else None
+    original_marker = previous.bytes(layout.MARKER) if previous else None
+    if original_marker is not None:
+        document = json.loads(original_marker)
+        layout.version({layout.MARKER: original_marker}, document.get('kind') if isinstance(document, dict) else None)
+    current_marker = changes.get(layout.MARKER, original_marker)
+    if current_marker is not None:
+        document = json.loads(current_marker)
+        layout.version({layout.MARKER: current_marker}, document.get('kind') if isinstance(document, dict) else None)
+    paths = set(previous.entries if previous else ()) | set(changes)
+    for path in paths:
+        if path not in changes or changes[path] is not None:
+            relpath(path)  # Also inspect inherited tracked files, not only new additions.
 
 
 def git_env(env=None):
@@ -156,6 +173,7 @@ class GitStore:
         return self.git("cat-file", "blob", sha).stdout
 
     def commit(self, parent: str, changes: dict[str, bytes | None], message: str) -> str:
+        _validate_commit(self, parent, changes)
         with tempfile.TemporaryDirectory(prefix="aw-index-") as directory:
             env = dict(os.environ, GIT_INDEX_FILE=str(Path(directory) / "index"),
                        GIT_AUTHOR_NAME="Agent Workspace", GIT_AUTHOR_EMAIL="aw@localhost",
@@ -163,7 +181,7 @@ class GitStore:
             self.git("read-tree", parent if parent else "--empty", env=env)
             lines = []
             for path, content in changes.items():
-                relpath(path)
+                relpath(path, allow_local=content is None)
                 if content is None:
                     lines.append(b"0 " + b"0" * 40 + b"\t" + path.encode() + b"\0")
                 else:
@@ -300,6 +318,11 @@ class GitHubStore(GitStore):
         # endpoint creates the initial commit; omitting sha forbids replacing a file.
         self.request("PUT", "/contents/workspace.json", {"message": "Initialize Agent Workspace",
             "content": base64.b64encode(encode(metadata)).decode(), "branch": "main"})
+        snap = self.snapshot()
+        self.change('main', {'workspace.json': None, layout.MARKER: layout.marker('workspace'),
+            '.agentworkspace/workspace.json': snap.bytes('workspace.json')},
+            {'workspace.json': snap.entries['workspace.json'], layout.MARKER: None,
+             '.agentworkspace/workspace.json': None}, 'Initialize AW data layout', base=snap.revision)
 
     def head(self, branch):
         ref = self.request("GET", "/git/ref/heads/" + urllib.parse.quote(branch, safe="/"))
@@ -330,9 +353,10 @@ class GitHubStore(GitStore):
         return self._blobs[sha]
 
     def commit(self, parent, changes, message):
+        _validate_commit(self, parent, changes)
         items = []
         for path, data in changes.items():
-            relpath(path)
+            relpath(path, allow_local=data is None)
             blob = None
             if data is not None:
                 blob = self.request("POST", "/git/blobs", {

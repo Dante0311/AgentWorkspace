@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import fnmatch
-from importlib.resources import files as package_files
 import json
 import os
 from pathlib import Path
@@ -9,10 +8,11 @@ import re
 import shutil
 import tempfile
 
-from . import __version__, skills as shared_skills
+from . import skills as shared_skills, software
 from .gitstore import GitStore, GitHubStore, open_store
 from . import model_profiles
-from .util import Conflict, Error, RetryableRead, Uncertain, digest, encode, inside, locked, now, read_json, relpath, slug, uid, write_bytes, write_json
+from . import layout
+from .util import Conflict, Error, RetryableRead, Uncertain, digest, encode, inside, local_asset_path, locked, now, read_json, relpath, slug, uid, write_bytes, write_json
 
 
 DEFAULT_EXCLUDES = [".git", ".aw-local", ".local", "__pycache__", ".env", ".env.*", "secrets"]
@@ -50,7 +50,8 @@ class App:
         GitStore.initialize(path)
         store = open_store(str(path), self.home)
         meta = {"schema": 1, "name": name, "locator": "local:" + name, "friends": {}, "projects": {}}
-        store.branch("main", {"workspace.json": encode(meta)})
+        store.branch("main", {layout.MARKER: layout.marker('workspace'),
+                              '.agentworkspace/workspace.json': encode(meta)})
         return self.workspace_connect(name, str(path))
 
     def workspace_connect(self, name, address):
@@ -59,7 +60,7 @@ class App:
             address = str(Path(address).expanduser().resolve())
         store = open_store(address, self.home)
         snap = store.snapshot()
-        meta = snap.json("workspace.json")
+        meta = snap.json(layout.shared_path(snap, "workspace.json"))
         if meta is None:
             raise Error("This repository has no workspace.json. Initialize it explicitly, not over existing files.")
         if meta.get("schema") != 1:
@@ -82,7 +83,8 @@ class App:
         if isinstance(store, GitHubStore):
             store.bootstrap(meta)
         else:
-            store.branch("main", {"workspace.json": encode(meta)})
+            store.branch("main", {layout.MARKER: layout.marker('workspace'),
+                                  '.agentworkspace/workspace.json': encode(meta)})
         return self.workspace_connect(name, address)
 
     def workspace_list(self):
@@ -90,7 +92,7 @@ class App:
 
     def workspace_show(self, workspace, *, snapshot=None):
         snap = snapshot or self.store(workspace).snapshot()
-        return {**snap.json("workspace.json"), "revision": snap.revision,
+        return {**snap.json(layout.shared_path(snap, "workspace.json")), "revision": snap.revision,
                 "access": self.local()["workspaces"][workspace]}
 
     def relation(self, workspace, kind, operation, alias=None, address=None, content=""):
@@ -98,7 +100,7 @@ class App:
             raise Error("Unknown relation kind.")
         store = self.store(workspace)
         snap = store.snapshot()
-        meta = snap.json("workspace.json")
+        meta = snap.json(layout.shared_path(snap, "workspace.json"))
         if operation == "list":
             return meta[kind]
         slug(alias)
@@ -110,7 +112,8 @@ class App:
             local = Path(address).expanduser().exists()
             if kind == "friends":
                 target = open_store(str(Path(address).expanduser().resolve()) if local else address, self.home)
-                target_meta = target.snapshot().json("workspace.json")
+                target_snapshot = target.snapshot()
+                target_meta = target_snapshot.json(layout.shared_path(target_snapshot, "workspace.json"))
                 if not target_meta:
                     raise Error("Friend must be an initialized workspace.")
                 locator = target_meta["locator"]
@@ -130,12 +133,13 @@ class App:
                 self.change_local(edit)
         else:
             raise Error("Expected add, list or remove.")
-        revision = store.change("main", {"workspace.json": encode(meta)},
-                                {"workspace.json": snap.entries["workspace.json"]}, f"{operation} {kind}/{alias}")
+        revision = store.change("main", {layout.shared_path(snap, "workspace.json"): encode(meta)},
+                                layout.expected(snap, {layout.shared_path(snap, "workspace.json"): snap.entries[layout.shared_path(snap, "workspace.json")]}), f"{operation} {kind}/{alias}")
         return {"relations": meta[kind], "revision": revision}
 
     def friend_store(self, workspace, alias):
-        meta = self.store(workspace).snapshot().json("workspace.json")
+        snap = self.store(workspace).snapshot()
+        meta = snap.json(layout.shared_path(snap, "workspace.json"))
         friend = meta["friends"].get(alias)
         if friend is None:
             raise Error(f"No friend named {alias}.")
@@ -144,7 +148,8 @@ class App:
         if not address:
             raise Error("This friend requires a local path mapping in this environment.")
         store = open_store(address, self.home)
-        other = store.snapshot().json("workspace.json")
+        other_snapshot = store.snapshot()
+        other = other_snapshot.json(layout.shared_path(other_snapshot, "workspace.json"))
         if other["locator"] != friend["locator"]:
             raise Conflict("Friend address now resolves to another workspace.")
         if meta["locator"] not in [v["locator"] for v in other["friends"].values()]:
@@ -154,14 +159,14 @@ class App:
     def agent(self, workspace, agent_id, snapshot=None):
         slug(agent_id)
         snap = snapshot or self.store(workspace).snapshot()
-        item = snap.json(f"agents/{agent_id}.json")
+        item = snap.json(layout.shared_path(snap, f"agents/{agent_id}.json"))
         if item is None:
             raise Error(f"Unknown agent {agent_id} in {workspace}.")
         return item
 
     def agents(self, workspace, archived=None, *, snapshot=None):
         snap = snapshot or self.store(workspace).snapshot()
-        items = [snap.json(p) for p in snap.entries if p.startswith("agents/") and p.endswith(".json")]
+        items = [snap.json(p) for p in snap.entries if p.startswith(layout.shared_path(snap, "agents/")) and p.endswith(".json")]
         return [a for a in items if archived is None or a["archived"] == archived]
 
     def require_binding(self, workspace, agent_id, binding, *, allow_stopping=False, snapshot=None):
@@ -169,33 +174,15 @@ class App:
         agent = self.agent(workspace, agent_id, snap)
         if not binding or agent["current"] != binding or agent["archived"]:
             raise Conflict("This is not the agent's current execution entry. Do not resume an old session.")
-        entry = snap.json(f"bindings/{binding}.json")
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         if not isinstance(entry, dict) or entry.get("id") != binding or entry.get("agent") != agent_id:
             raise Error("Binding record does not belong to this execution entry.")
         if entry["phase"] != "active" and not (allow_stopping and entry["phase"] == "stopping"):
             raise Conflict(f"Entry is {entry['phase']}; it cannot perform this operation.")
         return agent, entry
 
-    def _resources(self):
-        root = package_files("agent_workspace") / "resources"
-        result = {}
-        for name in ("workspace", "work", "message", "agent", "handoff", "relay", "fork"):
-            pending = [(root / "skills" / name, f".agents/skills/{name}")]
-            while pending:
-                source, prefix = pending.pop()
-                for item in source.iterdir():
-                    if item.name == "__pycache__":
-                        continue
-                    path = prefix + "/" + item.name
-                    if item.is_dir():
-                        pending.append((item, path))
-                    else:
-                        result[path] = item.read_bytes()
-        for name in ("initialization.md", "entry.md", "handoff.md", "checkpoints.md", "capabilities.md", "desktop-projects.md", "message-notification.json"):
-            result[f".aw/prompts/{name}"] = (root / "prompts" / name).read_bytes()
-        result[".aw/software.json"] = encode({"version": __version__,
-            "files": {p: digest(v) for p, v in result.items()}})
-        return result
+    def _resources(self, root=None):
+        return layout.resource_files(root)
 
     def _definition(self, workspace, definition, revision=None):
         prefix = relpath(definition).rstrip("/")
@@ -210,7 +197,7 @@ class App:
             if target.startswith("skills/"):
                 target = ".agents/" + target
             relpath(target)
-            if target.startswith(".aw/") or target == "source.json":
+            if target.startswith((".aw/", '.agentworkspace/')) or target == "source.json":
                 raise Error("Definition cannot replace platform metadata.")
             result[target] = data
             mapping[target] = {"path": origin, "hash": digest(data)}
@@ -231,7 +218,7 @@ class App:
         store = self.store(workspace)
         snap = store.snapshot()
         location_target = directory or str(self.home / "instances" / workspace / agent_id)
-        existing = snap.json(f"agents/{agent_id}.json")
+        existing = snap.json(layout.shared_path(snap, f"agents/{agent_id}.json"))
         if existing:
             if creation is None or existing.get("creation") != creation:
                 raise Conflict("Agent ID already exists. Connect to it; do not create a duplicate.")
@@ -240,16 +227,17 @@ class App:
         if creation is not None:
             previous = store.snapshot(branch)
             if previous.revision:
-                saved = previous.json(".aw/creation.json", {})
-                identity = previous.json(".aw/identity.json", {})
+                saved = previous.json(layout.instance_relpath(previous, "creation.json"), {})
+                identity = previous.json(layout.instance_relpath(previous, "identity.json"), {})
                 if (saved.get("creation") != creation or saved.get("id") != agent_id
-                        or identity != {"workspace": snap.json("workspace.json")["locator"], "agent": agent_id}):
+                        or identity != {"workspace": snap.json(layout.shared_path(snap, "workspace.json"))["locator"], "agent": agent_id}):
                     raise Conflict("Existing branch does not belong to this creation request.")
                 # Resume only registration of this exact saved creation; never replace assets.
-                store.change("main", {f"agents/{agent_id}.json": encode(saved)},
-                             {f"agents/{agent_id}.json": None}, f"Register {agent_id}")
+                store.change("main", {layout.shared_path(snap, f"agents/{agent_id}.json"): encode(saved)},
+                             layout.expected(snap, {layout.shared_path(snap, f"agents/{agent_id}.json"): None}), f"Register {agent_id}")
                 return {**saved, **self.connect_agent(workspace, agent_id, location_target)}
         content = self._resources()
+        content[layout.MARKER] = layout.marker('instance')
         content["AGENTS.md"] = f"# {name}\n\n{description or '职责待使用者逐步完善。'}\n\n工作根为本目录。平台操作参见 `.agents/skills/`；不要将没有收到的任务当作默认任务。\n".encode()
         if definition:
             selected, source = self._definition(workspace, definition, (revision or snap.revision) if skills else revision)
@@ -257,7 +245,7 @@ class App:
                 if path in content and path != "AGENTS.md":
                     raise Conflict(f"Definition overlaps a bundled platform skill: {path}")
             content.update(selected)
-            content["source.json"] = encode(source)
+            content[layout.instance_relpath(content, "source.json")] = encode(source)
         if import_directory:
             if not assets:
                 raise Error("Import requires an explicit list of relative asset paths; the source is never modified.")
@@ -267,20 +255,21 @@ class App:
                 if source_path.is_symlink() or not source_path.is_file():
                     raise Error("Import selects regular files only; inspect directories before selecting assets.")
                 target = relpath(name_in_source)
-                if target.startswith(".aw/") or (target in content and target != "AGENTS.md"):
+                if target.startswith((".aw/", '.agentworkspace/')) or (target in content and target != "AGENTS.md"):
                     raise Conflict(f"Import overlaps managed content: {target}")
                 content[target] = source_path.read_bytes()
         if skills:
             shared_skills.seed(shared_skills.snapshot(self, workspace, revision or snap.revision), skills, content)
-        content[".aw/identity.json"] = encode({"workspace": snap.json("workspace.json")["locator"], "agent": agent_id})
+        content[layout.instance_relpath(content, "identity.json")] = encode({"workspace": snap.json(layout.shared_path(snap, "workspace.json"))["locator"], "agent": agent_id})
         item = {"id": agent_id, "name": name, "description": description, "branch": branch,
                 "archived": False, "current": None, "has_run": False, "handoff": None,
                 "created_at": now()}
         if creation is not None:
             item["creation"] = creation
-            content[".aw/creation.json"] = encode(item)
+            content[layout.instance_relpath(content, "creation.json")] = encode(item)
+        layout.add_git_excludes(content)
         sha = store.branch(branch, content)
-        store.change("main", {f"agents/{agent_id}.json": encode(item)}, {f"agents/{agent_id}.json": None},
+        store.change("main", {layout.shared_path(snap, f"agents/{agent_id}.json"): encode(item)}, layout.expected(snap, {layout.shared_path(snap, f"agents/{agent_id}.json"): None}),
                      f"Register {agent_id}")
         try:
             location = self.connect_agent(workspace, agent_id, location_target)
@@ -303,7 +292,7 @@ class App:
     def connect_agent(self, workspace, agent_id, directory):
         item = self.agent(workspace, agent_id)
         root = Path(directory).expanduser().resolve()
-        marker = root / ".aw-local" / "context.json"
+        marker = layout.local_path(root, "context.json")
         existing = read_json(marker)
         locator = self.local()["workspaces"][workspace]["locator"]
         if existing:
@@ -328,7 +317,7 @@ class App:
             staged.mkdir()
             for path, data in content.items():
                 write_bytes(inside(staged, path), data)
-            write_json(staged / ".aw-local/context.json", context)
+            write_json(layout.local_path(staged, "context.json"), context)
             if root.exists():
                 root.rmdir()  # Refuse if another writer put anything in the target.
             staged.rename(root)
@@ -340,9 +329,10 @@ class App:
         return {"directory": str(root), "revision": snap.revision}
 
     def collect(self, root):
-        if (root / ".aw-local/skill-install/operation.json").exists():
+        software.require_ready(root)
+        if (layout.local_path(root, "skill-install/operation.json")).exists():
             raise Conflict("Finish or recover the pending Skill update before taking a snapshot.")
-        context = read_json(root / ".aw-local/context.json")
+        context = read_json(layout.local_path(root, "context.json"))
         excludes = context["exclude"]
         content, skipped = {}, []
         for base, directories, names in os.walk(root, followlinks=False):
@@ -350,7 +340,7 @@ class App:
             for name in directories:
                 candidate = Path(base) / name
                 relative = candidate.relative_to(root).as_posix()
-                if any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(relative, pat) for pat in excludes):
+                if local_asset_path(relative) or any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(relative, pat) for pat in excludes):
                     skipped.append(relative + "/")
                 elif candidate.is_symlink():
                     raise Error(f"Snapshot needs an explicit export for symlink: {relative}")
@@ -360,7 +350,7 @@ class App:
             for name in names:
                 candidate = Path(base) / name
                 relative = candidate.relative_to(root).as_posix()
-                if name.startswith(".aw-tmp-") or any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(relative, pat) for pat in excludes):
+                if local_asset_path(relative) or name.startswith(".aw-tmp-") or any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(relative, pat) for pat in excludes):
                     skipped.append(relative)
                     continue
                 if candidate.is_symlink():
@@ -370,12 +360,17 @@ class App:
                 content[relative] = candidate.read_bytes()
         return content, skipped
 
+    def _check_tracked_local(self, snapshot):
+        if any(local_asset_path(path) for path in snapshot.entries):
+            raise Error('Local runtime data is already tracked; migrate it explicitly before saving or syncing.')
+
     def sync_agent(self, workspace, agent_id, directory=None):
         root = self.root(workspace, agent_id, directory)
-        with locked(root / ".aw-local/files.lock"):
-            context = read_json(root / ".aw-local/context.json")
+        with locked(layout.local_path(root, "files.lock")):
+            context = read_json(layout.local_path(root, "context.json"))
             local, _ = self.collect(root)
             snap = self.store(workspace).snapshot(self.agent(workspace, agent_id)["branch"])
+            self._check_tracked_local(snap)
             remote = snap.all()
             for path in set(context["saved"]) | set(remote):
                 previous = context["saved"].get(path)
@@ -394,23 +389,24 @@ class App:
                 elif target.exists():
                     target.unlink()
             context.update(revision=snap.revision, saved={p: digest(v) for p, v in remote.items()})
-            write_json(root / ".aw-local/context.json", context)
+            write_json(layout.local_path(root, "context.json"), context)
             return {"revision": snap.revision, "directory": str(root)}
 
     def _save_files(self, workspace, agent_id, root, extra=None, message="Save instance assets"):
-        context = read_json(root / ".aw-local/context.json")
+        context = read_json(layout.local_path(root, "context.json"))
         content, skipped = self.collect(root)
         content.update(extra or {})
         store = self.store(workspace)
         branch = self.agent(workspace, agent_id)["branch"]
         previous = store.snapshot(branch, revision=context["revision"])
+        self._check_tracked_local(previous)
         changes = {p: None for p in previous.entries if p not in content}
         changes.update({p: data for p, data in content.items() if previous.bytes(p) != data})
         sha = store.change(branch, changes, {}, message, base=context["revision"]) if changes else context["revision"]
         for path, data in (extra or {}).items():
             write_bytes(inside(root, path), data)
         context.update(revision=sha, saved={p: digest(v) for p, v in content.items()})
-        write_json(root / ".aw-local/context.json", context)
+        write_json(layout.local_path(root, "context.json"), context)
         return sha, skipped
 
     def checkpoint(self, workspace, agent_id, summary, content="", binding=None, directory=None,
@@ -421,37 +417,39 @@ class App:
             self.require_binding(workspace, agent_id, binding, allow_stopping=True)
         cp = slug(checkpoint_id or uid("c"))
         store = self.store(workspace)
-        index = f"checkpoints/{agent_id}/{cp}.json"
-        found = store.snapshot().json(index)
+        snap = store.snapshot()
+        index = layout.shared_path(snap, f"checkpoints/{agent_id}/{cp}.json")
+        found = snap.json(index)
         if found:
             saved = store.snapshot(revision=found["revision"]).json(found["path"])
             if (saved["summary"], saved["content"]) != (summary, content):
                 raise Conflict("Checkpoint ID is immutable and already has different content.")
             return found
-        receipt_path = root / ".aw-local/checkpoint-operations" / f"{cp}.json"
+        receipt_path = layout.local_path(root, "checkpoint-operations") / f"{cp}.json"
         pending = read_json(receipt_path)
         if pending:
             saved = store.snapshot(revision=pending["revision"]).json(pending["path"])
             if (saved["summary"], saved["content"]) != (summary, content):
                 raise Conflict("Pending checkpoint has different content.")
-            store.change("main", {index: encode(pending)}, {index: None}, f"Register checkpoint {cp}")
+            store.change("main", {index: encode(pending)}, layout.expected(snap, {index: None}), f"Register checkpoint {cp}")
             return pending
-        with locked(root / ".aw-local/files.lock"):
-            if (root / f".aw/checkpoints/{cp}.json").exists():
+        with locked(layout.local_path(root, "files.lock")):
+            if (layout.instance_path(root, f"checkpoints/{cp}.json")).exists():
                 raise Conflict("Checkpoint file already exists without a publication receipt; inspect its saved revision before continuing.")
             record = {"id": cp, "created_at": now(), "summary": summary, "content": content,
                       "record_refs": references or [], "scope": "Saved instance files; external/runtime-unavailable state is not implied."}
+            point_path = layout.instance_relpath(root, f'checkpoints/{cp}.json')
             sha, skipped = self._save_files(workspace, agent_id, root,
-                {f".aw/checkpoints/{cp}.json": encode(record)}, f"Checkpoint {cp}")
-            pointer = {"id": cp, "agent": agent_id, "revision": sha, "path": f".aw/checkpoints/{cp}.json",
+                {point_path: encode(record)}, f"Checkpoint {cp}")
+            pointer = {"id": cp, "agent": agent_id, "revision": sha, "path": point_path,
                        "created_at": record["created_at"], "excluded": skipped}
             write_json(receipt_path, pointer)
-            store.change("main", {index: encode(pointer)}, {index: None}, f"Register checkpoint {cp}")
+            store.change("main", {index: encode(pointer)}, layout.expected(snap, {index: None}), f"Register checkpoint {cp}")
         return pointer
 
     def checkpoints(self, workspace, agent_id):
         snap = self.store(workspace).snapshot()
-        return sorted([snap.json(p) for p in snap.entries if p.startswith(f"checkpoints/{agent_id}/")],
+        return sorted([snap.json(p) for p in snap.entries if p.startswith(layout.shared_path(snap, f"checkpoints/{agent_id}/"))],
                       key=lambda p: p["created_at"])
 
     def checkpoint_show(self, workspace, agent_id, checkpoint):
@@ -460,16 +458,18 @@ class App:
 
     def _read_checkpoint(self, store, shared, agent_id, checkpoint):
         checkpoint = slug(checkpoint)
-        pointer = shared.json(f"checkpoints/{agent_id}/{checkpoint}.json")
+        pointer = shared.json(layout.shared_path(shared, f"checkpoints/{agent_id}/{checkpoint}.json"))
         if pointer is None:
             raise Error("Unknown saved checkpoint.")
         if (not isinstance(pointer, dict) or pointer.get("id") != checkpoint or pointer.get("agent") != agent_id
-                or pointer.get("path") != f".aw/checkpoints/{checkpoint}.json" or not pointer.get("revision")):
+                or not pointer.get("revision")):
             raise Error("Saved checkpoint reference does not match this instance and checkpoint.")
         snap = store.snapshot(revision=pointer["revision"])
-        identity = snap.json(".aw/identity.json")
+        if pointer.get('path') != layout.instance_relpath(snap, f'checkpoints/{checkpoint}.json'):
+            raise Error('Saved checkpoint path does not match its original layout.')
+        identity = snap.json(layout.instance_relpath(snap, "identity.json"))
         if (not isinstance(identity, dict) or identity.get("agent") != agent_id
-                or identity.get("workspace") != shared.json("workspace.json")["locator"]):
+                or identity.get("workspace") != shared.json(layout.shared_path(shared, "workspace.json"))["locator"]):
             raise Error("Saved checkpoint material belongs to a different instance or workspace.")
         record = snap.json(pointer["path"])
         if not isinstance(record, dict) or record.get("id") != checkpoint:
@@ -482,9 +482,9 @@ class App:
         store = self.store(workspace)
         snap = store.snapshot()
         source = store.snapshot(revision=point["revision"])
-        locator = snap.json("workspace.json")["locator"]
+        locator = snap.json(layout.shared_path(snap, "workspace.json"))["locator"]
         branch = "instance/" + target
-        agent_path = f"agents/{target}.json"
+        agent_path = layout.shared_path(snap, f"agents/{target}.json")
         origin = {"agent": agent_id, "checkpoint": point["id"], "revision": source.revision}
         identity = {"workspace": locator, "agent": target, "forked_from": origin}
         receipt_path = self.home / "fork-operations" / digest(encode([locator, target])) / "operation.json"
@@ -499,8 +499,8 @@ class App:
                         "archived": False, "current": None, "has_run": False, "handoff": None,
                         "created_at": now(), "forked_from": origin}
                 content = source.all()
-                content[".aw/identity.json"] = encode(identity)
-                content[".aw/fork.json"] = encode(item)
+                content[layout.instance_relpath(content, "identity.json")] = encode(identity)
+                content[layout.instance_relpath(content, "fork.json")] = encode(item)
                 receipt = {"fingerprint": digest(encode(item)), "registration_unknown": False}
                 # Retain the original target even if branch publication loses its reply.
                 write_json(receipt_path, receipt)
@@ -515,10 +515,10 @@ class App:
                 saved = store.snapshot(branch)
                 if not saved.revision:
                     raise Uncertain("The original Fork branch is not confirmed; do not create it again.")
-                item = saved.json(".aw/fork.json", {})
+                item = saved.json(layout.instance_relpath(saved, "fork.json"), {})
                 if (not isinstance(item, dict) or item.get("id") != target or item.get("branch") != branch
                         or item.get("name") != name or item.get("forked_from") != origin
-                        or saved.json(".aw/identity.json") != identity
+                        or saved.json(layout.instance_relpath(saved, "identity.json")) != identity
                         or (receipt and receipt["fingerprint"] != digest(encode(item)))):
                     raise Conflict("Saved target does not belong to this Fork and checkpoint revision.")
                 if existing:
@@ -529,8 +529,8 @@ class App:
                     return {**existing, **self.connect_agent(workspace, target, location)}
                 # Until registration, the target must still contain exactly the saved starting files.
                 content = source.all()
-                content[".aw/identity.json"] = encode(identity)
-                content[".aw/fork.json"] = encode(item)
+                content[layout.instance_relpath(content, "identity.json")] = encode(identity)
+                content[layout.instance_relpath(content, "fork.json")] = encode(item)
                 if saved.all() != content:
                     raise Conflict("Unregistered Fork files changed; inspect the original target before continuing.")
                 if receipt and receipt["registration_unknown"]:
@@ -540,7 +540,7 @@ class App:
             receipt["registration_unknown"] = True
             write_json(receipt_path, receipt)
             try:
-                store.change("main", {agent_path: encode(item)}, {agent_path: None}, f"Fork {target}")
+                store.change("main", {agent_path: encode(item)}, layout.expected(snap, {agent_path: None}), f"Fork {target}")
             except Uncertain:
                 raise
             except Error:
@@ -558,13 +558,13 @@ class App:
         if value.get("kind") in model_profiles.CODEX_KINDS:
             model_profiles.configure(root, value)
         else:
-            write_json(root / ".aw-local/runtime.json", value)
+            write_json(layout.local_path(root, "runtime.json"), value)
         return {"configured": True, "entry_changed": False}
 
     def _binding_history(self, snap, agent_id):
         entries = []
         for path in snap.entries:
-            if path.startswith("bindings/") and path.endswith(".json"):
+            if path.startswith(layout.shared_path(snap, "bindings/")) and path.endswith(".json"):
                 entry = snap.json(path)
                 if entry["agent"] == agent_id:
                     entries.append(entry)
@@ -579,10 +579,10 @@ class App:
     def _observe_copy(self, root, binding, installation):
         source = {"installation_id": installation, "directory": str(root), "kind": "local_copy"}
         try:
-            local_entry = read_json(root / ".aw-local/entry.json", {})
-            status = read_json(root / ".aw-local/status.json", {"state": "not_running"})
+            local_entry = read_json(layout.local_path(root, "entry.json"), {})
+            status = read_json(layout.local_path(root, "status.json"), {"state": "not_running"})
             try:
-                with locked(root / ".aw-local/runner.lock", wait=0):
+                with locked(layout.local_path(root, "runner.lock"), wait=0):
                     status["runner_alive"] = False
             except Conflict:
                 status["runner_alive"] = True
@@ -596,8 +596,8 @@ class App:
                 "execution_matches_local": bool(execution and execution["installation_id"] == installation
                                                  and execution["directory"] == str(root)),
                 "runtime": status,
-                "watch": read_json(root / ".aw-local/watch.json", {"enabled": False}),
-                "configured_kind": read_json(root / ".aw-local/runtime.json", {}).get("kind", "manual"),
+                "watch": read_json(layout.local_path(root, "watch.json"), {"enabled": False}),
+                "configured_kind": read_json(layout.local_path(root, "runtime.json"), {}).get("kind", "manual"),
                 "model_selection": model_profiles.desired(root),
                 "observation_source": source,
             }
@@ -610,11 +610,11 @@ class App:
         store = self.store(workspace)
         snap = snapshot or store.snapshot()
         item = self.agent(workspace, agent_id, snap)
-        binding = snap.json(f"bindings/{item['current']}.json") if item["current"] else None
+        binding = snap.json(layout.shared_path(snap, f"bindings/{item['current']}.json")) if item["current"] else None
         locations = self.local()["workspaces"][workspace].get("instances", {}).get(agent_id, [])
         installation = read_json(self.home / "installation.json", {}).get("id")
         copies = [self._observe_copy(Path(location), binding, installation) for location in locations]
-        result = {**item, "revision": snap.entries[f"agents/{agent_id}.json"], "binding": binding,
+        result = {**item, "revision": snap.entries[layout.shared_path(snap, f"agents/{agent_id}.json")], "binding": binding,
                   "directories": locations, "copies": copies, "history": self._binding_history(snap, agent_id),
                   "directory": None}
         errors = [f"{copy['directory']}: {copy['observation_error']}" for copy in copies if "observation_error" in copy]
@@ -652,8 +652,8 @@ class App:
         if item["current"]:
             raise Conflict("Handoff before archiving. Archive does not revoke a live entry.")
         item["archived"] = archived
-        path = f"agents/{agent_id}.json"
-        store.change("main", {path: encode(item)}, {path: snap.entries[path]}, f"Archive={archived} {agent_id}")
+        path = layout.shared_path(snap, f"agents/{agent_id}.json")
+        store.change("main", {path: encode(item)}, layout.expected(snap, {path: snap.entries[path]}), f"Archive={archived} {agent_id}")
         return item
 
     def reserve(self, workspace, agent_id, directory=None, binding_id=None, *, expected_handoff=None):
@@ -676,11 +676,11 @@ class App:
                  "phase": "starting", "session": None, "created_at": now(), "handoff": item["handoff"]}
         from .maintenance import installation_id
         entry["execution"] = {"installation_id": installation_id(self), "directory": str(root)}
-        changes = {f"bindings/{binding}.json": encode(entry)}
-        path = f"agents/{agent_id}.json"
-        expected = {path: snap.entries[path], f"bindings/{binding}.json": None}
+        changes = {layout.shared_path(snap, f"bindings/{binding}.json"): encode(entry)}
+        path = layout.shared_path(snap, f"agents/{agent_id}.json")
+        expected = {path: snap.entries[path], layout.shared_path(snap, f"bindings/{binding}.json"): None}
         if item["handoff"]:
-            handoff_path = f"handoffs/{item['handoff']}.json"
+            handoff_path = layout.shared_path(snap, f"handoffs/{item['handoff']}.json")
             handoff = snap.json(handoff_path)
             if handoff["consumed_by"]:
                 raise Conflict("Handoff already consumed.")
@@ -689,11 +689,11 @@ class App:
             changes[handoff_path] = encode(handoff)
         item.update(current=binding, has_run=True, handoff=None)
         changes[path] = encode(item)
-        store.change("main", changes, expected, f"Reserve entry {binding}")
+        store.change("main", changes, layout.expected(snap, expected), f"Reserve entry {binding}")
         record = {"binding": binding, "config": config}
         if profile is not None:
             record.update(model_profile=profile, model_adopted_at=now())
-        write_json(root / ".aw-local/entry.json", record)
+        write_json(layout.local_path(root, "entry.json"), record)
         return {"agent": agent_id, "binding": binding, "phase": "starting", "kind": entry["kind"]}
 
     def bind(self, workspace, agent_id, binding, session, directory=None):
@@ -703,20 +703,20 @@ class App:
         store = self.store(workspace)
         snap = store.snapshot()
         item = self.agent(workspace, agent_id, snap)
-        path = f"bindings/{binding}.json"
+        path = layout.shared_path(snap, f"bindings/{binding}.json")
         entry = snap.json(path)
         if item["current"] != binding or not entry or entry["phase"] != "starting":
             raise Conflict("Binding is not awaiting a new session.")
         for p in snap.entries:
-            if p.startswith("bindings/"):
+            if p.startswith(layout.shared_path(snap, "bindings/")):
                 previous = snap.json(p)
                 if previous["kind"] == entry["kind"] and previous["session"] == session:
                     raise Conflict("A native session cannot be reused as a new execution entry.")
         entry.update(session=session, phase="active")
-        session_path = f"sessions/{entry['kind']}/{digest(session.encode())}.json"
+        session_path = layout.shared_path(snap, f"sessions/{entry['kind']}/{digest(session.encode())}.json")
         store.change("main", {path: encode(entry), session_path: encode({"agent": agent_id, "binding": binding, "session": session})},
-                     {path: snap.entries[path], session_path: None,
-                      f"agents/{agent_id}.json": snap.entries[f"agents/{agent_id}.json"]}, f"Bind {binding}")
+                     layout.expected(snap, {path: snap.entries[path], session_path: None,
+                      layout.shared_path(snap, f"agents/{agent_id}.json"): snap.entries[layout.shared_path(snap, f"agents/{agent_id}.json")]}), f"Bind {binding}")
         return entry
 
     def stop(self, workspace, agent_id, binding, checkpoint, directory=None):
@@ -731,16 +731,16 @@ class App:
                 raise Conflict("A pending stop cannot be replaced with a different checkpoint.")
             return result
         # Disable local automatic restarts before requesting the native end-of-turn observation.
-        write_json(root / ".aw-local/watch.json", {"enabled": False, "reason": "handoff"})
+        write_json(layout.local_path(root, "watch.json"), {"enabled": False, "reason": "handoff"})
         entry.update(phase="stopping", checkpoint=point["id"], stop_requested_at=now())
-        path = f"bindings/{binding}.json"
-        store.change("main", {path: encode(entry)}, {path: snap.entries[path],
-                     f"checkpoints/{agent_id}/{checkpoint}.json": snap.entries[f"checkpoints/{agent_id}/{checkpoint}.json"],
-                     f"agents/{agent_id}.json": snap.entries[f"agents/{agent_id}.json"]}, "Prepare handoff")
+        path = layout.shared_path(snap, f"bindings/{binding}.json")
+        store.change("main", {path: encode(entry)}, layout.expected(snap, {path: snap.entries[path],
+                     layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json"): snap.entries[layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json")],
+                     layout.shared_path(snap, f"agents/{agent_id}.json"): snap.entries[layout.shared_path(snap, f"agents/{agent_id}.json")]}), "Prepare handoff")
         return result
 
     def _released_handoff(self, snap, agent_id, binding, expected_controller, expected_checkpoint, expected_session):
-        entry = snap.json(f"bindings/{binding}.json")
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         if entry is None:
             return None
         if not isinstance(entry, dict):
@@ -748,7 +748,7 @@ class App:
         if entry["phase"] != "released":
             return None
         handoff_id = "h" + binding[1:]
-        handoff = snap.json(f"handoffs/{handoff_id}.json")
+        handoff = snap.json(layout.shared_path(snap, f"handoffs/{handoff_id}.json"))
         if (entry.get("id") != binding or entry.get("agent") != agent_id or not handoff
                 or handoff.get("id") != handoff_id or handoff.get("agent") != agent_id
                 or handoff.get("entry") != binding or handoff.get("checkpoint") != entry.get("checkpoint")):
@@ -784,12 +784,12 @@ class App:
                    "checkpoint": entry["checkpoint"], "created_at": now(), "consumed_by": None}
         item.update(current=None, handoff=handoff_id)
         entry.update(phase="released", stopped_at=now())
-        ap, bp = f"agents/{agent_id}.json", f"bindings/{binding}.json"
-        cp = f"checkpoints/{agent_id}/{entry['checkpoint']}.json"
+        ap, bp = layout.shared_path(snap, f"agents/{agent_id}.json"), layout.shared_path(snap, f"bindings/{binding}.json")
+        cp = layout.shared_path(snap, f"checkpoints/{agent_id}/{entry['checkpoint']}.json")
         try:
-            store.change("main", {ap: encode(item), bp: encode(entry), f"handoffs/{handoff_id}.json": encode(handoff)},
-                         {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp],
-                          f"handoffs/{handoff_id}.json": None}, "Release entry")
+            store.change("main", {ap: encode(item), bp: encode(entry), layout.shared_path(snap, f"handoffs/{handoff_id}.json"): encode(handoff)},
+                         layout.expected(snap, {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp],
+                          layout.shared_path(snap, f"handoffs/{handoff_id}.json"): None}), "Release entry")
         except (Conflict, Uncertain) as failure:
             # A competing observer or a lost push reply may have completed this exact request.
             # Only read its result; never repeat the release mutation here.
@@ -809,10 +809,10 @@ class App:
         return handoff
 
     def _forced_handoff(self, snap, agent_id, binding, checkpoint):
-        entry = snap.json(f"bindings/{binding}.json")
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         if not entry or entry["phase"] != "revoked":
             return None
-        handoff = snap.json(f"handoffs/h{binding[1:]}.json")
+        handoff = snap.json(layout.shared_path(snap, f"handoffs/h{binding[1:]}.json"))
         if (entry["id"] != binding or entry["agent"] != agent_id or not handoff
                 or not handoff.get("forced") or handoff["agent"] != agent_id or handoff["entry"] != binding):
             raise Error("Revoked entry has no matching forced handoff.")
@@ -835,7 +835,7 @@ class App:
             if handoff is None:
                 if item["current"] != binding or item["archived"]:
                     raise Conflict("The selected entry is no longer current; read the Agent before taking it over.")
-                entry = snap.json(f"bindings/{binding}.json")
+                entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
                 if entry["agent"] != agent_id or entry["phase"] not in ("starting", "active", "stopping"):
                     raise Conflict("The current execution entry cannot be taken over.")
                 point = self._read_checkpoint(store, snap, agent_id, checkpoint)
@@ -850,13 +850,13 @@ class App:
                            "native_stop_confirmed": False}
                 item.update(current=None, handoff=handoff_id)
                 entry.update(phase="revoked", checkpoint=point["id"], revoked_at=now(), revocation="user_takeover")
-                ap, bp = f"agents/{agent_id}.json", f"bindings/{binding}.json"
-                cp, hp = f"checkpoints/{agent_id}/{checkpoint}.json", f"handoffs/{handoff_id}.json"
+                ap, bp = layout.shared_path(snap, f"agents/{agent_id}.json"), layout.shared_path(snap, f"bindings/{binding}.json")
+                cp, hp = layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json"), layout.shared_path(snap, f"handoffs/{handoff_id}.json")
                 pending = {"agent": agent_id, "checkpoint": checkpoint, "publication_unknown": True}
                 write_json(operation, pending)
                 try:
                     store.change("main", {ap: encode(item), bp: encode(entry), hp: encode(handoff)},
-                                 {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp], hp: None},
+                                 layout.expected(snap, {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp], hp: None}),
                                  "User takeover")
                 except (Conflict, Uncertain) as failure:
                     if isinstance(failure, Conflict):
@@ -881,7 +881,7 @@ class App:
 
     def versions(self, workspace, agent_id, directory=None):
         root = self.root(workspace, agent_id, directory)
-        source = read_json(root / "source.json")
+        source = read_json(layout.instance_path(root, 'source.json'))
         if source is None:
             return {"source": None, "files": [], "status": "instance_owned"}
         snap = self.store(workspace).snapshot()
@@ -897,14 +897,14 @@ class App:
 
     def update(self, workspace, agent_id, revision=None, directory=None):
         root = self.root(workspace, agent_id, directory)
-        with locked(root / ".aw-local/files.lock"):
-            if (root / ".aw-local/skill-install/operation.json").exists():
+        with locked(layout.local_path(root, "files.lock")):
+            if (layout.local_path(root, "skill-install/operation.json")).exists():
                 raise Conflict("Finish the pending Skill update before changing Definition materials.")
-            source = read_json(root / "source.json")
+            source = read_json(layout.instance_path(root, 'source.json'))
             if source is None:
                 raise Error("This agent has no shared source. Its own assets do not need an upstream.")
             selected, new_source = self._definition(workspace, source["definition"], revision)
-            for name in read_json(root / shared_skills.MANIFEST, {}):
+            for name in read_json(layout.instance_path(root, 'skill-sources.json'), {}):
                 prefix = f".agents/skills/{name}/".casefold()
                 if any(p.casefold().startswith(prefix) for p in selected):
                     raise Conflict(f"Definition overlaps independently installed shared Skill: {name}")
@@ -920,7 +920,7 @@ class App:
                 inside(root, target).unlink()
             for target, data in selected.items():
                 write_bytes(inside(root, target), data)
-            write_json(root / "source.json", new_source)
+            write_json(layout.instance_path(root, 'source.json'), new_source)
         return {"revision": new_source["revision"], "model_reloaded": False, "shared_snapshot_saved": False}
 
     def promote(self, workspace, agent_id, paths, destination, directory=None):
@@ -946,41 +946,41 @@ class App:
             changes[target] = source.read_bytes()
             source_files.append({"path": path, "hash": digest(changes[target])})
         changes[prefix + "/provenance.json"] = encode({"agent": agent_id, "files": source_files,
-            "instance_revision": read_json(root / ".aw-local/context.json")["revision"], "created_at": now()})
-        sha = store.change("main", changes, {p: None for p in changes}, f"Promote selected assets from {agent_id}")
+            "instance_revision": read_json(layout.local_path(root, "context.json"))["revision"], "created_at": now()})
+        sha = store.change("main", changes, layout.expected(snap, {p: None for p in changes}), f"Promote selected assets from {agent_id}")
         return {"revision": sha, "files": list(changes), "source_modified": False}
 
     def work_create(self, workspace, owner, content, parent_id=None):
         store = self.store(workspace)
         snap = store.snapshot()
         self.agent(workspace, owner, snap)
-        if parent_id and f"work/{slug(parent_id)}/work.json" not in snap.entries:
+        if parent_id and layout.shared_path(snap, f"work/{slug(parent_id)}/work.json") not in snap.entries:
             raise Error("Parent work does not exist.")
         if not isinstance(content, str) or not content.strip():
             raise Error("Work content cannot be empty.")
         wid = uid("w")
         work = {"id": wid, "parent_id": parent_id, "owner": owner, "content": content}
-        path = f"work/{wid}/work.json"
-        revision = store.change("main", {path: encode(work)}, {path: None}, f"Create work {wid}")
+        path = layout.shared_path(snap, f"work/{wid}/work.json")
+        revision = store.change("main", {path: encode(work)}, layout.expected(snap, {path: None}), f"Create work {wid}")
         return {**work, "commit": revision, "revision": store.snapshot(revision=revision).entries[path]}
 
     def work_show(self, workspace, work_id):
         snap = self.store(workspace).snapshot()
-        path = f"work/{slug(work_id)}/work.json"
+        path = layout.shared_path(snap, f"work/{slug(work_id)}/work.json")
         work = snap.json(path)
         if work is None:
             raise Error("Work not found.")
-        return {**work, "revision": snap.entries[path], "delivery": snap.json(f"work/{work_id}/delivery.json")}
+        return {**work, "revision": snap.entries[path], "delivery": snap.json(layout.shared_path(snap, f"work/{work_id}/delivery.json"))}
 
     def work_list(self, workspace, owner=None, parent_id=None, tree=False):
         snap = self.store(workspace).snapshot()
         result = []
         for path in snap.entries:
-            if path.startswith("work/") and path.endswith("/work.json"):
+            if path.startswith(layout.shared_path(snap, "work/")) and path.endswith("/work.json"):
                 item = snap.json(path)
                 if (owner is None or item["owner"] == owner) and (parent_id is None or item["parent_id"] == parent_id):
                     result.append({**item, "revision": snap.entries[path],
-                                   "delivery": snap.json(f"work/{item['id']}/delivery.json")})
+                                   "delivery": snap.json(layout.shared_path(snap, f"work/{item['id']}/delivery.json"))})
         if tree:
             nodes = {item["id"]: {**item, "children": []} for item in result}
             roots = []
@@ -993,7 +993,7 @@ class App:
     def work_update(self, workspace, work_id, revision, content=None, owner=None, parent_id=None):
         store = self.store(workspace)
         snap = store.snapshot()
-        path, delivery = f"work/{slug(work_id)}/work.json", f"work/{work_id}/delivery.json"
+        path, delivery = layout.shared_path(snap, f"work/{slug(work_id)}/work.json"), layout.shared_path(snap, f"work/{work_id}/delivery.json")
         item = snap.json(path)
         if not item:
             raise Error("Work not found.")
@@ -1014,24 +1014,25 @@ class App:
                 if current in visited:
                     raise Conflict("A work cannot be its own ancestor.")
                 visited.add(current)
-                parent = snap.json(f"work/{slug(current)}/work.json")
+                parent = snap.json(layout.shared_path(snap, f"work/{slug(current)}/work.json"))
                 if parent is None:
                     raise Error("Parent work not found.")
-                parent_path = f"work/{current}/work.json"
+                parent_path = layout.shared_path(snap, f"work/{current}/work.json")
                 expected[parent_path] = snap.entries[parent_path]
                 current = parent["parent_id"]
             item["parent_id"] = parent_id or None
-        sha = store.change("main", {path: encode(item)}, expected, f"Update work {work_id}")
+        sha = store.change("main", {path: encode(item)}, layout.expected(snap, expected), f"Update work {work_id}")
         return {**item, "revision": store.snapshot(revision=sha).entries[path]}
 
     def work_deliver(self, workspace, work_id, revision, content, refs):
         if not isinstance(content, str) or not content.strip() or not refs:
             raise Error("Delivery requires completion evidence and explicit result references.")
         store = self.store(workspace)
-        path = f"work/{slug(work_id)}/work.json"
-        if not store.snapshot().json(path):
+        snap = store.snapshot()
+        path = layout.shared_path(snap, f"work/{slug(work_id)}/work.json")
+        if not snap.json(path):
             raise Error("Work not found.")
-        target = f"work/{work_id}/delivery.json"
+        target = layout.shared_path(snap, f"work/{work_id}/delivery.json")
         result = {"work_id": work_id, "content": content, "refs": refs}
-        sha = store.change("main", {target: encode(result)}, {path: revision, target: None}, f"Deliver {work_id}")
+        sha = store.change("main", {target: encode(result)}, layout.expected(snap, {path: revision, target: None}), f"Deliver {work_id}")
         return {**result, "revision": sha}

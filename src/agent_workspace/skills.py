@@ -3,10 +3,11 @@ import re
 import shutil
 import stat
 
+from . import layout
 from .util import Conflict, Error, digest, encode, inside, locked, read_json, relpath, slug, write_bytes, write_json
 
 
-MANIFEST = '.aw/skill-sources.json'
+MANIFEST = '.agentworkspace/skill-sources.json'
 
 
 def names(values):
@@ -82,7 +83,7 @@ def seed(snap, selected, content):
         content.update({prefix + p: v for p, v in data.items()})
         manifest[name] = info
     if manifest:
-        content[MANIFEST] = encode(manifest)
+        content[layout.instance_relpath(content, 'skill-sources.json')] = encode(manifest)
 
 
 def local_files(root):
@@ -108,8 +109,8 @@ def inspect(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
     available = catalog(app, workspace)
     snap = snapshot(app, workspace, available['revision'])
-    sources = read_json(root / MANIFEST, {})
-    definition = read_json(root / 'source.json', {}).get('files', {})
+    sources = read_json(layout.instance_path(root, 'skill-sources.json'), {})
+    definition = read_json(layout.instance_path(root, 'source.json'), {}).get('files', {})
     candidates = {v['name']: v for v in available['skills']}
     folders = root / '.agents/skills'
     for path in folders.iterdir() if folders.exists() else []:
@@ -140,7 +141,7 @@ def inspect(app, workspace, agent_id, directory=None):
         else:
             value['state'] = 'owned_elsewhere'
         result.append(value)
-    pending = read_json(root / '.aw-local/skill-install/operation.json')
+    pending = read_json(layout.local_path(root, 'skill-install/operation.json'))
     pending_skill = ({'name': pending['name'], 'revision': pending['after'][pending['name']]['revision'],
                       'operation': 'update' if pending['old_files'] is not None else 'install'} if pending else None)
     return {**available, 'agent_id': agent_id, 'skills': result,
@@ -149,7 +150,7 @@ def inspect(app, workspace, agent_id, directory=None):
 
 def recover(root):
     """Finish only a known file swap; divergent user data is never overwritten."""
-    stage = root / '.aw-local/skill-install'
+    stage = layout.local_path(root, 'skill-install')
     operation = read_json(stage / 'operation.json')
     if operation is None:
         # No swap can precede the durable intent. Discard only abandoned staging.
@@ -158,13 +159,13 @@ def recover(root):
         return
     name = slug(operation['name'])
     target = inside(root, f'.agents/skills/{name}')
-    current = read_json(root / MANIFEST, {})
+    current = read_json(layout.instance_path(root, 'skill-sources.json'), {})
     actual = local_files(target)
     if current not in (operation['before'], operation['after']):
         raise Conflict('Skill source records changed during an unfinished update; preserve the staging directory.')
     if actual == operation['after'][name]['files']:
         if current != operation['after']:
-            write_json(root / MANIFEST, operation['after'])
+            write_json(layout.instance_path(root, 'skill-sources.json'), operation['after'])
     elif current == operation['before'] and actual == operation['old_files']:
         pass  # Swap never happened.
     elif current == operation['before'] and actual is None and (stage / 'old').exists():
@@ -179,11 +180,11 @@ def recover(root):
 def apply(app, operation, /, workspace, agent_id, name, revision=None, directory=None):
     slug(name)
     root = app.root(workspace, agent_id, directory)
-    with locked(root / '.aw-local/files.lock'):
+    with locked(layout.local_path(root, 'files.lock')):
         recover(root)
         snap = snapshot(app, workspace, revision)
         data, info = bundle(snap, name)
-        sources = read_json(root / MANIFEST, {})
+        sources = read_json(layout.instance_path(root, 'skill-sources.json'), {})
         target = inside(root, f'.agents/skills/{name}')
         for parent in (root / '.agents', target.parent):
             if parent.exists() and (parent.is_symlink() or getattr(parent.lstat(), 'st_file_attributes', 0) & 0x400):
@@ -193,7 +194,7 @@ def apply(app, operation, /, workspace, agent_id, name, revision=None, directory
             raise Conflict('A case-conflicting Skill already exists.')
         local = local_files(target)
         previous = sources.get(name)
-        reserved = set(app._resources()) | set(read_json(root / 'source.json', {}).get('files', {}))
+        reserved = set(app._resources()) | set(read_json(layout.instance_path(root, 'source.json'), {}).get('files', {}))
         prefix = f'.agents/skills/{name}/'.casefold()
         if any(p.casefold().startswith(prefix) for p in reserved):
             raise Conflict('This Skill name belongs to platform or definition resources.')
@@ -207,7 +208,7 @@ def apply(app, operation, /, workspace, agent_id, name, revision=None, directory
                         'model_reloaded': False, 'shared_snapshot_saved': False}
             if operation != 'update':
                 raise Conflict('Skill already installed; use the explicit update operation.')
-        stage = root / '.aw-local/skill-install'
+        stage = layout.local_path(root, 'skill-install')
         for path, content in data.items():
             write_bytes(inside(stage / 'new', path), content)
         after = {**sources, name: info}
@@ -216,7 +217,7 @@ def apply(app, operation, /, workspace, agent_id, name, revision=None, directory
         if local is not None:
             target.rename(stage / 'old')
         (stage / 'new').rename(target)
-        write_json(root / MANIFEST, after)
+        write_json(layout.instance_path(root, 'skill-sources.json'), after)
         shutil.rmtree(stage)
     return {'name': name, 'state': 'updated' if previous else 'installed', 'source_revision': info['revision'],
             'model_reloaded': False, 'shared_snapshot_saved': False}

@@ -76,17 +76,23 @@ def temporary_transport_failure(detail: str) -> bool:
 class Snapshot:
     def __init__(self, store, revision: str, entries: dict[str, str]):
         self.store, self.revision, self.entries = store, revision, entries
+        self._blobs = {}
 
     def bytes(self, path: str) -> bytes | None:
         sha = self.entries.get(path)
-        return None if sha is None else self.store.blob(sha)
+        if sha is None:
+            return None
+        # A blob ID fixes immutable bytes; keep reuse within this pinned snapshot.
+        if sha not in self._blobs:
+            self._blobs[sha] = self.store.blob(sha)
+        return self._blobs[sha]
 
     def json(self, path: str, default=None):
         value = self.bytes(path)
         return default if value is None else json.loads(value)
 
     def all(self, prefix: str = "") -> dict[str, bytes]:
-        return {p: self.store.blob(sha) for p, sha in self.entries.items() if p.startswith(prefix)}
+        return {p: self.bytes(p) for p in self.entries if p.startswith(prefix)}
 
 
 class GitStore:

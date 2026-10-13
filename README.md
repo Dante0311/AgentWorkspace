@@ -4,7 +4,7 @@
 
 AgentWorkspace 在用户已有的 Agent 客户端之上提供协作：保存 Agent 的身份、职责、Skill、资料和历史，管理当前执行资格，并通过 Git Workspace 交换消息。它操作已有客户端的真实会话，不重写模型推理或工具循环，也不要求用户改用新的聊天客户端。Work / Delivery 按需使用。
 
-2026-10-13 的开发候选已接入[新目录设计](docs/design.md#31-用户工作根与-aw-内部目录)：实例和共享仓的平台内部数据统一放入 `.agentworkspace/`，提供显式迁移、同一 `AW_HOME` 的后台恢复和统一材料更新。基础检查及已授权恢复不依赖管家模型持续在线。日常安装和现有数据尚未据此升级或迁移；开发检查与实机验收分别以[当前实现](docs/implementation.md)及对应候选证据为准。
+2026-10-13 的开发候选已接入[新目录设计](docs/design.md#31-用户工作根与-aw-内部目录)：实例和共享仓的平台内部数据统一放入 `.agentworkspace/`，提供显式迁移、同一 `AW_HOME` 的后台恢复和统一材料更新。基础检查及已授权恢复不依赖管家模型持续在线。软件升级与数据迁移分别执行，安装新版不会自动搬迁已有 Workspace；开发检查与实机验收分别以[当前实现](docs/implementation.md)及对应候选证据为准。
 
 > **开发预览。** npm 包版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`。优先满足 Codex Desktop 与 ChatGPT Web；Web 保留手动收件，并提供 [Web Courier](extensions/web-courier/README.md) 的单条人工确认投递候选，真实浏览器仍须独立验收。tclaude 待实际验证，其他 Harness、模型供应商与企业微信暂缓扩展。已有 npm、后台、三视图工作台、同机直发路径、显式强制接手及原操作继续的验证边界见[当前实现](docs/implementation.md)，不表示完整 V1 已完成。未发布 npm Registry 或正式 Release。
 

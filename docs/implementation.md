@@ -2,7 +2,7 @@
 
 版本仍为 `0.1.0a1` 开发预览。本文随产品源码维护当前能力、限制与验证层次；产品目标以 [design.md](design.md) 为准，操作见 [usage.md](usage.md) 和 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
 
-**2026-10-13 开发候选：** 当前源码已接入按版本选择的 `.agentworkspace/` 路径、显式可恢复迁移、实例模板配置映射、注册副本的统一材料更新、后台共同恢复和 Web Courier 的受限单条通知接口。日常安装与现有数据尚未升级或迁移。源码回归、安装检查与真实 Desktop/浏览器 E2E 分开记录，历史结果不代表本轮候选已验收。软件维护不要求逐 Agent 在线授权，业务写入仍核对现有执行资格。
+**2026-10-13 开发候选：** 当前源码已接入按版本选择的 `.agentworkspace/` 路径、显式可恢复迁移、实例模板配置映射、注册副本的统一材料更新、后台共同恢复和 Web Courier 的受限单条通知接口。软件安装不会自动迁移既有数据；已有 Workspace 继续按登记的布局版本访问，迁移须显式执行。源码回归、安装检查与真实 Desktop/浏览器 E2E 分开记录，历史结果不代表本轮候选已验收。软件维护不要求逐 Agent 在线授权，业务写入仍核对现有执行资格。
 
 团队的问题登记、调查、验收脚本和详细报告在 [AW-Workspace 开发仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md)维护。历史结果只证明对应提交和测试范围，不替代当前版本的验收。
 

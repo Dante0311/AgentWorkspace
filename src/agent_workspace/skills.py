@@ -4,7 +4,7 @@ import shutil
 import stat
 
 from . import layout
-from .util import Conflict, Error, digest, encode, inside, locked, read_json, relpath, slug, write_bytes, write_json
+from .util import Conflict, Error, digest, encode, inside, read_json, relpath, slug, write_bytes, write_json
 
 
 MANIFEST = '.agentworkspace/skill-sources.json'
@@ -180,7 +180,7 @@ def recover(root):
 def apply(app, operation, /, workspace, agent_id, name, revision=None, directory=None):
     slug(name)
     root = app.root(workspace, agent_id, directory)
-    with locked(layout.local_path(root, 'files.lock')):
+    with layout.lock(root, 'files.lock'):
         recover(root)
         snap = snapshot(app, workspace, revision)
         data, info = bundle(snap, name)

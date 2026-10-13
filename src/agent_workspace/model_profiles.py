@@ -5,7 +5,7 @@ import json
 import re
 
 from . import layout
-from .util import Conflict, Error, digest, locked, now, read_json, write_json
+from .util import Conflict, Error, digest, now, read_json, write_json
 
 
 CODEX_KINDS = {"codex", "desktop"}
@@ -91,7 +91,7 @@ def desired(root):
 
 def migrate(root):
     """Copy an old choice once. Subsequent local capture must not replace it."""
-    with locked(layout.local_path(root, "files.lock")):
+    with layout.lock(root, "files.lock"):
         path = layout.local_path(root, "runtime.json")
         config = read_json(path, {"kind": "manual"})
         if config.get("kind") not in CODEX_KINDS:
@@ -117,7 +117,7 @@ def migrate(root):
 def configure(root, config):
     migrate(root)
     local, choice, _ = split_config(config)
-    with locked(layout.local_path(root, "files.lock")):
+    with layout.lock(root, "files.lock"):
         if choice:
             document = _document(root)
             document["codex"] = choice
@@ -161,7 +161,7 @@ def adopted(root, binding=None, *, session=None):
 
 
 def pin(root, binding, profile):
-    with locked(layout.local_path(root, "profile.lock")):
+    with layout.lock(root, "profile.lock"):
         path = layout.local_path(root, "entry.json")
         record = read_json(path, {})
         if record.get("binding") != binding:

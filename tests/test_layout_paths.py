@@ -32,6 +32,8 @@ def test_pinned_shared_and_instance_layouts_use_their_own_marker():
     ('inputs/unknown.json', 'operations/inputs/unknown.json'),
     ('skill-install/operation.json', 'operations/skill-install/operation.json'),
     ('runner.log', 'logs/runner.log'), ('cache/item.json', 'cache/item.json'),
+    ('bridge-sends/unknown.json', 'operations/bridge-sends/unknown.json'),
+    ('desktop-preparations/unknown.json', 'operations/desktop-preparations/unknown.json'),
 ])
 def test_local_classification_keeps_unknown_operation_names(tmp_path, name, new):
     assert layout.local_path(tmp_path, name) == tmp_path / '.aw-local' / name
@@ -76,3 +78,9 @@ def test_resources_require_migration_and_keep_native_skill_location(tmp_path):
     from agent_workspace.util import digest
     assert software['files'] == {path: digest(data) for path, data in content.items()
                                  if path != '.agentworkspace/software.json'}
+
+
+def test_channel_semantic_path_keeps_legacy_channels_at_the_root(tmp_path):
+    assert layout.instance_path(tmp_path, 'records/channels') == tmp_path / 'channels'
+    write_bytes(tmp_path / layout.MARKER, layout.marker('instance'))
+    assert layout.instance_path(tmp_path, 'records/channels') == tmp_path / '.agentworkspace/records/channels'

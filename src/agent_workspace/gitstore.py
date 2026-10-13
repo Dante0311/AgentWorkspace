@@ -172,6 +172,12 @@ class GitStore:
     def blob(self, sha: str) -> bytes:
         return self.git("cat-file", "blob", sha).stdout
 
+    def contains_commit(self, commit, head):
+        result = self.git('merge-base', '--is-ancestor', commit, head, check=False)
+        if result.returncode not in (0, 1):
+            raise Error(command_detail(result.stderr) or 'Could not inspect migration commit ancestry.')
+        return result.returncode == 0
+
     def commit(self, parent: str, changes: dict[str, bytes | None], message: str) -> str:
         _validate_commit(self, parent, changes)
         with tempfile.TemporaryDirectory(prefix="aw-index-") as directory:
@@ -351,6 +357,12 @@ class GitHubStore(GitStore):
                 raise Error(f"Git blob unavailable: {sha}")
             self._blobs[sha] = base64.b64decode(item["content"])
         return self._blobs[sha]
+
+    def contains_commit(self, commit, head):
+        comparison = self.request('GET', f'/compare/{commit}...{head}')
+        if not isinstance(comparison, dict) or comparison.get('status') not in ('ahead', 'behind', 'identical', 'diverged'):
+            raise Error('Could not inspect migration commit ancestry.')
+        return comparison['status'] in ('ahead', 'identical')
 
     def commit(self, parent, changes, message):
         _validate_commit(self, parent, changes)

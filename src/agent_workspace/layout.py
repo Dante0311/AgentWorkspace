@@ -1,11 +1,12 @@
 """Physical paths selected by an explicit layout, never by per-file fallback."""
 from collections.abc import Mapping
+from contextlib import contextmanager
 from importlib.resources import files as package_files
 import json
 from pathlib import Path, PurePosixPath
 
 from . import __version__
-from .util import Conflict, Error, digest, encode, read_json
+from .util import Conflict, Error, digest, encode, locked, read_json
 
 
 VERSION = 1
@@ -17,7 +18,8 @@ INSTANCE_ROOT_FILES = {'source.json': 'source.json', 'config.json': 'runtime.jso
 LOCAL_OPERATIONS = frozenset(('context.json', 'launch.json', 'input-sequence.json',
                              'inputs', 'checkpoint-operations', 'fork-operations',
                              'skill-install', 'transfer.json', 'transfers',
-                             'renew.json', 'renew-result.json', 'model-migration.json', 'software-update.json'))
+                             'renew.json', 'renew-result.json', 'model-migration.json', 'software-update.json',
+                             'bridge-sends', 'desktop-preparations'))
 
 
 class MigrationRequired(Conflict):
@@ -82,6 +84,8 @@ def instance_relpath(source, name):
         return f'.agentworkspace/{name}'
     if name in INSTANCE_ROOT_FILES:
         return INSTANCE_ROOT_FILES[name]
+    if name == 'records/channels' or name.startswith('records/channels/'):
+        return 'channels' + name[len('records/channels'):]
     if name.split('/')[0] in ('records', 'messages'):
         return name
     return f'.aw/{name}'
@@ -109,6 +113,18 @@ def local_path(root, name):
     if version(root, 'instance'):
         return Path(root) / '.agentworkspace/local' / local_relpath(name)
     return Path(root) / '.aw-local' / name
+
+
+@contextmanager
+def lock(root, name, *, wait=30):
+    """Recheck the layout after waiting so an old waiter joins the current mutex."""
+    while True:
+        path = local_path(root, name)
+        with locked(path, wait=wait):
+            if local_path(root, name) != path:
+                continue
+            yield
+            return
 
 
 def require_current(root):

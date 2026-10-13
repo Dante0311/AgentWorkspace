@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 
-from . import skills as shared_skills, software
+from . import migration, skills as shared_skills, software
 from .gitstore import GitStore, GitHubStore, open_store
 from . import model_profiles
 from . import layout
@@ -94,6 +94,13 @@ class App:
         snap = snapshot or self.store(workspace).snapshot()
         return {**snap.json(layout.shared_path(snap, "workspace.json")), "revision": snap.revision,
                 "access": self.local()["workspaces"][workspace]}
+
+    def layout_plan(self, workspace, agent_ids=None):
+        return migration.plan(self, workspace, agent_ids)
+
+    def layout_migrate(self, workspace, request_id, *, agent_ids=None, migrate_shared=False, compatible_writers=None):
+        return migration.migrate(self, workspace, request_id, agent_ids=agent_ids,
+                                 migrate_shared=migrate_shared, compatible_writers=compatible_writers)
 
     def relation(self, workspace, kind, operation, alias=None, address=None, content=""):
         if kind not in ("friends", "projects"):
@@ -307,6 +314,8 @@ class App:
                 if str(root) not in locations:
                     locations.append(str(root))
             self.change_local(register)
+            if layout.version(root, 'instance'):
+                software.update_instance(self, workspace, agent_id, str(root))
             return {"directory": str(root), "revision": existing["revision"]}
         if root.exists() and any(root.iterdir()):
             raise Conflict("Use an empty directory. To adopt an external agent, select its assets with agent import.")
@@ -330,6 +339,8 @@ class App:
             if str(root) not in locations:
                 locations.append(str(root))
         self.change_local(edit)
+        if layout.version(root, 'instance'):
+            software.update_instance(self, workspace, agent_id, str(root))
         return {"directory": str(root), "revision": snap.revision}
 
     def collect(self, root):
@@ -370,7 +381,7 @@ class App:
 
     def sync_agent(self, workspace, agent_id, directory=None):
         root = self.root(workspace, agent_id, directory)
-        with locked(layout.local_path(root, "files.lock")):
+        with layout.lock(root, "files.lock"):
             context = read_json(layout.local_path(root, "context.json"))
             local, _ = self.collect(root)
             snap = self.store(workspace).snapshot(self.agent(workspace, agent_id)["branch"])
@@ -429,15 +440,15 @@ class App:
             if (saved["summary"], saved["content"]) != (summary, content):
                 raise Conflict("Checkpoint ID is immutable and already has different content.")
             return found
-        receipt_path = layout.local_path(root, "checkpoint-operations") / f"{cp}.json"
-        pending = read_json(receipt_path)
-        if pending:
-            saved = store.snapshot(revision=pending["revision"]).json(pending["path"])
-            if (saved["summary"], saved["content"]) != (summary, content):
-                raise Conflict("Pending checkpoint has different content.")
-            store.change("main", {index: encode(pending)}, layout.expected(snap, {index: None}), f"Register checkpoint {cp}")
-            return pending
-        with locked(layout.local_path(root, "files.lock")):
+        with layout.lock(root, "files.lock"):
+            receipt_path = layout.local_path(root, "checkpoint-operations") / f"{cp}.json"
+            pending = read_json(receipt_path)
+            if pending:
+                saved = store.snapshot(revision=pending["revision"]).json(pending["path"])
+                if (saved["summary"], saved["content"]) != (summary, content):
+                    raise Conflict("Pending checkpoint has different content.")
+                store.change("main", {index: encode(pending)}, layout.expected(snap, {index: None}), f"Register checkpoint {cp}")
+                return pending
             if (layout.instance_path(root, f"checkpoints/{cp}.json")).exists():
                 raise Conflict("Checkpoint file already exists without a publication receipt; inspect its saved revision before continuing.")
             record = {"id": cp, "created_at": now(), "summary": summary, "content": content,
@@ -502,7 +513,10 @@ class App:
                 item = {"id": target, "name": name, "description": "", "branch": branch,
                         "archived": False, "current": None, "has_run": False, "handoff": None,
                         "created_at": now(), "forked_from": origin}
-                content = source.all()
+                source_files = source.all()
+                owned = migration.owned_instance_files(source_files, snap, agent_id)
+                content, _, _ = migration.instance_files(source_files, owned=owned)
+                content[layout.MARKER] = layout.marker('instance')
                 content[layout.instance_relpath(content, "identity.json")] = encode(identity)
                 content[layout.instance_relpath(content, "fork.json")] = encode(item)
                 receipt = {"fingerprint": digest(encode(item)), "registration_unknown": False}
@@ -532,7 +546,10 @@ class App:
                         raise Conflict("Registered target belongs to another Fork identity.")
                     return {**existing, **self.connect_agent(workspace, target, location)}
                 # Until registration, the target must still contain exactly the saved starting files.
-                content = source.all()
+                source_files = source.all()
+                owned = migration.owned_instance_files(source_files, snap, agent_id)
+                content, _, _ = migration.instance_files(source_files, owned=owned)
+                content[layout.MARKER] = layout.marker('instance')
                 content[layout.instance_relpath(content, "identity.json")] = encode(identity)
                 content[layout.instance_relpath(content, "fork.json")] = encode(item)
                 if saved.all() != content:
@@ -562,7 +579,8 @@ class App:
         if value.get("kind") in model_profiles.CODEX_KINDS:
             model_profiles.configure(root, value)
         else:
-            write_json(layout.local_path(root, "runtime.json"), value)
+            with layout.lock(root, "files.lock"):
+                write_json(layout.local_path(root, "runtime.json"), value)
         return {"configured": True, "entry_changed": False}
 
     def _binding_history(self, snap, agent_id):
@@ -586,7 +604,7 @@ class App:
             local_entry = read_json(layout.local_path(root, "entry.json"), {})
             status = read_json(layout.local_path(root, "status.json"), {"state": "not_running"})
             try:
-                with locked(layout.local_path(root, "runner.lock"), wait=0):
+                with layout.lock(root, "runner.lock", wait=0):
                     status["runner_alive"] = False
             except Conflict:
                 status["runner_alive"] = True
@@ -662,43 +680,45 @@ class App:
 
     def reserve(self, workspace, agent_id, directory=None, binding_id=None, *, expected_handoff=None):
         root = self.root(workspace, agent_id, directory)
-        config = model_profiles.migrate(root)
-        profile = (model_profiles.selected(root) if config.get("kind") in model_profiles.CODEX_KINDS
-                   and model_profiles.desired(root) is not None else None)
-        store = self.store(workspace)
-        snap = store.snapshot()
-        item = self.agent(workspace, agent_id, snap)
-        if item["current"] or item["archived"]:
-            raise Conflict("Agent already has an entry or is archived; relay cannot take it over.")
-        # An automatic continuation must consume its verified handoff, never a later one.
-        if expected_handoff is not None and item["handoff"] != expected_handoff:
-            raise Conflict("The handoff selected for continuation changed; the old request cannot use its successor.")
-        if item["has_run"] and not item["handoff"]:
-            raise Conflict("No handoff is available. A crash is not a release of ownership.")
-        binding = slug(binding_id) if binding_id else uid("b")
-        entry = {"id": binding, "agent": agent_id, "kind": config.get("kind", "manual"),
-                 "phase": "starting", "session": None, "created_at": now(), "handoff": item["handoff"]}
-        from .maintenance import installation_id
-        entry["execution"] = {"installation_id": installation_id(self), "directory": str(root)}
-        changes = {layout.shared_path(snap, f"bindings/{binding}.json"): encode(entry)}
-        path = layout.shared_path(snap, f"agents/{agent_id}.json")
-        expected = {path: snap.entries[path], layout.shared_path(snap, f"bindings/{binding}.json"): None}
-        if item["handoff"]:
-            handoff_path = layout.shared_path(snap, f"handoffs/{item['handoff']}.json")
-            handoff = snap.json(handoff_path)
-            if handoff["consumed_by"]:
-                raise Conflict("Handoff already consumed.")
-            handoff["consumed_by"] = binding
-            expected[handoff_path] = snap.entries[handoff_path]
-            changes[handoff_path] = encode(handoff)
-        item.update(current=binding, has_run=True, handoff=None)
-        changes[path] = encode(item)
-        store.change("main", changes, layout.expected(snap, expected), f"Reserve entry {binding}")
-        record = {"binding": binding, "config": config}
-        if profile is not None:
-            record.update(model_profile=profile, model_adopted_at=now())
-        write_json(layout.local_path(root, "entry.json"), record)
-        return {"agent": agent_id, "binding": binding, "phase": "starting", "kind": entry["kind"]}
+        model_profiles.migrate(root)
+        with layout.lock(root, "files.lock"):
+            config = read_json(layout.local_path(root, "runtime.json"), {"kind": "manual"})
+            profile = (model_profiles.selected(root) if config.get("kind") in model_profiles.CODEX_KINDS
+                       and model_profiles.desired(root) is not None else None)
+            store = self.store(workspace)
+            snap = store.snapshot()
+            item = self.agent(workspace, agent_id, snap)
+            if item["current"] or item["archived"]:
+                raise Conflict("Agent already has an entry or is archived; relay cannot take it over.")
+            # An automatic continuation must consume its verified handoff, never a later one.
+            if expected_handoff is not None and item["handoff"] != expected_handoff:
+                raise Conflict("The handoff selected for continuation changed; the old request cannot use its successor.")
+            if item["has_run"] and not item["handoff"]:
+                raise Conflict("No handoff is available. A crash is not a release of ownership.")
+            binding = slug(binding_id) if binding_id else uid("b")
+            entry = {"id": binding, "agent": agent_id, "kind": config.get("kind", "manual"),
+                     "phase": "starting", "session": None, "created_at": now(), "handoff": item["handoff"]}
+            from .maintenance import installation_id
+            entry["execution"] = {"installation_id": installation_id(self), "directory": str(root)}
+            changes = {layout.shared_path(snap, f"bindings/{binding}.json"): encode(entry)}
+            path = layout.shared_path(snap, f"agents/{agent_id}.json")
+            expected = {path: snap.entries[path], layout.shared_path(snap, f"bindings/{binding}.json"): None}
+            if item["handoff"]:
+                handoff_path = layout.shared_path(snap, f"handoffs/{item['handoff']}.json")
+                handoff = snap.json(handoff_path)
+                if handoff["consumed_by"]:
+                    raise Conflict("Handoff already consumed.")
+                handoff["consumed_by"] = binding
+                expected[handoff_path] = snap.entries[handoff_path]
+                changes[handoff_path] = encode(handoff)
+            item.update(current=binding, has_run=True, handoff=None)
+            changes[path] = encode(item)
+            store.change("main", changes, layout.expected(snap, expected), f"Reserve entry {binding}")
+            record = {"binding": binding, "config": config}
+            if profile is not None:
+                record.update(model_profile=profile, model_adopted_at=now())
+            write_json(layout.local_path(root, "entry.json"), record)
+            return {"agent": agent_id, "binding": binding, "phase": "starting", "kind": entry["kind"]}
 
     def bind(self, workspace, agent_id, binding, session, directory=None):
         slug(binding)
@@ -725,23 +745,24 @@ class App:
 
     def stop(self, workspace, agent_id, binding, checkpoint, directory=None):
         root = self.root(workspace, agent_id, directory)
-        store = self.store(workspace)
-        snap = store.snapshot()
-        _, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True, snapshot=snap)
-        point = self._read_checkpoint(store, snap, agent_id, checkpoint)
-        result = {"state": "awaiting_native_idle", "binding": binding, "checkpoint": checkpoint}
-        if entry["phase"] == "stopping":
-            if entry["checkpoint"] != checkpoint:
-                raise Conflict("A pending stop cannot be replaced with a different checkpoint.")
+        with layout.lock(root, "files.lock"):
+            store = self.store(workspace)
+            snap = store.snapshot()
+            _, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True, snapshot=snap)
+            point = self._read_checkpoint(store, snap, agent_id, checkpoint)
+            result = {"state": "awaiting_native_idle", "binding": binding, "checkpoint": checkpoint}
+            if entry["phase"] == "stopping":
+                if entry["checkpoint"] != checkpoint:
+                    raise Conflict("A pending stop cannot be replaced with a different checkpoint.")
+                return result
+            # Disable local automatic restarts before requesting the native end-of-turn observation.
+            write_json(layout.local_path(root, "watch.json"), {"enabled": False, "reason": "handoff"})
+            entry.update(phase="stopping", checkpoint=point["id"], stop_requested_at=now())
+            path = layout.shared_path(snap, f"bindings/{binding}.json")
+            store.change("main", {path: encode(entry)}, layout.expected(snap, {path: snap.entries[path],
+                         layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json"): snap.entries[layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json")],
+                         layout.shared_path(snap, f"agents/{agent_id}.json"): snap.entries[layout.shared_path(snap, f"agents/{agent_id}.json")]}), "Prepare handoff")
             return result
-        # Disable local automatic restarts before requesting the native end-of-turn observation.
-        write_json(layout.local_path(root, "watch.json"), {"enabled": False, "reason": "handoff"})
-        entry.update(phase="stopping", checkpoint=point["id"], stop_requested_at=now())
-        path = layout.shared_path(snap, f"bindings/{binding}.json")
-        store.change("main", {path: encode(entry)}, layout.expected(snap, {path: snap.entries[path],
-                     layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json"): snap.entries[layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json")],
-                     layout.shared_path(snap, f"agents/{agent_id}.json"): snap.entries[layout.shared_path(snap, f"agents/{agent_id}.json")]}), "Prepare handoff")
-        return result
 
     def _released_handoff(self, snap, agent_id, binding, expected_controller, expected_checkpoint, expected_session):
         entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
@@ -901,7 +922,7 @@ class App:
 
     def update(self, workspace, agent_id, revision=None, directory=None):
         root = self.root(workspace, agent_id, directory)
-        with locked(layout.local_path(root, "files.lock")):
+        with layout.lock(root, "files.lock"):
             if (layout.local_path(root, "skill-install/operation.json")).exists():
                 raise Conflict("Finish the pending Skill update before changing Definition materials.")
             source = read_json(layout.instance_path(root, 'source.json'))

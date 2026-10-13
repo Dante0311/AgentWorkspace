@@ -20,6 +20,7 @@ def legacy_app(tmp_path):
     files = {'.aw/identity.json': encode(identity), 'AGENTS.md': b'Private responsibility\n',
              'startup.md': b'Private startup\n', 'notes/work.md': b'Original work\n',
              '.agents/skills/custom/SKILL.md': b'Private skill\n',
+             '.aw/software.json': encode({'version': 'legacy', 'files': {}}),
              '.aw/checkpoints/c-old.json': encode({'id': 'c-old', 'summary': 'original', 'content': 'old facts',
                                                   'created_at': '2020-01-01', 'record_refs': []})}
     saved = store.branch('instance/alice', files)

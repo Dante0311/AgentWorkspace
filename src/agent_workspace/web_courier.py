@@ -103,9 +103,10 @@ def _attempt_status(app, connection, snap=None):
         return None, None
     snap = snap or app.store(connection["workspace"]).snapshot()
     dispatch = snap.json(shared_path(snap, f"dispatch/{connection['agent_id']}.json"), {})
-    claimed = (dispatch.get("message_id") == attempt["message_id"]
-               and dispatch.get("binding") == connection["binding"]
-               and dispatch.get("manual_attempt_id") == attempt["attempt_id"])
+    claimed = (attempt.get("claim_state") == "confirmed"
+               or (dispatch.get("message_id") == attempt["message_id"]
+                   and dispatch.get("binding") == connection["binding"]
+                   and dispatch.get("manual_attempt_id") == attempt["attempt_id"]))
     return {"message_id": attempt["message_id"], "attempt_id": attempt["attempt_id"],
             "claim_state": "confirmed" if claimed else "outcome_unknown",
             "web_fact": attempt.get("web_fact", "unknown"), "attempted_at": attempt["attempted_at"]}, attempt

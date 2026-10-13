@@ -95,7 +95,17 @@ def test_original_multiline_notification_claim_page_fact_and_real_ack(courier):
     final = request(courier, conn, 'status')
     assert final['ack'] == {'message_id': 'message-one'}
     assert final['attempt']['web_fact'] == 'observed'
+    assert final['attempt']['claim_state'] == 'confirmed'
     assert 'token' not in final
+
+    message(courier, 'message-two')
+    notifications = []
+    next_adapter = type('Adapter', (), {'status': lambda self: 'idle',
+                                       'notify': lambda self, prompt, delivery: notifications.append((prompt, delivery))})()
+    assert Messages(app).poll('sea', 'receiver', binding, adapter=next_adapter)['state'] == 'notified_waiting_ack'
+    assert len(notifications) == 1
+    # The shared dispatch now names message two; the original confirmed claim remains confirmed.
+    assert request(courier, conn, 'status')['attempt']['claim_state'] == 'confirmed'
 
 
 def test_unknown_claim_is_inspected_without_repeating_original(courier, monkeypatch):

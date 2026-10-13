@@ -10,7 +10,7 @@ from pathlib import Path
 import threading
 import time
 
-from .layout import expected as expected_layout, local_path, shared_path
+from .layout import expected as expected_layout, local_path, lock as layout_lock, shared_path
 from .util import Conflict, Error, digest, encode, locked, now, read_json, slug, uid, write_json
 
 
@@ -267,7 +267,7 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
                 result = recover(app, workspace, agent_id, expected_binding=expected_binding)
             else:
                 # Prevent a local managed writer from entering during the file update.
-                with locked(local_path(root, "runner.lock"), wait=0):
+                with layout_lock(root, "runner.lock", wait=0):
                     if app.agent(workspace, agent_id)["current"]:
                         raise Conflict("An entry was acquired before sync repair; no files were changed.")
                     result = app.sync_agent(workspace, agent_id)

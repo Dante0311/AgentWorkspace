@@ -9,7 +9,7 @@ import time
 from importlib.resources import files as package_files
 
 from .gitstore import open_store
-from .layout import expected as expected_layout, instance_path, shared_path
+from .layout import expected as expected_layout, instance_path, lock as layout_lock, shared_path
 from .util import Conflict, Error, RetryableRead, Uncertain, digest, encode, locked, now, read_json, slug, uid, write_json
 
 
@@ -202,9 +202,10 @@ class Messages:
         except Error:
             root = None
         if root is not None:
-            write_json(instance_path(root, f"messages/{mid}.json"), {
-                k: v for k, v in result.items() if k != "publication"
-            })
+            with layout_lock(root, "files.lock"):
+                write_json(instance_path(root, f"messages/{mid}.json"), {
+                    k: v for k, v in result.items() if k != "publication"
+                })
         return result
 
     def _notification(self, snap, index):

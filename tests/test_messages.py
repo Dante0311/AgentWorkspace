@@ -1,4 +1,7 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+import threading
 import pytest
 from agent_workspace.messages import Messages
 from agent_workspace.util import Conflict, Error
@@ -106,3 +109,34 @@ def test_long_message_id_has_stable_ack_receipt(pair):
     app,ids=pair;messages=Messages(app);mid='m'*64
     messages.send('sea','alice',ids['alice'],'bob','hello',request_id=mid)
     assert messages.receive('sea','bob',ids['bob'],mid)['publication']['state']=='published'
+
+
+def test_receive_local_copy_waits_for_instance_files_lock(pair, monkeypatch):
+    import agent_workspace.messages as module
+    from agent_workspace.layout import instance_path, lock, local_path
+    from agent_workspace.util import locked
+
+    app, ids = pair
+    messages = Messages(app)
+    messages.send('sea', 'alice', ids['alice'], 'bob', 'original', request_id='local-copy-lock')
+    root = app.root('sea', 'bob')
+    waiting = threading.Event()
+
+    @contextmanager
+    def observe_wait(root, name, *, wait=30):
+        waiting.set()
+        with lock(root, name, wait=wait):
+            yield
+
+    monkeypatch.setattr(module, 'layout_lock', observe_wait)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with locked(local_path(root, 'files.lock')):
+            result = executor.submit(messages.receive, 'sea', 'bob', ids['bob'], 'local-copy-lock')
+            assert waiting.wait(30)
+            assert not result.done()
+            assert not instance_path(root, 'messages/local-copy-lock.json').exists()
+            assert messages.show('sea', 'local-copy-lock')['ack'] == {'message_id': 'local-copy-lock'}
+        assert result.result(timeout=30)['publication']['state'] == 'published'
+    saved = json.loads(instance_path(root, 'messages/local-copy-lock.json').read_text())
+    assert saved['message']['content'] == 'original'
+    assert not (root / 'messages/local-copy-lock.json').exists()

@@ -211,14 +211,16 @@ def doctor(app, workspace):
 def repair(app, workspace, agent_id, action, request_id, operation_id=None, bridge=None,
            expected_binding=None, expected_generation=None, expected_checkpoint=None):
     """No arbitrary shell, no automatic reset of a native writer or uncertain send."""
-    if action not in ("publication-reconcile", "bridge-retry", "sync-idle", "continue-stop"):
-        raise Error("Only publication-reconcile, bridge-retry, sync-idle and continue-stop are repair operations.")
+    if action not in ("publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover"):
+        raise Error("Only publication-reconcile, bridge-retry, sync-idle, continue-stop and runtime-recover are repair operations.")
     if action == "publication-reconcile" and not operation_id:
         raise Error("Publication repair requires the original operation_id.")
     if action == "bridge-retry" and not (bridge and expected_binding and expected_generation):
         raise Error("Bridge repair requires bridge, expected_binding and expected_generation.")
     if action == "continue-stop" and not (expected_binding and expected_checkpoint):
         raise Error("Stop continuation requires the original expected_binding and expected_checkpoint.")
+    if action == "runtime-recover" and not expected_binding:
+        raise Error("Runtime recovery requires the original expected_binding.")
     root = app.root(workspace, agent_id)
     path = folder(app, workspace) / "repairs" / (slug(request_id) + ".json")
     payload = {"agent_id": agent_id, "action": action, "operation_id": operation_id, "bridge": bridge,
@@ -244,6 +246,8 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
             config = read_json(local_path(root, f"bridges/{slug(bridge)}.json"))
             if not config or not config.get("enabled") or config["generation"] != expected_generation:
                 raise Conflict("Bridge configuration changed or was disabled; inspect it again.")
+        elif action == "runtime-recover":
+            app.require_binding(workspace, agent_id, expected_binding, allow_stopping=True)
         elif action == "sync-idle" and app.agent(workspace, agent_id)["current"]:
             raise Conflict("Sync repair only runs without an active entry; handoff first.")
         write_json(path, receipt)
@@ -258,6 +262,9 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
                 from .runtime import continue_stop
                 result = continue_stop(app, workspace, agent_id, expected_binding,
                                        expected_checkpoint=expected_checkpoint)
+            elif action == "runtime-recover":
+                from .backend import recover
+                result = recover(app, workspace, agent_id, expected_binding=expected_binding)
             else:
                 # Prevent a local managed writer from entering during the file update.
                 with locked(local_path(root, "runner.lock"), wait=0):
@@ -269,29 +276,30 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
             write_json(path, receipt)
             raise
         # Persist the effect before a separate observation can fail or the process exits.
-        receipt.update(state="applied", result=result)
+        receipt.update(state=result["state"] if action == "runtime-recover" else "applied", result=result)
         write_json(path, receipt)
         return _verify_repair(app, workspace, path, receipt)
 
 
 def _verify_repair(app, workspace, path, receipt):
     stop_repair = receipt["request"]["action"] == "continue-stop"
-    if not stop_repair and (receipt["state"] != "applied"
+    runtime_repair = receipt["request"]["action"] == "runtime-recover"
+    if not (stop_repair or runtime_repair) and (receipt["state"] != "applied"
             or receipt.get("verification", {}).get("state") not in (None, "unavailable")):
         return receipt
     try:
         receipt["verification"] = doctor(app, workspace)
-        if stop_repair:
+        if stop_repair or runtime_repair:
             # Observe the fixed request, even after a successor owns the instance.
             binding = receipt["request"]["expected_binding"]
             snap = app.store(workspace).snapshot()
             entry = snap.json(shared_path(snap, f"bindings/{binding}.json"))
-            stop = {"binding": binding, "state": "not_observed", "observed_at": now()}
+            observation = {"binding": binding, "state": "not_observed", "observed_at": now()}
             if entry and entry["agent"] == receipt["request"]["agent_id"]:
-                stop.update(state=entry["phase"], checkpoint=entry.get("checkpoint"), session=entry.get("session"))
-                if entry.get("checkpoint") != receipt["request"]["expected_checkpoint"]:
-                    stop.update(state="request_changed", phase=entry["phase"])
-            receipt["verification"]["stop"] = stop
+                observation.update(state=entry["phase"], checkpoint=entry.get("checkpoint"), session=entry.get("session"))
+                if stop_repair and entry.get("checkpoint") != receipt["request"]["expected_checkpoint"]:
+                    observation.update(state="request_changed", phase=entry["phase"])
+            receipt["verification"]["stop" if stop_repair else "runtime"] = observation
     except (Error, OSError, ValueError, KeyError) as exc:
         receipt["verification"] = {"state": "unavailable", "observed_at": now(),
                                    "error_type": type(exc).__name__}

@@ -11,7 +11,8 @@ from agent_workspace.util import encode, write_json
 
 @pytest.fixture
 def observed_app(app, monkeypatch):
-    monkeypatch.setattr(app, "_resources", lambda: {"AGENTS.md": b"Agent responsibilities\n"})
+    resources = app._resources
+    monkeypatch.setattr(app, "_resources", lambda: {**resources(), "AGENTS.md": b"Agent responsibilities\n"})
     app.create("sea", "alice")
     return app
 
@@ -24,10 +25,10 @@ def test_current_binding_uses_its_copy_and_retains_old_observation(observed_app,
     entry = app.reserve("sea", "alice", second)
     binding = entry["binding"]
     app.bind("sea", "alice", binding, "fixture-current-session", second)
-    write_json(first / ".aw-local/entry.json", {"binding": "fixture-old-binding"})
-    write_json(first / ".aw-local/status.json", {"binding": "fixture-old-binding", "session": "fixture-old-session",
+    write_json(first / ".agentworkspace/local/runtime/entry.json", {"binding": "fixture-old-binding"})
+    write_json(first / ".agentworkspace/local/runtime/status.json", {"binding": "fixture-old-binding", "session": "fixture-old-session",
                                                 "state": "fixture-old-busy", "observed_at": "past-observation"})
-    write_json(second / ".aw-local/status.json", {"binding": binding, "session": "fixture-current-session",
+    write_json(second / ".agentworkspace/local/runtime/status.json", {"binding": binding, "session": "fixture-current-session",
                                                  "state": "fixture-current-idle", "observed_at": "current-observation"})
     value = app.show("sea", "alice")
     assert value["directory"] == str(second)
@@ -55,8 +56,8 @@ def test_current_remote_installation_is_not_inferred_from_local_copy(observed_ap
     peer.bind("peer", "alice", binding, "fixture-peer-session")
     local = app.root("sea", "alice")
     # Even a copied receipt/status cannot override the shared execution location.
-    write_json(local / ".aw-local/entry.json", {"binding": binding})
-    write_json(local / ".aw-local/status.json", {"binding": binding, "session": "fixture-peer-session", "state": "idle"})
+    write_json(local / ".agentworkspace/local/runtime/entry.json", {"binding": binding})
+    write_json(local / ".agentworkspace/local/runtime/status.json", {"binding": binding, "session": "fixture-peer-session", "state": "idle"})
     value = app.show("sea", "alice")
     assert value["binding"]["execution"]["installation_id"] == installation_id(peer)
     assert value["directory"] is None
@@ -70,7 +71,7 @@ def test_current_binding_with_different_observed_session_is_unknown(observed_app
     binding = app.reserve("sea", "alice")["binding"]
     app.bind("sea", "alice", binding, "fixture-current-session")
     root = app.root("sea", "alice")
-    write_json(root / ".aw-local/status.json", {"binding": binding, "session": "fixture-different-session", "state": "busy"})
+    write_json(root / ".agentworkspace/local/runtime/status.json", {"binding": binding, "session": "fixture-different-session", "state": "busy"})
     value = app.show("sea", "alice")
     assert value["runtime"]["state"] == "unknown"
     assert value["copies"][0]["runtime"]["session"] == "fixture-different-session"
@@ -108,7 +109,7 @@ def test_old_binding_without_execution_source_is_not_backfilled(observed_app):
     app.bind("sea", "alice", binding, "fixture-legacy-session")
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = f".agentworkspace/bindings/{binding}.json"
     legacy = snap.json(path)
     del legacy["execution"]
     store.change("main", {path: encode(legacy)}, {path: snap.entries[path]}, "Legacy record fixture")
@@ -127,9 +128,9 @@ def test_damaged_old_copy_preserves_healthy_current_copy_and_history(observed_ap
     app.connect_agent("sea", "alice", current_copy)
     binding = app.reserve("sea", "alice", current_copy)["binding"]
     app.bind("sea", "alice", binding, "fixture-current-session", current_copy)
-    damaged = old_copy / ".aw-local/status.json"
+    damaged = old_copy / ".agentworkspace/local/runtime/status.json"
     damaged.write_bytes(b"{broken")
-    write_json(current_copy / ".aw-local/status.json", {"binding": binding, "session": "fixture-current-session",
+    write_json(current_copy / ".agentworkspace/local/runtime/status.json", {"binding": binding, "session": "fixture-current-session",
                                                        "state": "idle"})
     before = app.store("sea").head("main")
     value = app.show("sea", "alice")

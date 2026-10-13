@@ -9,7 +9,8 @@ from agent_workspace.util import Conflict, Error, RetryableRead, Uncertain, writ
 
 @pytest.fixture
 def running_agent(app, monkeypatch):
-    monkeypatch.setattr(app, "_resources", lambda: {"AGENTS.md": b"Responsibilities\n"})
+    resources = app._resources
+    monkeypatch.setattr(app, "_resources", lambda: {**resources(), "AGENTS.md": b"Responsibilities\n"})
     app.create("sea", "alice")
     root = app.root("sea", "alice")
     (root / "notes.md").write_text("saved", encoding="utf-8")
@@ -28,7 +29,7 @@ def test_takeover_revokes_aw_rights_without_claiming_native_stop(running_agent, 
     app, old, checkpoint = running_agent
     root = app.root("sea", "alice")
     (root / "notes.md").write_text("unsaved old-copy work", encoding="utf-8")
-    write_json(root / ".aw-local/status.json", {"binding": old, "session": "fixture-old-session", "state": "busy"})
+    write_json(root / ".agentworkspace/local/runtime/status.json", {"binding": old, "session": "fixture-old-session", "state": "busy"})
     store = app.store("sea")
     before_files = store.head(app.agent("sea", "alice")["branch"])
     result = take(app, old, checkpoint)
@@ -37,7 +38,7 @@ def test_takeover_revokes_aw_rights_without_claiming_native_stop(running_agent, 
     assert result["native_state"] == "not_observed"
     assert result["starts_new_session"] is False
     assert app.agent("sea", "alice")["current"] is None
-    old_entry = store.snapshot().json(f"bindings/{old}.json")
+    old_entry = store.snapshot().json(f".agentworkspace/bindings/{old}.json")
     assert old_entry["phase"] == "revoked"
     assert "stopped_at" not in old_entry
     assert app.show("sea", "alice")["copies"][0]["runtime"]["state"] == "busy"
@@ -110,8 +111,8 @@ def test_normal_stop_wins_a_race_without_second_handoff(running_agent, tmp_path,
     with pytest.raises(Conflict):
         take(app, binding, checkpoint)
     snap = store.snapshot()
-    assert snap.json(f"bindings/{binding}.json")["phase"] == "released"
-    handoffs = [path for path in snap.entries if path.startswith("handoffs/")]
+    assert snap.json(f".agentworkspace/bindings/{binding}.json")["phase"] == "released"
+    handoffs = [path for path in snap.entries if path.startswith(".agentworkspace/handoffs/")]
     assert len(handoffs) == 1
     assert "forced" not in snap.json(handoffs[0])
 

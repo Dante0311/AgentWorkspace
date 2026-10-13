@@ -236,7 +236,7 @@ def execute(app, command, arguments, *, actor=None):
             raise Error("Force takeover is an explicit user operation, not an Agent or caretaker operation.")
         if command == "layout.migrate":
             raise Error("Layout migration is an explicit user operation; run it from the user management terminal.")
-        if command in ("web-courier.connect", "web-courier.revoke"):
+        if command in ("web-courier.connect", "web-courier.status", "web-courier.revoke"):
             raise Error("Web Courier connections are explicit user operations; use the user management terminal.")
         # Signatures supply defaults, never authorization. A new agent's ID is a target.
         if "workspace" in signature.parameters:

@@ -97,7 +97,7 @@ aw web-courier status courier-one
 aw web-courier revoke courier-one --request-id revoke-courier-one
 ```
 
-只将 connect 返回的连接 JSON 粘贴到扩展设置，不把后台管理 Token 交给扩展。status 不返回连接密钥，并分别显示网页观察和真实 ACK。原发送返回丢失或页面结果未知时只查询原记录，不再次点击；撤销保留连接与尝试记录。首批只支持单条 normal Message，真实 Chrome 加载、登录和页面效果由具体候选的 E2E 结果说明。
+这三个命令都只供用户管理终端调用，普通 Agent 不能凭连接 ID 查询会话地址或尝试记录。只将 connect 返回的连接 JSON 粘贴到扩展设置，不把后台管理 Token 交给扩展。status 不返回连接密钥，并分别显示网页观察和真实 ACK。原发送返回丢失或页面结果未知时只查询原记录，不再次点击；撤销保留连接与尝试记录。首批只支持单条 normal Message，真实 Chrome 加载、登录和页面效果由具体候选的 E2E 结果说明。
 
 MCP 启动命令是 `aw mcp`。给对应会话的进程配置 `AW_HOME`、`AW_WORKSPACE`、`AW_AGENT`、`AW_BINDING`，使工具以实际运行绑定核对身份。`aw_execute` 接受 `{command, arguments}`，例如：
 

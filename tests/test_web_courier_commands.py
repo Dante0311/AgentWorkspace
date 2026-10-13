@@ -9,8 +9,8 @@ from agent_workspace.app import App
 from agent_workspace.util import Error
 
 
-@pytest.mark.parametrize('command', ['web-courier.connect', 'web-courier.revoke'])
-def test_model_cannot_create_or_revoke_a_courier_connection(tmp_path, command):
+@pytest.mark.parametrize('command', ['web-courier.connect', 'web-courier.status', 'web-courier.revoke'])
+def test_model_cannot_manage_a_courier_connection(tmp_path, command):
     app = App(tmp_path / 'home')
     with pytest.raises(Error, match='explicit user operations'):
         commands.execute(app, command, {}, actor=('sea', 'steward', 'old-entry'))
@@ -37,6 +37,9 @@ def test_user_cli_connect_status_and_revoke_do_not_publish_agent_state(app, tmp_
                     '--request-id', 'connection-one', '--port', '18765')
     assert connected['connection_id'] == 'connection-one' and connected['token']
     assert connected['backend_url'] == 'http://127.0.0.1:18765'
+    with pytest.raises(Error, match='explicit user operations'):
+        commands.execute(app, 'web-courier.status', {'connection_id': 'connection-one'},
+                         actor=('sea', 'another-agent', 'another-binding'))
     observed = run('web-courier', 'status', 'connection-one')
     assert observed['eligible'] is True and observed['attempt'] is None and observed['ack'] is None
     assert 'token' not in observed and connected['token'] not in json.dumps(observed)

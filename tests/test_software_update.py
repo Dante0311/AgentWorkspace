@@ -139,6 +139,40 @@ def test_pending_update_does_not_overwrite_later_user_changes(installation, monk
     assert read_json(layout.local_path(root, software.OPERATION))['state'] == 'pending'
 
 
+def test_checkpoint_waits_for_original_material_update(app, monkeypatch):
+    app.create('sea', 'helper')
+    root = app.root('sea', 'helper')
+    manifest = read_json(root / software.MANIFEST)
+    for path, content in ((SKILL, b'previous skill'), (PROMPT, b'previous prompt')):
+        write_bytes(root / path, content)
+        manifest['files'][path] = digest(content)
+    write_json(root / software.MANIFEST, manifest)
+    write_bytes(root / 'notes.md', b'user work')
+    before = app.store('sea').snapshot('instance/helper').revision
+    original = software.write_bytes
+
+    def fail_prompt(path, data):
+        if path == root / PROMPT:
+            raise OSError('injected disk interruption')
+        original(path, data)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(software, 'write_bytes', fail_prompt)
+        assert not software.update(app)['complete']
+    with pytest.raises(Conflict):
+        app.checkpoint('sea', 'helper', 'incomplete materials')
+    assert app.store('sea').snapshot('instance/helper').revision == before
+
+    assert software.update(app)['complete']
+    saved = app.checkpoint('sea', 'helper', 'complete materials')
+    snapshot = app.store('sea').snapshot('instance/helper')
+    assert snapshot.revision == saved['revision']
+    assert snapshot.bytes(SKILL) == layout.resource_files()[SKILL]
+    assert snapshot.bytes(PROMPT) == layout.resource_files()[PROMPT]
+    assert snapshot.bytes('notes.md') == b'user work'
+    assert not any(path.startswith('.agentworkspace/local/') for path in snapshot.entries)
+
+
 def test_cli_software_commands_do_not_require_a_workspace_or_live_agent(installation, monkeypatch, capsys):
     copy(installation, 'alice')
     for key, value in {'AW_AGENT': 'old', 'AW_BINDING': 'old', 'AW_WORKSPACE': 'missing'}.items():

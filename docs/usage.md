@@ -34,7 +34,7 @@ aw workspace connect sea git@github.com:OWNER/SEA-WORKSPACE.git
 aw workspace connect sea github:OWNER/SEA-WORKSPACE
 ```
 
-前者通过 Git，后者通过 GitHub REST 对 Git 对象读写，不要求本地 clone。远端必须包含平台 workspace.json。已由用户创建的空仓可显式初始化：
+前者通过 Git，后者通过 GitHub REST 对 Git 对象读写，不要求本地 clone。新版远端保存 `.agentworkspace/workspace.json`，旧仓仍按自身布局读取，不自动迁移。已由用户创建的空仓可显式初始化：
 
 ```sh
 aw workspace bootstrap-remote sea github:OWNER/SEA-WORKSPACE
@@ -103,7 +103,7 @@ MCP 启动命令是 `aw mcp`。给对应会话的进程配置 `AW_HOME`、`AW_WO
 aw -w sea agent capture-desktop helper --command '["node","ACTUAL_INSTALLED_CODEX_APP_TOOLS/server.mjs"]'
 ```
 
-这里路径由安装环境确定，不是仓库提供的文件。命令读取该会话真实的 `CODEX_APP_TOOLS_PIPE_PATH` 和 `CODEX_THREAD_ID`，只保存到 `.aw-local/runtime.json`。不能从外部终端编造这两个值。
+这里路径由安装环境确定，不是仓库提供的文件。命令读取该会话真实的 `CODEX_APP_TOOLS_PIPE_PATH` 和 `CODEX_THREAD_ID`，只保存到 `.agentworkspace/local/runtime/runtime.json`。不能从外部终端编造这两个值。
 
 回到用户终端，保存模型选择并启动：
 
@@ -113,7 +113,7 @@ aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-模型和强度必须明确选择，保存在实例根 `runtime.json` 的 `codex` 段；本机文件只保存连接和项目信息。可选 Definition 提供创建模板，实例此后独立维护；详见[实例模型配置](instance-model-profiles.md)。同一实例主目录匹配多个项目时，用 `--project-id` 明确选择。配置和启动都会读取实际项目列表核对主目录。缺配置、项目或控制接口时先报错，不预留第二个执行入口。
+模型和强度必须明确选择，保存在 `.agentworkspace/config.json` 的 `codex` 段；本机文件只保存连接和项目信息。可选 Definition 提供创建模板，实例此后独立维护；详见[实例模型配置](instance-model-profiles.md)。同一实例主目录匹配多个项目时，用 `--project-id` 明确选择。配置和启动都会读取实际项目列表核对主目录。缺配置、项目或控制接口时先报错，不预留第二个执行入口。
 
 运行器通过 `create_thread` 在该项目创建真实新聊天，读取实际 ID 与 `cwd` 后才绑定。第一轮仅建立连接；正式进入材料随后作为输入交付。桌面 Agent 使用提示中的 `aw call --desktop-agent` 命令前缀，由真实 `CODEX_THREAD_ID` 约束平台身份，不继承管理权限。输入先通过 `runtime.receive-input` 关联当前原生轮次；只有该轮明确完成才记录完成并为初次进入发布检查点，发送回执或 idle 本身不算业务完成。
 
@@ -133,7 +133,7 @@ aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-程序通过 app-server 创建原生线程、提交初始化输入、记录事件；`aw_execute` 动态工具直接调用公共操作，不要求模型切到开发目录。实例须明确选择 `model` 与 `effort`，保存到根 `runtime.json`；`modelProvider` 与 `sandbox` 留在本机连接配置，sandbox 默认 `workspace-write`。旧模型覆盖首次使用时迁移并保留来源，缺项不继承原生默认。原生审批/额外授权请求不会被自动批准。
+程序通过 app-server 创建原生线程、提交初始化输入、记录事件；`aw_execute` 动态工具直接调用公共操作，不要求模型切到开发目录。实例须明确选择 `model` 与 `effort`，保存到 `.agentworkspace/config.json`；`modelProvider` 与 `sandbox` 留在本机连接配置，sandbox 默认 `workspace-write`。旧模型覆盖首次使用时迁移并保留来源，缺项不继承原生默认。原生审批/额外授权请求不会被自动批准。
 
 Windows npm `.cmd` 启动器有单独的 argv 处理；未在真实 Windows/Codex 环境完成验收。CLI 成功不等于 Desktop 成功。
 
@@ -184,7 +184,7 @@ Fork 已保存目标分支但登记或目录准备未完成时，用原来源 Ag
 aw -w sea agent fork helper --checkpoint CHECKPOINT_ID --name explorer --new-id explorer --resume
 ```
 
-程序核对原目标的 `.aw/fork.json` 和资料版本，只补缺失步骤；已登记目标只准备或复用本地副本，已有用户修改保留。原发表结果未知时先读回原分支和登记，不重发。换机器或 `AW_HOME` 前，先在原环境核实尚未确认的发表；新环境没有本机凭据不能证明原操作未发生。旧 Fork 没有该来源记录时不支持这条继续路径；已经登记的旧目标仍可使用 `agent connect`。
+程序核对原目标的 `.agentworkspace/fork.json` 和资料版本，只补缺失步骤；旧分支按原布局读取。已登记目标只准备或复用本地副本，已有用户修改保留。原发表结果未知时先读回原分支和登记，不重发。换机器或 `AW_HOME` 前，先在原环境核实尚未确认的发表；新环境没有本机凭据不能证明原操作未发生。旧 Fork 没有该来源记录时不支持这条继续路径；已经登记的旧目标仍可使用 `agent connect`。
 
 `runtime stop helper` 只停止本机监视任务，**不释放实例资格**；不是 handoff。已有归档/解除归档不启动会话。跨目录运行器还要在共享 binding 上条件登记 controller，不能只靠同机 PID。硬崩溃留下未释放 controller 时保持阻塞，不自动接管。
 
@@ -252,15 +252,16 @@ aw -w sea asset read helper --path AGENTS.md
 aw -w sea asset write helper --path notes.md --content "记录" --revision FILE_HASH
 aw -w sea agent versions helper
 aw -w sea agent update helper --revision SOURCE_COMMIT
-aw -w sea agent upgrade-tools helper
+aw software status
+aw software update
 aw -w sea agent promote helper --path AGENTS.md --destination definitions/build-helper
 ```
 
 新文件写入不传 revision；覆盖必须传读取时的哈希。工具资源更新不重置 AGENTS.md。来源更新发现本地修改就保留并报告，不自动三方合并。无关共享消息提交不触发来源过期提示。
 
-实例的 `.aw/` 为受管身份、工具版本、提示词和检查点；`.aw-local/` 为当前环境资料，不进入实例 Git。source.json 只在确有来源时出现。
+实例的 `.agentworkspace/` 保存受管身份、配置、材料来源、提示词、检查点和平台记录；`.agentworkspace/local/` 保存当前环境资料，不进入实例 Git。`.agentworkspace/source.json` 只在确有来源时出现。`AGENTS.md`、原生 `.agents/skills/` 与用户自己的文档留在原位置。旧实例在明确迁移前继续使用旧布局，旧检查点仍从原提交读取。
 
-默认排除 `.git`、`.aw-local`、`.local`、`secrets`、`.env*`、`__pycache__`。排除列表在本机 context.json 的 `exclude` 中明确可见；这是简单名称/路径 glob，不声称实现完整 `.gitignore` 语法。单文件 50 MiB 上限，外部大附件需明确引用。symlink/submodule 不自动穿透。已保存快照的范围和排除项会返回；外部产品、原生隐藏状态、未同步的本机发送事实不自动成为完整备份。
+默认排除 `.git`、`.agentworkspace/local`、旧 `.aw-local`、`.local`、`secrets`、`.env*`、`__pycache__`。排除列表在本机 context.json 的 `exclude` 中明确可见；本机运行目录也由收集器强制排除，不只依赖 `.gitignore`。自定义排除是简单名称/路径 glob，不声称实现完整 `.gitignore` 语法。单文件 50 MiB 上限，外部大附件需明确引用。symlink/submodule 不自动穿透。已保存快照的范围和排除项会返回；外部产品、原生隐藏状态、未同步的本机发送事实不自动成为完整备份。
 
 本机待发送 journal 不会被 Fork 自动执行。需要保留其中的业务事实时，按用户选择写进检查点或实例材料；平台不自动重做，也不禁止查阅。
 

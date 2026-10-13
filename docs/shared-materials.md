@@ -57,11 +57,11 @@ aw -w sea agent skill-update reviewer --name code-review --revision FULL_COMMIT_
 
 创建时可重复 `--skill`，也可不使用 Definition。工作台创建表单提供勾选，实例卡片的“Skill”提供安装和选定更新；批量操作逐项执行并显示结果，不声称跨 Skill 原子提交。直接修改文件的 Agent 使用同一组 `agent.skills`、`agent.skill-install`、`agent.skill-update` 工具，其原有身份与跨实例授权边界不变。管家跨实例需要用户明确授予 agent.skill-install/agent.skill-update 及目标；撤权立即拒绝，不凭角色名称取得权限。
 
-安装把完整目录复制到 `.agents/skills/<目录名>/`，包含脚本和参考文件，但不执行脚本。共享 Git 是发布来源，不把未提交检出修改当成已发布版本。Definition 来源继续由 `source.json` 管理；独立 Skill 来源记录在 `.aw/skill-sources.json`，按每个 Skill 保存源路径、实际提交和所有文件摘要。`agent.versions/update` 继续处理 Definition，`agent.skills/skill-update` 单独处理共享 Skill。
+安装把完整目录复制到 `.agents/skills/<目录名>/`，包含脚本和参考文件，但不执行脚本。共享 Git 是发布来源，不把未提交检出修改当成已发布版本。Definition 来源由 `.agentworkspace/source.json` 管理；独立 Skill 来源记录在 `.agentworkspace/skill-sources.json`，按每个 Skill 保存源路径、实际提交和所有文件摘要。`agent.versions/update` 继续处理 Definition，`agent.skills/skill-update` 单独处理共享 Skill。
 
 更新比较实际文件变化，不因 Workspace 无关提交而提示过期。实例添加、删除、修改过该 Skill 的任何文件都先报冲突；软件内置、Definition 专用、自有 Skill 和大小写冲突名称不得覆盖。共享来源删除后保留实例副本，不自动删除。更新 Definition 也不能侵占独立安装的 Skill。仅文件替换，不自动重载当前模型，不自动发布实例检查点；需持久保存时按既有 checkpoint 流程完成。
 
-文件交换前写入本机意图，复用现有文件锁。中断时 `agent.skills` 返回 `pending_update` 与原操作的名称/版本，工作台提供“恢复原更新”；CLI 重用原名称与固定版本即可。已完成的文件交换只补来源记录，未交换的旧目录可恢复；出现额外私人修改时保留双方供检查。未完成交换时拒绝新会话、交出和实例快照，不能把半个 Skill 发布为成功。不要删除 `.aw-local/skill-install` 来绕过恢复。
+文件交换前写入本机意图，复用现有文件锁。中断时 `agent.skills` 返回 `pending_update` 与原操作的名称/版本，工作台提供“恢复原更新”；CLI 重用原名称与固定版本即可。已完成的文件交换只补来源记录，未交换的旧目录可恢复；出现额外私人修改时保留双方供检查。未完成交换时拒绝新会话、交出和实例快照，不能把半个 Skill 发布为成功。不要删除 `.agentworkspace/local/operations/skill-install` 来绕过恢复。
 
 ## Codex 项目和分区准备
 

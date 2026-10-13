@@ -25,7 +25,11 @@ aw backend stop
 
 `stop` 退出整个 AW 后台，网页随之断开；需要再启动时运行 `aw backend start --open`。这只停止 AW 的任务与观察，不证明原生聊天停工，也不替 Agent 交出执行资格。`restart` 必须等新进程实际就绪，启动请求已接受不等于已恢复正常。
 
-升级时先运行 `aw backend stop`，再用 `aw backend status` 确认状态为 `stopped`，之后才用 `npm install --global 新包.tgz` 替换程序，最后启动同一个数据目录。停止请求已接受或页面断开时，后台可能仍在结束任务，尚不能替换程序。不会因升级重建 Workspace、修改用户职责或更换当前会话。当前没有自动更新或自动数据迁移；软件回退仍需要数据格式兼容。
+升级时先运行 `aw backend stop`，再用 `aw backend status` 确认状态为 `stopped`，之后才用 `npm install --global 新包.tgz` 替换程序，最后启动同一个数据目录。停止请求已接受或页面断开时，后台可能仍在结束任务，尚不能替换程序。这份安装服务的全部 Agent 共用新版程序，不要求逐 Agent 升级。不会因升级重建 Workspace、修改用户职责或更换当前会话。
+
+后台启动时统一检查并更新本机登记副本的内置材料；也可运行 `aw software status` 查看，或 `aw software update` 单独更新。结果逐项列出当前、已更新、用户修改冲突、需迁移或无法访问。冲突文件保留，不影响其他副本；更新中断时保留原记录并继续原计划，不把半套材料保存成检查点。新材料位于原生 `.agents/skills/` 和实例 `.agentworkspace/prompts/`，仍可随实例保存；程序更新不会自动让当前模型重新读取它们。
+
+旧布局的数据迁移单独确定 Workspace、实例和范围，不隐藏在 npm 安装中；只更新软件不会静默改写共享仓。当前没有自动下载新版软件；软件回退仍需要数据格式兼容。
 
 默认应用数据在 `~/.agent-workspace`，可用 `--home` 或 `AW_HOME` 指定。软件安装目录、Workspace 数据仓与产品代码仓应分开。检测和 Git 认证规则见 [首次配置](first-use.md)。
 
@@ -102,7 +106,7 @@ aw -w demo agent transfer-continue helper
 
 请求先预检目标，再固定原 Binding、目标配置和唯一后继 Binding。原会话收到 handoff，使用工具保存检查点并请求 stop；运行器确认旧端停妥、发布交接点后，为同一实例目录创建目标新会话并提供接手材料。身份、资料和 Work 归属不变，不转换两家私有会话数据库。
 
-`transfer-continue` 只推进原记录，不另造后继。结果不明先检查原会话/记录；不能删除 `.aw-local/transfer.json`、锁或 Binding 强行重试。状态含义：`handoff_requested` 等原端交出，`starting` 等原生入口，`session_bound` 等接手轮次完成，`completed` 已观察到后继和检查点；`relay_failed`/`outcome_unknown` 不等于可从头重做。
+`transfer-continue` 只推进原记录，不另造后继。结果不明先检查原会话/记录；不能删除 `.agentworkspace/local/operations/transfer.json`、锁或 Binding 强行重试。状态含义：`handoff_requested` 等原端交出，`starting` 等原生入口，`session_bound` 等接手轮次完成，`completed` 已观察到后继和检查点；`relay_failed`/`outcome_unknown` 不等于可从头重做。
 
 目标缺程序/凭据/SDK 时，不开始交出。旧会话真正丢失且没有交接点时仍阻塞；正常自动化不是强制接管后门。自动 transfer 接受 `codex`、`claude`、`codebuddy`，以及已捕获实际控制连接并核验已有本地项目的 `desktop`。不把 Desktop 替换成后台 CLI。桌面首次准备和操作见 [Codex Desktop](usage.md#42-codex-desktop)。
 
@@ -168,7 +172,7 @@ aw -w demo maintenance repair helper --repair-action continue-stop --expected-bi
 
 明确不支持的操作是本版公开限制，不靠反复重试或自行更换入口“修好”；未确认能力不冒充上游不支持。SDK 的 insert 队头仍保留并返回 `delivery_unsupported`，结果同时给出处理说明，不改消息和 ACK。模型目录不支持时明确说明可手工填写，填写成功仍不等于服务已经验收。
 
-新建实例带有 `.aw/prompts/capabilities.md`，message/relay Skill 引导读取。自动或手动 `agent start` 生成的首次进入与接手提示总是附带当前安装包的说明和实际 Binding 类型，不信任旧 checkpoint 中的能力副本。已有实例可显式使用 `agent upgrade-tools` 更新受管说明，保留本地修改冲突检查，不覆盖 AGENTS.md 或用户资料。已经运行的模型不会因软件更新自动读到新规则，需用户明确让它读取更新材料，或在下次接手时加载。
+新建实例带有 `.agentworkspace/prompts/capabilities.md`，message/relay Skill 引导读取。自动或手动 `agent start` 生成的首次进入与接手提示总是附带当前安装包的说明和实际 Binding 类型，不信任旧 checkpoint 中的能力副本。受管说明随软件统一更新，`agent upgrade-tools` 保留为单副本入口；两者均保留本地修改冲突检查，不覆盖 AGENTS.md 或用户资料。已经运行的模型不会因软件更新自动读到新规则，需用户明确让它读取更新材料，或在下次接手时加载。
 
 开发测试中的原生客户端回环用例使用协议夹具，不能证明真实模型、账号或 Desktop。本批另做了 Windows Codex Desktop / App Tools 0.1.5 / gpt-6-luna 的限定实测，保留修复前失败和模型偏差，见 [桌面接入报告](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/evidence/2026-10-08-codex-desktop-integration/README.md)。未测的跨 Harness、busy insert、桌面重启恢复和长期运行不由该结果代验收。源码测试与当前提交的 CI 仍分别记录。
 

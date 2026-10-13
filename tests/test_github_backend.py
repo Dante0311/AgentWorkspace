@@ -4,6 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 import pytest
+from agent_workspace import app as app_module, layout
+from agent_workspace.app import App
 from agent_workspace.gitstore import GitHubStore
 from agent_workspace.util import Conflict, encode
 
@@ -15,6 +17,21 @@ class MemoryGitHub:
         sha=hashlib.sha1(encode(value)).hexdigest();self.objects[sha]=value;return sha
     def request(self,method,path,value=None):
         self.calls.append((method,path))
+        if method == 'PUT' and path.startswith('/contents/'):
+            name = value['branch']
+            parent = self.refs.get(name)
+            tree = dict(self.objects[self.objects[parent]['tree']['sha']]) if parent else {}
+            relative = path.removeprefix('/contents/')
+            # Creating a file without its original SHA must never replace it.
+            if relative in tree:
+                raise Conflict('existing file requires its original SHA')
+            assert 'sha' not in value
+            tree[relative] = self.put({'content': value['content'], 'encoding': 'base64'})
+            tree_sha = self.put(tree)
+            commit = self.put({'message': value['message'], 'tree': {'sha': tree_sha},
+                               'parents': [parent] if parent else []})
+            self.refs[name] = commit
+            return {'commit': {'sha': commit}, 'content': {'sha': tree[relative]}}
         if method=='GET' and path.startswith('/git/ref/heads/'):
             sha=self.refs.get(path.removeprefix('/git/ref/heads/'));return {'object':{'sha':sha}} if sha else None
         if method=='GET':
@@ -58,11 +75,56 @@ def test_github_backend_no_clone_and_object_cas(tmp_path,monkeypatch):
     assert not list(tmp_path.iterdir())
 
 
-def test_empty_github_bootstrap_uses_contents(tmp_path,monkeypatch):
-    store=GitHubStore('github:owner/repo',tmp_path);calls=[]
-    monkeypatch.setattr(store,'request',lambda *args: calls.append(args) or {})
-    store.bootstrap({'name':'sea'})
-    method,path,body=calls[0]
-    assert (method,path)==('PUT','/contents/workspace.json')
-    assert 'sha' not in body and body['branch']=='main'
-    assert json.loads(base64.b64decode(body['content']))=={'name':'sea'}
+def test_empty_github_bootstrap_uses_contents(tmp_path, monkeypatch):
+    memory = MemoryGitHub()
+    store = GitHubStore('github:owner/repo', tmp_path)
+    calls = []
+    def request(method, path, value=None):
+        calls.append((method, path, value))
+        return memory.request(method, path, value)
+    monkeypatch.setattr(store, 'request', request)
+    metadata = {'name': 'sea'}
+    store.bootstrap(metadata)
+    method, path, body = calls[0]
+    assert (method, path) == ('PUT', '/contents/workspace.json')
+    assert 'sha' not in body and body['branch'] == 'main'
+    assert json.loads(base64.b64decode(body['content'])) == metadata
+    snap = store.snapshot()
+    assert layout.version(snap, 'workspace') == 1
+    assert snap.json('.agentworkspace/workspace.json') == metadata
+    assert 'workspace.json' not in snap.entries
+    # The second commit must preserve and consume the exact first Contents commit.
+    parent = memory.objects[snap.revision]['parents'][0]
+    initial = store.snapshot(revision=parent)
+    assert initial.json('workspace.json') == metadata
+    assert layout.MARKER not in initial.entries
+    assert not list(tmp_path.iterdir())
+
+
+def test_contents_bootstrap_does_not_replace_an_existing_workspace(tmp_path, monkeypatch):
+    memory = MemoryGitHub()
+    store = GitHubStore('github:owner/repo', tmp_path)
+    monkeypatch.setattr(store, 'request', memory.request)
+    original = {'workspace.json': encode({'name': 'existing'}), 'notes.md': b'Existing user work'}
+    head = store.branch('main', original)
+    with pytest.raises(Conflict):
+        store.bootstrap({'name': 'replacement'})
+    assert store.head('main') == head
+    assert store.snapshot().all() == original
+
+
+def test_remote_initialization_refuses_existing_current_layout_before_contents_put(tmp_path, monkeypatch):
+    memory = MemoryGitHub()
+    store = GitHubStore('github:owner/repo', tmp_path)
+    monkeypatch.setattr(store, 'request', memory.request)
+    store.bootstrap({'name': 'existing'})
+    original = store.snapshot()
+    memory.calls.clear()
+    monkeypatch.setattr(app_module, 'open_store', lambda address, home: store)
+    app = App(tmp_path / 'home')
+    with pytest.raises(Conflict):
+        app.workspace_bootstrap_remote('replacement', 'github:owner/repo')
+    assert not any(method == 'PUT' for method, path in memory.calls)
+    assert store.head('main') == original.revision
+    assert store.snapshot().all() == original.all()
+    assert app.workspace_list() == []

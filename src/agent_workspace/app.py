@@ -386,6 +386,8 @@ class App:
             local, _ = self.collect(root)
             snap = self.store(workspace).snapshot(self.agent(workspace, agent_id)["branch"])
             self._check_tracked_local(snap)
+            if layout.version(root, 'instance') != layout.version(snap, 'instance'):
+                raise layout.MigrationRequired('Continue the explicit layout migration before synchronizing this copy.')
             remote = snap.all()
             for path in set(context["saved"]) | set(remote):
                 previous = context["saved"].get(path)

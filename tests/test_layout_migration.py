@@ -109,6 +109,16 @@ def test_real_lock_appears_after_plan_no_move_then_original_request_resumes(tmp_
         pending = app.layout_plan('sea')['pending_migrations']
         assert pending[0]['request_id'] == 'lock-race' and pending[0]['branches'][0]['published']
         assert 'moves' not in pending[0]['directories'][0]
+        if name == 'runner.lock':
+            migrated_head = store.head('instance/alice')
+            with pytest.raises(Conflict):
+                app.checkpoint('sea', 'alice', 'old copy must not append legacy data', checkpoint_id='c-stale-layout')
+            assert store.head('instance/alice') == migrated_head
+            assert not (root / '.aw/checkpoints/c-stale-layout.json').exists()
+            with pytest.raises(layout.MigrationRequired):
+                app.sync_agent('sea', 'alice')
+            assert not (root / layout.MARKER).exists()
+            assert (root / '.aw-local/context.json').exists()
         with pytest.raises(Conflict):
             app.layout_migrate('sea', 'bypass-busy')
     finally:

@@ -9,7 +9,7 @@ import pytest
 from agent_workspace import backend, runtime
 from agent_workspace.commands import execute
 from agent_workspace.messages import Messages
-from agent_workspace.util import RetryableRead, read_json, write_json
+from agent_workspace.util import Error, RetryableRead, read_json, write_bytes, write_json
 
 
 def wait_for(read, check, timeout=60):
@@ -117,3 +117,18 @@ def test_watch_registry_read_failure_is_reported_and_bounded(pair, monkeypatch):
     assert len(calls) == 5 and delays == [2, 4, 8, 16]
     assert manager.status()["watch_failure"]["state"] == "check_paused"
     assert not manager.runners
+
+
+def test_runner_failure_creates_versioned_log_directory(tmp_path):
+    write_bytes(tmp_path / layout.MARKER, layout.marker("instance"))
+    manager = backend.Backend(SimpleNamespace(), SimpleNamespace(server_port=0))
+
+    class FailedRunner:
+        root = tmp_path
+
+        def run(self):
+            raise Error("original connection failed")
+
+    manager._run_runner({"runner": FailedRunner()})
+    log = layout.local_path(tmp_path, "runner.log")
+    assert log.exists() and "original connection failed" in log.read_text(encoding="utf-8")

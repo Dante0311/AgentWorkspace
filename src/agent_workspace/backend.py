@@ -277,6 +277,7 @@ class Backend:
         except Exception:
             # A task failure belongs to this Runner; it must not terminate other Agents.
             log_path = layout.local_path(runner.root, "runner.log")
+            log_path.parent.mkdir(parents=True, exist_ok=True)
             with log_path.open("a", encoding="utf-8") as log:
                 log.write(now() + "\n" + traceback.format_exc() + "\n")
         else:

@@ -103,6 +103,7 @@ class BridgeManager:
                        AW_AGENT=self.agent_id, AW_BINDING=self.binding, AW_BRIDGE_NAME=name,
                        AW_INSTANCE_ROOT=str(self.root))
             log = layout.local_path(self.root, f"bridge-{name}.log")
+            log.parent.mkdir(parents=True, exist_ok=True)
             with log.open("ab") as output:
                 proc = subprocess.Popen(child_command(config["command"]), cwd=self.root, env=env, stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, stderr=output, text=True, encoding="utf-8", bufsize=1)

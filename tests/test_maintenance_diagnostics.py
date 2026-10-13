@@ -1,7 +1,7 @@
 """Health observations do not turn stopped or unobserved workers into success."""
 import pytest
 
-from agent_workspace import maintenance, runtime
+from agent_workspace import backend, maintenance, runtime
 from agent_workspace.util import encode, locked, read_json, write_json
 
 
@@ -73,8 +73,10 @@ def test_retry_and_unknown_stop_observation_are_not_reported_as_healthy(desktop_
         assert report["local_observations"]["alice"]["runtime"]["retry_seconds"] == 4
 
 
-def test_watch_configuration_and_unknown_runtime_are_separate(desktop_entry):
+def test_watch_configuration_and_unknown_runtime_are_separate(desktop_entry, monkeypatch):
     app, binding, root = desktop_entry
+    # This check reads metadata; Runtime tests cover the actual background service.
+    monkeypatch.setattr(backend, "start", lambda app: {"state": "isolated-checker-fixture"})
     write_json(root / ".agentworkspace/local/runtime/control.json", {"stop": binding})
     observation = maintenance.doctor(app, "sea")["local_observations"]["alice"]
     assert observation["runtime"] is None

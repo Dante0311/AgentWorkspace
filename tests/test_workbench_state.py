@@ -12,7 +12,7 @@ from agent_workspace.server import make_server
 @pytest.mark.parametrize("filename", ["status.json", "watch.json", "runtime.json"])
 def test_state_keeps_other_instances_and_diagnostics_available(pair, filename):
     app, bindings = pair
-    damaged = app.root("sea", "alice") / ".aw-local" / filename
+    damaged = app.root("sea", "alice") / ".agentworkspace/local/runtime" / filename
     damaged.write_bytes(b"{broken")
     server = make_server(app, 0, "state-test-token")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -33,7 +33,7 @@ def test_state_keeps_other_instances_and_diagnostics_available(pair, filename):
         assert entries["alice"]["runtime"]["state"] == "unknown"
         assert entries["alice"]["history"][0]["id"] == bindings["alice"]
         copy = entries["alice"]["copies"][0]
-        assert copy["directory"] == str(damaged.parent.parent)
+        assert copy["directory"] == str(app.root("sea", "alice"))
         assert copy["unknown_reason"] == "local_copy_observation_failed"
         assert "JSONDecodeError" in copy["observation_error"]
         assert "runtime" not in copy  # Failed local reads do not erase known shared facts.

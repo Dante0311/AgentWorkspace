@@ -52,7 +52,7 @@ def test_workspace_creation_uses_selected_directories_and_returns_real_revisions
         assert len(entry["revision"]) == 40
         root = app.root("demo", role)
         assert str(root) == directories[role]
-        assert read_json(root / ".aw-local/context.json")["revision"] == entry["revision"]
+        assert read_json(root / ".agentworkspace/local/operations/context.json")["revision"] == entry["revision"]
     assert all(app.agent("demo", role)["current"] is None for role in onboarding.ROLES)
 
 
@@ -76,7 +76,7 @@ def test_prepare_existing_identity_accepts_another_explicit_empty_directory(crea
     result = onboarding.prepare_instance(second, "copy", "steward", str(target))
     assert result["directory"] == str(target.resolve())
     assert result["sessions_started"] is False
-    assert read_json(target / ".aw-local/context.json")["agent"] == "steward"
+    assert read_json(target / ".agentworkspace/local/operations/context.json")["agent"] == "steward"
     assert second.agent("copy", "steward")["current"] is None
 
 

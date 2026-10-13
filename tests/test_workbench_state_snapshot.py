@@ -21,7 +21,8 @@ def test_workspace_response_uses_one_shared_snapshot(state_app, tmp_path, monkey
     peer = App(tmp_path / "peer-home")
     peer.workspace_connect("copy", str(tmp_path / "sea.git"))
     workspace_show = app.workspace_show
-    status_path = app.root("sea", "alice") / ".aw-local/status.json"
+    status_path = app.root("sea", "alice") / ".agentworkspace/local/runtime/status.json"
+    status_path.parent.mkdir(parents=True, exist_ok=True)
     local_status = {"state": "fixture-after-shared-snapshot", "observed_at": "fixture-later-local-observation"}
 
     def concurrent_commit(*args, **kwargs):
@@ -41,24 +42,24 @@ def test_workspace_response_uses_one_shared_snapshot(state_app, tmp_path, monkey
     workspace = value["workspaces"][0]
     agents = {item["id"]: item for item in value["agents"]}
     assert workspace["snapshot_revision"] == original.revision
-    assert workspace["projects"] == original.json("workspace.json")["projects"]
+    assert workspace["projects"] == original.json(".agentworkspace/workspace.json")["projects"]
     assert set(agents) == {"alice", "bob"}
     assert agents["alice"]["archived"] is False
     assert all(item["snapshot_revision"] == original.revision for item in agents.values())
-    assert agents["bob"]["revision"] == original.entries["agents/bob.json"]
+    assert agents["bob"]["revision"] == original.entries[".agentworkspace/agents/bob.json"]
     if local_unreadable:
-        assert agents["alice"]["revision"] == original.entries["agents/alice.json"]
+        assert agents["alice"]["revision"] == original.entries[".agentworkspace/agents/alice.json"]
         assert agents["alice"]["binding"] is None
         assert agents["alice"]["runtime"] == {"state": "unknown", "reason": "local_copy_observation_failed"}
         copy = agents["alice"]["copies"][0]
-        assert copy["directory"] == str(status_path.parent.parent)
+        assert copy["directory"] == str(app.root("sea", "alice"))
         assert copy["unknown_reason"] == "local_copy_observation_failed"
         assert "observation_error" in copy and "runtime" not in copy
         assert any(error.get("agent") == "alice" and error.get("directory") == copy["directory"]
                    for error in value["errors"])
         write_json(status_path, local_status)
     else:
-        assert agents["alice"]["revision"] == original.entries["agents/alice.json"]
+        assert agents["alice"]["revision"] == original.entries[".agentworkspace/agents/alice.json"]
         assert agents["alice"]["runtime"]["state"] == local_status["state"]
         assert agents["alice"]["runtime"]["observed_at"] == local_status["observed_at"]
         assert agents["alice"]["observation_source"]["kind"] == "local_registry_and_runtime"
@@ -66,8 +67,8 @@ def test_workspace_response_uses_one_shared_snapshot(state_app, tmp_path, monkey
 
     latest = app.store("sea").snapshot()
     assert latest.revision != original.revision
-    assert latest.json("agents/alice.json")["archived"] is True
-    assert "later-project" in latest.json("workspace.json")["projects"]
+    assert latest.json(".agentworkspace/agents/alice.json")["archived"] is True
+    assert "later-project" in latest.json(".agentworkspace/workspace.json")["projects"]
     assert app.workspace_show("sea", snapshot=original)["revision"] == original.revision
     assert {item["id"] for item in app.agents("sea", archived=False, snapshot=original)} == {"alice", "bob"}
     assert app.agents("sea", archived=True, snapshot=original) == []
@@ -98,8 +99,8 @@ def test_binding_details_use_the_same_shared_snapshot(state_app, monkeypatch):
 
     alice = next(item for item in value["agents"] if item["id"] == "alice")
     assert alice["snapshot_revision"] == original.revision
-    assert alice["binding"] == original.json(f"bindings/{binding}.json")
-    assert alice["revision"] == original.entries["agents/alice.json"]
+    assert alice["binding"] == original.json(f".agentworkspace/bindings/{binding}.json")
+    assert alice["revision"] == original.entries[".agentworkspace/agents/alice.json"]
     assert app.show("sea", "alice")["binding"]["session"] == "fixture-bound-after-shared-read"
     assert app.store("sea").snapshot().revision != original.revision
 

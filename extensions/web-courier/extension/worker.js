@@ -55,11 +55,12 @@ async function handle(message) {
     const value = await request(config, 'get');
     if (value.state !== 'ready') return {connection:publicConnection(config), aw:value, record:null};
     const n = value.notification;
-    if (!n || n.binding !== config.binding || n.agent !== config.agent_id || n.workspace !== config.workspace || n.delivery !== 'normal' || typeof value.prompt !== 'string' || !value.prompt.trim() || value.prompt.length > 2*1024*1024 || value.message_id !== n.message_id) {
+    if (!n || n.binding !== config.binding || n.agent !== config.agent_id || n.workspace !== config.workspace || n.delivery !== 'normal' || typeof value.prompt !== 'string' || !value.prompt.trim() || value.prompt.length > 2*1024*1024 || !/^[a-f0-9]{64}$/.test(value.prompt_digest) || value.message_id !== n.message_id) {
       throw new Error('后台返回的原通知与限定连接不符');
     }
     record = await save(ATTEMPT, {message_id:value.message_id, notification:n, body:value.prompt,
-      attempt_id:crypto.randomUUID(), phase:'fetched', createdAt:new Date().toISOString()});
+      attempt_id:crypto.randomUUID(), prompt_digest:value.prompt_digest,
+      phase:'fetched', createdAt:new Date().toISOString()});
     const probe = await page(config, tabId, 'inspect', record.body);
     return {connection:publicConnection(config), aw:value, record, probe};
   }
@@ -68,7 +69,10 @@ async function handle(message) {
     const probe = await page(config, tabId, 'inspect', record?.body);
     if (record) {
       record = await save(ATTEMPT, reconcile(record, probe));
-      if (status.attempt?.attempt_id === record.attempt_id) await report(config, record, probe);
+      if (status.attempt?.attempt_id === record.attempt_id && record.web_fact &&
+          record.web_fact !== 'unknown' && status.attempt.web_fact !== record.web_fact) {
+        await report(config, record, probe);
+      }
     }
     return {connection:publicConnection(config), aw:status, record, probe};
   }
@@ -80,7 +84,7 @@ async function handle(message) {
       note:probe.receipt?'相同正文已经存在，禁止重发':'完整原通知已填入，尚未发送'});
     return {connection:publicConnection(config), aw:status, record, probe};
   }
-  if (!canSend(record) || record.tabId !== tabId || message.confirm !== true) throw new Error('需要在原标签页明确确认；或原消息已经尝试发送');
+  if (!canSend(record) || record.tabId !== tabId || message.confirm !== true || status.attempt) throw new Error('需要在原标签页明确确认；或原消息已经尝试发送');
   const before = await page(config, tabId, 'inspect', record.body);
   if (before.receipt) return {record:await save(ATTEMPT,reconcile(record,before)),probe:before,aw:status};
   if (before.state !== 'idle_candidate' || !before.draftMatches) throw new Error('会话忙碌、状态不明或草稿已变，不会发送');
@@ -88,7 +92,8 @@ async function handle(message) {
   record = await save(ATTEMPT, {...record,phase:'submitting',submitEpoch:before.pageEpoch,
     web_fact:'unknown',note:'发送结果待核对；不会重试',attemptedAt:new Date().toISOString()});
   try {
-    const claim = await request(config, 'begin', {...attemptArgs(record),binding:config.binding,target_url:config.target_url});
+    const claim = await request(config, 'begin', {...attemptArgs(record),binding:config.binding,
+      target_url:config.target_url,prompt_digest:record.prompt_digest});
     if (claim.state !== 'claimed' || claim.attempt_id !== record.attempt_id) throw new Error('没有取得本次原尝试的发送许可');
     const probe = await page(config, tabId, 'send', record.body);
     record = await save(ATTEMPT, reconcile(record, probe));

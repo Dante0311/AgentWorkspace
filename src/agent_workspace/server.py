@@ -111,6 +111,9 @@ def make_server(app, port=8765, token=None):
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
+            if getattr(self, "courier_origin", None):
+                self.send_header("Access-Control-Allow-Origin", self.courier_origin)
+                self.send_header("Vary", "Origin")
             self.end_headers()
             self.wfile.write(data)
 
@@ -133,7 +136,90 @@ def make_server(app, port=8765, token=None):
                 return False
             return True
 
+        def courier_id(self):
+            prefix = "/api/web-courier/"
+            if not self.path.startswith(prefix):
+                return None
+            from .util import slug
+            try:
+                return slug(self.path[len(prefix):])
+            except Error:
+                return None
+
+        def courier_host(self):
+            allowed = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
+            if self.headers.get("Host", "") not in allowed:
+                self.reply(403, {"error": "Invalid local host."})
+                return False
+            if self.server.stopping.is_set():
+                self.reply(503, {"error": "Workbench is stopping."})
+                return False
+            return True
+
+        def do_OPTIONS(self):
+            self.courier_origin = None
+            connection_id = self.courier_id()
+            if connection_id is None or not self.courier_host():
+                if connection_id is None:
+                    self.reply(404, {"error": "Not found"})
+                return
+            from . import web_courier
+            try:
+                origin = web_courier.preflight(app, connection_id, self.headers.get("Origin"))
+                if self.headers.get("Access-Control-Request-Method") != "POST":
+                    raise Error("Web Courier only accepts POST.")
+                requested = {part.strip().lower() for part in self.headers.get("Access-Control-Request-Headers", "").split(",") if part.strip()}
+                if not requested.issubset({"authorization", "content-type"}):
+                    raise Error("Web Courier request headers are not allowed.")
+            except (Error, OSError, ValueError):
+                self.reply(403, {"error": "Web Courier preflight was rejected."})
+                return
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "POST")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Vary", "Origin")
+            self.end_headers()
+
+        def courier_post(self, connection_id):
+            if not self.courier_host():
+                return
+            from . import web_courier
+            token_header = self.headers.get("Authorization", "")
+            token = token_header[7:] if token_header.startswith("Bearer ") else ""
+            origin = self.headers.get("Origin")
+            try:
+                web_courier.authorize(app, connection_id, token, origin)
+            except Error as exc:
+                if getattr(exc, "code", "") == "conflict":
+                    self.reply(403, {"error": "Web Courier connection is not authorized."})
+                else:
+                    self.reply(503, {"error": "Web Courier entry cannot be checked now."})
+                return
+            except (OSError, ValueError):
+                self.reply(503, {"error": "Web Courier entry cannot be checked now."})
+                return
+            if origin:
+                self.courier_origin = origin
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 64 * 1024 or not self.headers.get("Content-Type", "").startswith("application/json"):
+                    raise Error("Web Courier needs a JSON request of at most 64 KiB.")
+                payload = json.loads(self.rfile.read(length))
+                if self.server.stopping.is_set():
+                    self.reply(503, {"error": "Workbench is stopping."})
+                    return
+                result = web_courier.handle(app, connection_id, token, origin, payload)
+                self.reply(200, {"ok": True, "result": result})
+            except (Error, ValueError, OSError, TypeError) as exc:
+                self.reply(409 if getattr(exc, "code", "") == "conflict" else 400,
+                           {"ok": False, "code": getattr(exc, "code", "invalid_input"),
+                            "error": str(exc)})
+
         def do_GET(self):
+            self.courier_origin = None
             if self.path == "/capabilities":
                 # Public, static package documentation only; no instance or account data.
                 guide = (files("agent_workspace") / "resources" / "prompts" / "capabilities.md").read_bytes()
@@ -163,6 +249,14 @@ def make_server(app, port=8765, token=None):
                 self.reply(400, {"ok": False, "error": str(exc)})
 
         def do_POST(self):
+            self.courier_origin = None
+            if self.path.startswith("/api/web-courier/"):
+                connection_id = self.courier_id()
+                if connection_id is None:
+                    self.reply(404, {"error": "Not found"})
+                else:
+                    self.courier_post(connection_id)
+                return
             if not self.authorized():
                 return
             if self.path == "/api/shutdown":

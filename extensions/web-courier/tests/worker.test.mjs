@@ -28,15 +28,21 @@ function harness(options={},store={[C]:structuredClone(config)}) {
     assert.equal(request.redirect,'error');
     const args=JSON.parse(request.body);requests.push(args);
     let result;
-    if(args.action==='get')result={state:options.delivery==='insert'?'delivery_unsupported':'ready',message_id:'original',prompt,notification:{message_id:'original',workspace:'test',agent:'receiver',binding:'binding-test',delivery:'normal'}};
+    if(args.action==='get')result={state:options.delivery==='insert'?'delivery_unsupported':'ready',message_id:'original',prompt,
+      prompt_digest:'a'.repeat(64),notification:{message_id:'original',workspace:'test',agent:'receiver',binding:'binding-test',delivery:'normal'}};
     if(args.action==='status')result={eligible:options.stale!==true,ack:options.ack||null,attempt:backend.attempt};
     if(args.action==='begin') {
       assert.equal(store[R].phase,'submitting');assert.ok(trusted);
+      assert.equal(args.prompt_digest,'a'.repeat(64));
       backend.attempt={attempt_id:args.attempt_id,message_id:args.message_id};
       if(options.failBegin)throw new Error('begin response lost');
       result={state:'claimed',attempt_id:args.attempt_id};
     }
-    if(args.action==='report')result={eligible:true,ack:options.ack||null,attempt:backend.attempt,web_fact:args.web_fact};
+    if(args.action==='report'){
+      backend.attempt.web_fact=args.web_fact;
+      if(options.failReport)throw new Error('report response lost');
+      result={eligible:true,ack:options.ack||null,attempt:backend.attempt,web_fact:args.web_fact};
+    }
     return {ok:true,json:async()=>({ok:true,result})};
   }
   vm.runInContext(source,vm.createContext({...core,chrome,crypto,fetch}));
@@ -48,6 +54,7 @@ test('explicit confirmation required',async()=>{const h=harness();await prepare(
 test('different tab cannot send prepared draft',async()=>{const h=harness();await prepare(h);assert.equal((await h.call('send',{confirm:true,tabId:2})).ok,false);assert.equal(h.pageCalls.some(p=>p.command==='send'),false);});
 for(const key of ['failBegin','failSend'])test('lost '+key+' survives worker restart without second claim or click',async()=>{const h=harness({[key]:true});await prepare(h);assert.equal((await h.call('send',{confirm:true})).ok,false);assert.equal(h.store[R].phase,'submitting');const next=harness({backend:h.backend},h.store);assert.equal((await next.call('send',{confirm:true})).ok,false);assert.equal(next.requests.some(r=>r.action==='begin'),false);assert.equal(next.pageCalls.some(p=>p.command==='send'),false);assert.equal((await next.call('prepare')).ok,false);assert.equal((await next.call('get')).ok,false);});
 test('storage failure stops before backend claim',async()=>{const h=harness({failStorage:true});await prepare(h);assert.equal((await h.call('send',{confirm:true})).ok,false);assert.equal(h.requests.some(r=>r.action==='begin'),false);assert.equal(h.pageCalls.some(p=>p.command==='send'),false);});
+test('lost web-fact response is read back without another report or click',async()=>{const h=harness({failReport:true});await prepare(h);assert.equal((await h.call('send',{confirm:true})).ok,false);assert.equal(h.pageCalls.filter(p=>p.command==='send').length,1);const next=harness({backend:h.backend,probe:{receipt:true}},h.store);assert.ok((await next.call('inspect')).ok);assert.equal(next.requests.some(r=>r.action==='report'),false);assert.equal(next.pageCalls.some(p=>p.command==='send'),false);});
 test('wrong URL rejected before injection or backend get',async()=>{const h=harness({url:'https://chatgpt.com/c/other'});assert.equal((await h.call('get')).ok,false);assert.deepEqual(h.pageCalls,[]);assert.deepEqual(h.requests,[]);});
 test('navigation during injection rejects before backend get',async()=>{const h=harness({probe:{target:false}});assert.equal((await h.call('get')).ok,false);assert.deepEqual(h.requests,[]);});
 test('external sender ignored',()=>assert.equal(harness().external(),false));

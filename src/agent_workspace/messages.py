@@ -208,7 +208,7 @@ class Messages:
                 })
         return result
 
-    def _notification(self, snap, index):
+    def _notification(self, snap, index, *, require_body=False):
         template = json.loads((package_files("agent_workspace") / "resources/prompts/message-notification.json").read_bytes())
         try:
             raw = snap.bytes(shared_path(snap, f"messages/{index['id']}.json"))
@@ -224,20 +224,79 @@ class Messages:
         except RetryableRead:
             # A temporary blob read does not mean the immutable body is damaged.
             raise
-        except (Error, ValueError):
+        except (Error, ValueError, UnicodeError):
+            if require_body:
+                raise Error("The complete original Message is unavailable; Web Courier cannot send it.")
             text = snap.bytes(shared_path(snap, f"message-index/{index['id']}.json")).decode("utf-8")
             return template["instruction"] + template["unavailable"].format(record=text)
         return template["instruction"] + template["message"].format(record=text)
+
+    def _head(self, snap, workspace, agent_id, binding):
+        self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
+        messages = self._list(snap, agent_id, unacked=True)
+        return messages[0] if messages else None
+
+    def _dispatch(self, snap, workspace, agent_id, binding, message, attempts, *, manual_attempt_id=None):
+        path = shared_path(snap, f"dispatch/{agent_id}.json")
+        record = {"message_id": message["id"], "workspace": workspace, "agent": agent_id,
+                  "binding": binding, "delivery": message["delivery"],
+                  "attempts": attempts, "attempted_at": time.time()}
+        if manual_attempt_id is not None:
+            record["manual_attempt_id"] = manual_attempt_id
+        agent_path = shared_path(snap, f"agents/{agent_id}.json")
+        binding_path = shared_path(snap, f"bindings/{binding}.json")
+        expected = {path: snap.entries.get(path), agent_path: snap.entries[agent_path],
+                    binding_path: snap.entries[binding_path],
+                    shared_path(snap, f"acks/{message['id']}.json"): None}
+        for original in (f"messages/{message['id']}.json", f"message-index/{message['id']}.json"):
+            original_path = shared_path(snap, original)
+            expected[original_path] = snap.entries.get(original_path)
+        self.app.store(workspace).change("main", {path: encode(record)},
+                                         expected_layout(snap, expected), "Claim notification attempt")
+        return record
+
+    def preview_manual(self, workspace, agent_id, binding):
+        snap = self.app.store(workspace).snapshot()
+        message = self._head(snap, workspace, agent_id, binding)
+        if message is None:
+            return {"state": "empty"}
+        if message["delivery"] != "normal":
+            return {"state": "delivery_unsupported", "message_id": message["id"],
+                    "delivery": message["delivery"]}
+        previous = snap.json(shared_path(snap, f"dispatch/{agent_id}.json"), {})
+        if previous.get("message_id") == message["id"]:
+            return {"state": "waiting_ack", "message_id": message["id"]}
+        prompt = self._notification(snap, message, require_body=True)
+        return {"state": "ready", "message_id": message["id"], "prompt_digest": digest(prompt.encode()),
+                "notification": {"message_id": message["id"], "workspace": workspace,
+                                 "agent": agent_id, "binding": binding, "delivery": message["delivery"]},
+                "prompt": prompt}
+
+    def claim_manual(self, workspace, agent_id, binding, message_id, attempt_id, expected_prompt_digest):
+        """Share poll's FIFO and dispatch claim; a manual outcome is never retried."""
+        mid, attempt = slug(message_id), slug(attempt_id)
+        snap = self.app.store(workspace).snapshot()
+        message = self._head(snap, workspace, agent_id, binding)
+        if message is None or message["id"] != mid:
+            raise Conflict("The original message is no longer the unacknowledged FIFO head.")
+        if message["delivery"] != "normal":
+            raise Error("This manual Web route does not support insert delivery.")
+        previous = snap.json(shared_path(snap, f"dispatch/{agent_id}.json"), {})
+        if previous.get("message_id") == mid:
+            raise Conflict("The original message already has a notification attempt; inspect it without claiming again.")
+        prompt = self._notification(snap, message, require_body=True)
+        if digest(prompt.encode()) != expected_prompt_digest:
+            raise Conflict("The original notification changed before this attempt.")
+        self._dispatch(snap, workspace, agent_id, binding, message, 1, manual_attempt_id=attempt)
+        return {"state": "claimed", "message_id": mid, "attempt_id": attempt}
 
     def poll(self, workspace, agent_id, binding, *, adapter=None, directory=None,
              retry_seconds=60, max_attempts=3):
         store = self.app.store(workspace)
         snap = store.snapshot()
-        self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
-        messages = self._list(snap, agent_id, unacked=True)
-        if not messages:
+        message = self._head(snap, workspace, agent_id, binding)
+        if message is None:
             return {"state": "empty"}
-        message = messages[0]
         notification = {"message_id": message["id"], "workspace": workspace, "agent": agent_id,
                         "binding": binding, "delivery": message["delivery"]}
         if adapter is None:
@@ -254,6 +313,8 @@ class Messages:
         dispatch_path = shared_path(snap, f"dispatch/{agent_id}.json")
         self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
         previous = snap.json(dispatch_path, {})
+        if previous.get("message_id") == message["id"] and previous.get("manual_attempt_id"):
+            return {"state": "waiting_ack", "message_id": message["id"]}
         attempts = 0
         if previous.get("message_id") == message["id"] and previous.get("binding") == binding:
             attempts = previous["attempts"]
@@ -262,14 +323,8 @@ class Messages:
             if attempts >= max_attempts:
                 return {"state": "notification_retry_exhausted", "message_id": message["id"]}
         prompt = self._notification(snap, message)
-        dispatch = {**notification, "attempts": attempts + 1, "attempted_at": time.time()}
-        agent_path = shared_path(snap, f"agents/{agent_id}.json")
-        binding_path = shared_path(snap, f"bindings/{binding}.json")
         # A shared attempt record arbitrates separate local copies, not just one process's lock.
-        store.change("main", {dispatch_path: encode(dispatch)},
-            expected_layout(snap, {dispatch_path: snap.entries.get(dispatch_path),
-             agent_path: snap.entries[agent_path], binding_path: snap.entries[binding_path],
-             shared_path(snap, f"acks/{message['id']}.json"): None}), "Claim notification attempt")
+        self._dispatch(snap, workspace, agent_id, binding, message, attempts + 1)
         self.app.require_binding(workspace, agent_id, binding)
         try:
             adapter.notify(prompt, message["delivery"])

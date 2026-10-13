@@ -2,6 +2,8 @@
 
 版本仍为 `0.1.0a1` 开发预览。本文随产品源码维护当前能力、限制与验证层次；产品目标以 [design.md](design.md) 为准，操作见 [usage.md](usage.md) 和 [runtime-and-maintenance.md](runtime-and-maintenance.md)。
 
+**2026-10-12 设计与实现的区别：** [新目录设计](design.md#31-用户工作根与-aw-内部目录)、共享仓 `.agentworkspace/` 布局，以及平台资源随 AW 软件统一更新尚待实现。本次仅改文档。现有程序仍使用 `.aw/`、`.aw-local/`、实例根 `source.json` / `runtime.json` 和 main 根的平台记录；现有 `agent.upgrade-tools` 仍为单实例操作，跨实例维护与后台管理仍受当前权限代码限制。目标设计将软件升级交给安装器、CLI 与统一后台完成，并明确后台独立执行已启用的基础检查、共用恢复操作；不增加逐 Agent 升级授权、管家模型在线前提或额外后台服务。这些职责澄清尚未逐项核对实现，下文现有能力和历史证据不因此扩大。
+
 团队的问题登记、调查、验收脚本和详细报告在 [AW-Workspace 开发仓](https://github.com/Dante0311/AW-Workspace/blob/main/development/README.md)维护。历史结果只证明对应提交和测试范围，不替代当前版本的验收。
 
 近期优先用户自己的 Codex Desktop 与 ChatGPT Web。Web 当前使用手动 Message 协议，浏览器插件另行开发；tclaude 待实际验证。已有 CLI/SDK、模型配置和企业微信接口继续保留，但不作为本轮扩展目标。工作台集中显示 Agent 与环境、消息历史和本机后台；创建、配置和交接通过 CLI、Skills 与原生客户端操作。

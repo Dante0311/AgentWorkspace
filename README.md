@@ -4,6 +4,8 @@
 
 AgentWorkspace 在用户已有的 Agent 客户端之上提供协作：保存 Agent 的身份、职责、Skill、资料和历史，管理当前执行资格，并通过 Git Workspace 交换消息。它操作已有客户端的真实会话，不重写模型推理或工具循环，也不要求用户改用新的聊天客户端。Work / Delivery 按需使用。
 
+2026-10-12 的[设计整理](docs/design.md#31-用户工作根与-aw-内部目录)以 Aster 为参考，拟将实例和共享仓的平台内部数据统一放入 `.agentworkspace/`，并明确 Git 分支、统一后台、软件升级与管理权限。Agent 仍属于 Workspace；同一正式 `AW_HOME` 的实例共用一套平台程序和后台，基础检查及已授权恢复不依赖管家模型持续在线。此次仅更新设计，现有安装与数据尚未采用新布局；下文操作说明仍对应当前程序。
+
 > **开发预览，近期方向于 2026-10-11 调整。** npm 包版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`。优先满足 Codex Desktop 与 ChatGPT Web；Web 当前手动收件，浏览器插件另行开发，取得真实接口后再接入。tclaude 待实际验证，其他 Harness、模型供应商与企业微信暂缓扩展。本轮 npm、统一后台、三视图工作台、同机直发路径、显式强制接手及原操作继续已实现；已通过的开发检查与真实环境待验范围见[当前实现](docs/implementation.md)，不表示完整 V1 已完成。未发布 npm Registry 或正式 Release。
 
 Codex Desktop 已有在本地项目中的自动创建、真实会话绑定、持续投递和同 Agent 交接；需要先准备项目并从真实桌面聊天取得控制连接。历史限定实测见 [实现进展](docs/implementation.md#codex-desktop-自动接入2026-10-08)，操作和限制见 [Codex Desktop](docs/usage.md#42-codex-desktop)。这些结果不代替本轮新增功能的验收。

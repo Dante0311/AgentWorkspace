@@ -106,10 +106,10 @@ def test_create_three_real_identities_without_model_or_work(fresh):
     assert app.work_list("demo") == []
     for role in onboarding.ROLES:
         root = app.root("demo", role)
-        assert read_json(root / "source.json")["definition"] == "definitions/caretaker/" + role
+        assert read_json(root / ".agentworkspace/source.json")["definition"] == "definitions/caretaker/" + role
         assert len(list((root / ".agents/skills").glob("*/SKILL.md"))) == 7
-        assert not (root / ".aw-local/runtime.json").exists()
-        assert not (root / ".aw-local/watch.json").exists()
+        assert not (root / ".agentworkspace/local/runtime/runtime.json").exists()
+        assert not (root / ".agentworkspace/local/runtime/watch.json").exists()
 
 
 def test_repeat_preserves_assets_config_and_branch_heads(fresh):
@@ -121,7 +121,7 @@ def test_repeat_preserves_assets_config_and_branch_heads(fresh):
     heads = {branch: app.store("demo").head(branch) for branch in ["main", "instance/steward"]}
     assert create(fresh)["state"] == "created"
     assert (root / "notes.md").read_text() == "user asset"
-    assert read_json(root / ".aw-local/runtime.json") == {"kind": "manual"}
+    assert read_json(root / ".agentworkspace/local/runtime/runtime.json") == {"kind": "manual"}
     assert heads == {branch: app.store("demo").head(branch) for branch in heads}
 
 
@@ -164,13 +164,14 @@ def test_branch_published_but_registration_failed_is_resumed(fresh, monkeypatch)
 
     def fail_registration(self, branch, changes, *args, **kwargs):
         nonlocal failed
-        if "agents/sentinel.json" in changes and not failed:
+        if ".agentworkspace/agents/sentinel.json" in changes and not failed:
             failed = True
             raise Error("registration interrupted")
         return change(self, branch, changes, *args, **kwargs)
 
     monkeypatch.setattr(GitStore, "change", fail_registration)
     result = create(fresh)
+    assert failed
     assert result["state"] == "pending" and result["stage"] == "caretaker/sentinel"
     original = app.store("demo").head("instance/sentinel")
     assert original and len(app.agents("demo")) == 1
@@ -235,7 +236,7 @@ def test_failed_directory_copy_leaves_no_partial_target(fresh, monkeypatch, tmp_
     assert not target.exists()
     monkeypatch.setattr(app_module, "write_bytes", write)
     app.connect_agent("demo", "steward", target)
-    assert read_json(target / ".aw-local/context.json")["agent"] == "steward"
+    assert read_json(target / ".agentworkspace/local/operations/context.json")["agent"] == "steward"
 
 
 def test_import_keeps_requested_destination_after_resumable_create_refactor(fresh, tmp_path):

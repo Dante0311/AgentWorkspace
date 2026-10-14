@@ -107,6 +107,32 @@ MCP 启动命令是 `aw mcp`。给对应会话的进程配置 `AW_HOME`、`AW_WO
 
 不要把无绑定的管理工具入口当成跨 Agent 的权限隔离。第一版是可信本机协作模型。
 
+云端完成报告使用单独的受限 stdio 入口，不把通用 `aw_execute` 交给云会话：
+
+```sh
+aw --home /path/to/isolated-acceptance-home mcp --completion-config /path/to/completion.json
+```
+
+本机用户保存的配置示例（替换为实际隔离验收身份，不编造 Binding）：
+
+```json
+{
+  "enabled": true,
+  "workspace": "acceptance",
+  "agent_id": "cloud-report",
+  "binding": "ACTUAL_GRANTED_BINDING",
+  "recipient": "local-receiver",
+  "material_paths": ["knowledge/completion-brief.md"]
+}
+```
+
+这个入口只公开 `aw_read_materials`（读取配置中的共享材料）、`aw_report_completion`（用稳定的 `request_id` 和 `content` 向固定收件人发正式 Message）及 `aw_report_status`（只查本配置身份和收件人对应的原请求）。调用方不能改 Workspace、Agent、Binding、收件人或材料路径，也不能用配置替换进程已继承的执行身份。共享材料仍受 `workspace.read` 的路径与大小约束。
+
+每次调用都核对配置；将 `enabled` 改为 `false` 会拒绝后续调用。修改身份或其他范围后必须重新启动入口，不能让原进程静默改用新资格。Binding 停止或换会话后，旧配置不能再次发报告或读取材料，但仍可在配置未停用时只读核对自己原报告的发布回执。撤销不表示已经开始的发布已回滚。
+
+发送回复丢失或结果未知时，只用原 `request_id` 查 `aw_report_status`；`not_recorded` 不表示可以盲目重发。返回的 `notification_acknowledged` 只说明正式 ACK 存在，不表示本机接收者已完成业务处理。MCP 握手、正式 Message 发布、接收者实际阅读与保存结果、真实云端模型调用分别验收。
+
+
 ### 4.2 Codex Desktop
 
 先在 Codex 手动建立或选择一个已有本地项目，把该 Agent 的实例目录设为主目录；项目和分区沿用用户既有布局。随后在用户授权的真实 Codex 桌面聊天中捕获桌面自己的 MCP 控制连接：

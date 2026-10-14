@@ -294,9 +294,13 @@ def serve(app, port=8765, open_browser=False, setup=False):
     run(app, port, open_browser, setup)
 
 
-def mcp(app, actor=None):
+def mcp(app, actor=None, completion_config=None, workspace=None):
     if actor is None and os.environ.get("AW_AGENT") and os.environ.get("AW_BINDING"):
         actor = (os.environ["AW_WORKSPACE"], os.environ["AW_AGENT"], os.environ["AW_BINDING"])
+    completion = None
+    if completion_config is not None:
+        from .mcp_completion import CompletionMCP
+        completion = CompletionMCP(app, completion_config, actor, workspace)
     for line in sys.stdin:
         try:
             message = json.loads(line)
@@ -307,14 +311,26 @@ def mcp(app, actor=None):
                 result = {"protocolVersion": params.get("protocolVersion", "2024-11-05"),
                           "capabilities": {"tools": {}}, "serverInfo": {"name": "agent-workspace", "version": "0.1.0a1"}}
             elif method == "tools/list":
-                result = {"tools": [{"name": "aw_execute", "description": "Agent Workspace operations. Commands: " + ", ".join(command_map(app)),
+                if completion is not None:
+                    from .mcp_completion import TOOLS
+                    result = {"tools": TOOLS}
+                else:
+                    result = {"tools": [{"name": "aw_execute", "description": "Agent Workspace operations. Commands: " + ", ".join(command_map(app)),
                                      "inputSchema": TOOL_SCHEMA}]}
             elif method == "tools/call":
-                if params["name"] != "aw_execute":
+                if completion is not None:
+                    try:
+                        output = completion.call(params["name"], params.get("arguments", {}))
+                        result = {"content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]}
+                    except Error as exc:
+                        result = {"isError": True, "content": [{"type": "text", "text": json.dumps(
+                            {"error": str(exc), "code": exc.code}, ensure_ascii=False)}]}
+                elif params["name"] != "aw_execute":
                     raise Error("Unknown tool")
-                values = params.get("arguments", {})
-                output = execute(app, values["command"], values.get("arguments", {}), actor=actor)
-                result = {"content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]}
+                else:
+                    values = params.get("arguments", {})
+                    output = execute(app, values["command"], values.get("arguments", {}), actor=actor)
+                    result = {"content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]}
             elif method == "ping":
                 result = {}
             else:

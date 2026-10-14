@@ -28,7 +28,8 @@ def parser():
     setup = domains.add_parser("setup", help="Open first-use setup; detect dependencies, never install them.")
     setup.add_argument("--port", type=int, default=8765)
     setup.add_argument("--open", action="store_true")
-    domains.add_parser("mcp", help="MCP stdio tools; use AW_* environment to bind model identity.")
+    mcp = domains.add_parser("mcp", help="MCP stdio tools; use AW_* environment to bind model identity.")
+    mcp.add_argument("--completion-config", help="Local configuration for identity-bound completion tools only.")
 
     def actions(domain, names):
         sub = domains.add_parser(domain).add_subparsers(dest="action", required=True)
@@ -301,7 +302,7 @@ def main(argv=None):
             return 0
         if domain == "mcp":
             from .server import mcp
-            mcp(app, actor=actor)
+            mcp(app, actor=actor, completion_config=options["completion_config"], workspace=workspace)
             return 0
         if domain == "runtime" and action == "run":
             from .runtime import Runner

@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 
-from . import migration, skills as shared_skills, software
+from . import instance_worktrees, migration, skills as shared_skills, software
 from .gitstore import GitStore, GitHubStore, open_store
 from . import model_profiles
 from . import layout
@@ -228,7 +228,7 @@ class App:
         agent_id = slug(agent_id or (name if re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name) else uid("a")))
         store = self.store(workspace)
         snap = store.snapshot()
-        location_target = directory or str(self.home / "instances" / workspace / agent_id)
+        location_target = directory
         existing = snap.json(layout.shared_path(snap, f"agents/{agent_id}.json"))
         if existing:
             if creation is None or existing.get("creation") != creation:
@@ -300,48 +300,75 @@ class App:
             raise Error("No instance directory here; run agent connect first.")
         return Path(selected)
 
-    def connect_agent(self, workspace, agent_id, directory):
+    def _default_instance_directory(self, workspace, agent_id):
+        address = self.local()["workspaces"][workspace]["address"]
+        workspace_root = Path(address) if Path(address).is_dir() else self.home / 'workspaces' / workspace
+        return workspace_root / '.agentworkspace/local/worktrees' / agent_id
+
+    def prepare_agent_directory(self, workspace, agent_id, directory=None):
         item = self.agent(workspace, agent_id)
-        root = Path(directory).expanduser().resolve()
-        marker = layout.local_path(root, "context.json")
-        existing = read_json(marker)
+        locations = self.local()["workspaces"][workspace].get("instances", {}).get(agent_id, [])
+        selected = directory if directory is not None else (locations[0] if locations else self._default_instance_directory(workspace, agent_id))
+        root = Path(selected).expanduser().resolve()
         locator = self.local()["workspaces"][workspace]["locator"]
-        if existing:
-            if (existing["locator"], existing["agent"]) != (locator, agent_id):
-                raise Conflict("Directory belongs to another instance.")
+        address = self.local()["workspaces"][workspace]["address"]
+        with locked(self.home / 'directory-preparations' / (digest(str(root).encode()) + '.lock')):
+            existing = read_json(layout.local_path(root, "context.json"))
+            repository = instance_worktrees.repository(root, address, self.home, item['branch'])
+            if existing:
+                identity = read_json(layout.instance_path(root, 'identity.json'))
+                if (not isinstance(identity, dict) or (existing["locator"], existing["agent"]) != (locator, agent_id)
+                        or identity['workspace'] != locator or identity['agent'] != agent_id):
+                    raise Conflict("Directory belongs to another instance.")
+                revision = existing['revision']
+            else:
+                if root.exists() and any(root.iterdir()) and repository is None:
+                    raise Conflict("Use an empty directory. To adopt an external agent, select its assets with agent import.")
+                if repository:
+                    identity = read_json(layout.instance_path(root, 'identity.json'))
+                    if not isinstance(identity, dict) or identity.get('workspace') != locator or identity.get('agent') != agent_id:
+                        raise Conflict('The actual directory identity differs from its Git branch; it was preserved.')
+                snap = (repository.snapshot(revision=instance_worktrees.head(root)) if repository
+                        else self.store(workspace).snapshot(item["branch"]))
+                identity = snap.json(layout.instance_relpath(snap, 'identity.json'))
+                if not isinstance(identity, dict) or identity.get('workspace') != locator or identity.get('agent') != agent_id:
+                    raise Conflict('The saved branch belongs to another instance; no directory was prepared.')
+                content = snap.all()
+                context = {"workspace": workspace, "locator": locator, "agent": agent_id, "revision": snap.revision,
+                           "saved": {p: digest(data) for p, data in content.items()}, "exclude": DEFAULT_EXCLUDES}
+                root.parent.mkdir(parents=True, exist_ok=True)
+                if layout.version(snap, 'instance'):
+                    self._check_tracked_local(snap)
+                    if repository is None:
+                        repository = instance_worktrees.prepare(root, address, self.home, item['branch'], snap.revision)
+                    write_json(layout.local_path(root, "context.json"), context)
+                else:
+                    # Preserve the legacy ordinary-copy path; preparation does not migrate layouts.
+                    with tempfile.TemporaryDirectory(prefix=".aw-connect-", dir=root.parent) as temporary:
+                        staged = Path(temporary) / "instance"
+                        staged.mkdir()
+                        for path, data in content.items():
+                            write_bytes(inside(staged, path), data)
+                        write_json(layout.local_path(staged, "context.json"), context)
+                        if root.exists():
+                            root.rmdir()
+                        staged.rename(root)
+                revision = snap.revision
             def register(value):
                 locations = value["workspaces"][workspace].setdefault("instances", {}).setdefault(agent_id, [])
                 if str(root) not in locations:
                     locations.append(str(root))
             self.change_local(register)
-            if layout.version(root, 'instance'):
-                software.update_instance(self, workspace, agent_id, str(root))
-            return {"directory": str(root), "revision": existing["revision"]}
-        if root.exists() and any(root.iterdir()):
-            raise Conflict("Use an empty directory. To adopt an external agent, select its assets with agent import.")
-        snap = self.store(workspace).snapshot(item["branch"])
-        content = snap.all()
-        context = {"workspace": workspace, "locator": locator, "agent": agent_id, "revision": snap.revision,
-                   "saved": {p: digest(data) for p, data in content.items()}, "exclude": DEFAULT_EXCLUDES}
-        # Prepare a complete directory before exposing it. A failed copy is safe to retry.
-        root.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix=".aw-connect-", dir=root.parent) as temporary:
-            staged = Path(temporary) / "instance"
-            staged.mkdir()
-            for path, data in content.items():
-                write_bytes(inside(staged, path), data)
-            write_json(layout.local_path(staged, "context.json"), context)
-            if root.exists():
-                root.rmdir()  # Refuse if another writer put anything in the target.
-            staged.rename(root)
-        def edit(value):
-            locations = value["workspaces"][workspace].setdefault("instances", {}).setdefault(agent_id, [])
-            if str(root) not in locations:
-                locations.append(str(root))
-        self.change_local(edit)
+        return {"workspace": workspace, "agent_id": agent_id, "branch": item['branch'],
+                "directory": str(root), "revision": revision, "worktree": bool(repository and (root / '.git').is_file()),
+                "prepared": existing is None, "instructions": str(root / 'AGENTS.md')}
+
+    def connect_agent(self, workspace, agent_id, directory=None):
+        result = self.prepare_agent_directory(workspace, agent_id, directory)
+        root = Path(result['directory'])
         if layout.version(root, 'instance'):
             software.update_instance(self, workspace, agent_id, str(root))
-        return {"directory": str(root), "revision": snap.revision}
+        return result
 
     def collect(self, root):
         software.require_ready(root)
@@ -355,17 +382,19 @@ class App:
             for name in directories:
                 candidate = Path(base) / name
                 relative = candidate.relative_to(root).as_posix()
-                if local_asset_path(relative) or any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(relative, pat) for pat in excludes):
+                if name == '.git' or local_asset_path(relative) or any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(relative, pat) for pat in excludes):
                     skipped.append(relative + "/")
                 elif candidate.is_symlink():
                     raise Error(f"Snapshot needs an explicit export for symlink: {relative}")
+                elif (candidate / '.git').exists():
+                    skipped.append(relative + '/')
                 else:
                     kept.append(name)
             directories[:] = kept
             for name in names:
                 candidate = Path(base) / name
                 relative = candidate.relative_to(root).as_posix()
-                if local_asset_path(relative) or name.startswith(".aw-tmp-") or any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(relative, pat) for pat in excludes):
+                if name == '.git' or local_asset_path(relative) or name.startswith(".aw-tmp-") or any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(relative, pat) for pat in excludes):
                     skipped.append(relative)
                     continue
                 if candidate.is_symlink():
@@ -380,11 +409,26 @@ class App:
             raise Error('Local runtime data is already tracked; migrate it explicitly before saving or syncing.')
 
     def sync_agent(self, workspace, agent_id, directory=None):
-        root = self.root(workspace, agent_id, directory)
+        root = Path(self.prepare_agent_directory(workspace, agent_id, directory)['directory'])
         with layout.lock(root, "files.lock"):
             context = read_json(layout.local_path(root, "context.json"))
             local, _ = self.collect(root)
-            snap = self.store(workspace).snapshot(self.agent(workspace, agent_id)["branch"])
+            branch = self.agent(workspace, agent_id)['branch']
+            repository = instance_worktrees.repository(root, self.local()['workspaces'][workspace]['address'], self.home, branch)
+            store = repository or self.store(workspace)
+            snap = store.snapshot(branch)
+            if repository:
+                before = instance_worktrees.head(root)
+                instance_worktrees.check_index(root)
+                if not store.contains_commit(context['revision'], before):
+                    raise Conflict('The local Git history no longer continues this copy; no files were changed.')
+                saved = store.snapshot(revision=before)
+                self._check_tracked_local(saved)
+                context.update(revision=before, saved={p: digest(data) for p, data in saved.all().items()})
+                if store.contains_commit(snap.revision, before):
+                    snap = saved
+                elif not store.contains_commit(before, snap.revision):
+                    raise Conflict('Local and remote Git histories diverged; preserve both and resolve them before syncing.')
             self._check_tracked_local(snap)
             if layout.version(root, 'instance') != layout.version(snap, 'instance'):
                 raise layout.MigrationRequired('Continue the explicit layout migration before synchronizing this copy.')
@@ -395,6 +439,8 @@ class App:
                 desired = digest(remote[path]) if path in remote else None
                 if actual != previous and desired != previous and actual != desired:
                     raise Conflict(f"Local and remote edits overlap: {path}. No file was changed.")
+            if repository and before != snap.revision:
+                instance_worktrees.git(root, 'read-tree', '-m', before, snap.revision)
             for path in set(context["saved"]) | set(remote):
                 previous = context["saved"].get(path)
                 desired = digest(remote[path]) if path in remote else None
@@ -405,6 +451,8 @@ class App:
                     write_bytes(target, remote[path])
                 elif target.exists():
                     target.unlink()
+            if repository:
+                instance_worktrees.git(root, 'update-ref', 'refs/heads/' + branch, snap.revision, before)
             context.update(revision=snap.revision, saved={p: digest(v) for p, v in remote.items()})
             write_json(layout.local_path(root, "context.json"), context)
             return {"revision": snap.revision, "directory": str(root)}
@@ -415,23 +463,44 @@ class App:
         content.update(extra or {})
         store = self.store(workspace)
         branch = self.agent(workspace, agent_id)["branch"]
-        previous = store.snapshot(branch, revision=context["revision"])
+        repository = instance_worktrees.repository(root, self.local()['workspaces'][workspace]['address'], self.home, branch)
+        if repository:
+            store = repository
+            before = instance_worktrees.head(root)
+            staged = instance_worktrees.check_index(root)
+            if any(path not in content and (root / path).exists() for path in staged):
+                raise Conflict('A staged asset is excluded from this save; its index and working files were preserved.')
+            if not store.contains_commit(context['revision'], before):
+                raise Conflict('The local Git history no longer continues this copy; no assets were published.')
+            remote = store.head(branch)
+            if not store.contains_commit(remote, before):
+                raise Conflict('The remote branch changed; sync or resolve the worktree before saving.')
+            previous = store.snapshot(revision=before)
+        else:
+            previous = store.snapshot(branch, revision=context["revision"])
         self._check_tracked_local(previous)
         changes = {p: None for p in previous.entries if p not in content}
         changes.update({p: data for p, data in content.items() if previous.bytes(p) != data})
-        sha = store.change(branch, changes, {}, message, base=context["revision"]) if changes else context["revision"]
+        if repository:
+            sha = store.commit(before, changes, message) if changes else before
+            if sha != remote:
+                store.publish(branch, sha, remote)
+        else:
+            sha = store.change(branch, changes, {}, message, base=context["revision"]) if changes else context["revision"]
         for path, data in (extra or {}).items():
             write_bytes(inside(root, path), data)
+        if repository:
+            instance_worktrees.record_saved(root, branch, before, sha)
         context.update(revision=sha, saved={p: digest(v) for p, v in content.items()})
         write_json(layout.local_path(root, "context.json"), context)
         return sha, skipped
 
     def checkpoint(self, workspace, agent_id, summary, content="", binding=None, directory=None,
                    checkpoint_id=None, references=None):
-        root = self.root(workspace, agent_id, directory)
         item = self.agent(workspace, agent_id)
         if item["current"] or binding:
             self.require_binding(workspace, agent_id, binding, allow_stopping=True)
+        root = Path(self.prepare_agent_directory(workspace, agent_id, directory)['directory'])
         cp = slug(checkpoint_id or uid("c"))
         store = self.store(workspace)
         snap = store.snapshot()
@@ -505,7 +574,7 @@ class App:
         origin = {"agent": agent_id, "checkpoint": point["id"], "revision": source.revision}
         identity = {"workspace": locator, "agent": target, "forked_from": origin}
         receipt_path = self.home / "fork-operations" / digest(encode([locator, target])) / "operation.json"
-        location = directory or str(self.home / "instances" / workspace / target)
+        location = directory
         with locked(receipt_path.with_suffix(".lock")):
             receipt = read_json(receipt_path)
             existing = store.snapshot().json(agent_path)
@@ -722,10 +791,12 @@ class App:
             write_json(layout.local_path(root, "entry.json"), record)
             return {"agent": agent_id, "binding": binding, "phase": "starting", "kind": entry["kind"]}
 
-    def bind(self, workspace, agent_id, binding, session, directory=None):
+    def bind(self, workspace, agent_id, binding, session, directory=None, *, cwd=None):
         slug(binding)
         if not session or len(session) > 256 or any(c in session for c in "\r\n\0"):
             raise Error("A real native session ID is required.")
+        if cwd is not None and (not isinstance(cwd, str) or not cwd or any(c in cwd for c in "\r\n\0")):
+            raise Error('Native cwd must be an explicit nonempty path observation.')
         store = self.store(workspace)
         snap = store.snapshot()
         item = self.agent(workspace, agent_id, snap)
@@ -739,6 +810,8 @@ class App:
                 if previous["kind"] == entry["kind"] and previous["session"] == session:
                     raise Conflict("A native session cannot be reused as a new execution entry.")
         entry.update(session=session, phase="active")
+        if cwd is not None:
+            entry['execution']['cwd'] = cwd
         session_path = layout.shared_path(snap, f"sessions/{entry['kind']}/{digest(session.encode())}.json")
         store.change("main", {path: encode(entry), session_path: encode({"agent": agent_id, "binding": binding, "session": session})},
                      layout.expected(snap, {path: snap.entries[path], session_path: None,

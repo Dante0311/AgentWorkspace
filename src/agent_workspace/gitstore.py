@@ -102,9 +102,9 @@ class Snapshot:
 
 
 class GitStore:
-    def __init__(self, address: str, home: Path):
+    def __init__(self, address: str, home: Path, *, root: Path | None = None):
         self.address = address
-        self.root = home / "git" / digest(address.encode())[:24]
+        self.root = root if root is not None else home / "git" / digest(address.encode())[:24]
         with self._cache_lock():
             if not self.root.exists():
                 self.root.parent.mkdir(parents=True, exist_ok=True)

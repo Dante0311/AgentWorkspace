@@ -57,10 +57,13 @@ aw -w sea agent create helper --description "分析构建日志，修改前向�
 aw -w sea agent create ui --definition definitions/ui --directory /data/aw/sea/ui
 aw -w sea agent list
 aw -w sea agent show helper
+aw -w sea agent connect helper
 aw -w sea agent connect helper --directory /path/to/helper-copy
 ```
 
-实例名可为中文，未指定 ID 时工具生成安全 ID；自动化可使用 `--id helper`。默认实例目录在 `AW_HOME/instances/WORKSPACE/ID`。`--directory` 可选择其他本机绝对路径或另一磁盘；目录只是本机副本位置。`connect` 可增加多个目录，目录存在不授予执行权。
+实例名可为中文，未指定 ID 时工具生成安全 ID；自动化可使用 `--id helper`。新布局的默认资料目录在本机 Workspace 的 `.agentworkspace/local/worktrees/ID` 中，是 `instance/ID` 分支的真实 Git worktree。仅有远端地址时，本机 Workspace 区域位于 `AW_HOME/workspaces/WORKSPACE`。`--directory` 仍可选择其他本机路径；已有普通副本不搬迁。`connect` 省略目录时复用原登记副本，缺失时从已保存的实例分支准备；目录存在不授予执行权，也不恢复尚未保存的资料。
+
+新 worktree 需要 Git 及该 Workspace 的 Git 访问权限；`github:owner/repo` 的 REST 读取凭据不等于 Git transport 已可访问。准备只恢复资料，不启动会话或消费 handoff。身份、分支、已有目录或 Git 历史冲突会保留现场并报错。保存包括本次选定的实际文件与对应暂存内容，并更新 worktree 分支和索引；同一文件的暂存版本与工作文件不同、或本地和远端历史已经分叉时，先解决差异。同步保留不重叠的本机修改，`.git`、本机运行数据和嵌套仓库不进入实例快照。
 
 已有外部目录的保守导入形式：
 

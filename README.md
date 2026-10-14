@@ -10,7 +10,7 @@ AgentWorkspace 在用户已有的 Agent 客户端之上提供协作：保存 Age
 
 Codex Desktop 已有在本地项目中的自动创建、真实会话绑定、持续投递和同 Agent 交接；需要先准备项目并从真实桌面聊天取得控制连接。历史限定实测见 [实现进展](docs/implementation.md#codex-desktop-自动接入2026-10-08)，操作和限制见 [Codex Desktop](docs/usage.md#42-codex-desktop)。这些结果不代替本轮新增功能的验收。
 
-2026-10-14 已确认下一批实现：Agent 可选独立或共用 Codex 项目，各自保留实例分支和个人资料 worktree；进入与交接时自动准备缺失的本地资料，并重新提供身份、职责与工作背景。工作台后续完善，现有 Agent 和资料不在本轮迁移或清理范围。此处记录开发方向，当前功能状态见[实现范围](docs/implementation.md#共用项目与-worktree2026-10-14-开发候选)。
+2026-10-14 开发候选已接入可选独立或共用 Codex 项目、实例分支与个人资料 worktree，以及进入和交接时的自动准备、身份与工作背景材料。本机隔离 Desktop 已通过共用项目和正常 handoff/relay 的实际流程验证；具体受测版本、范围与未测项见[实现范围](docs/implementation.md#共用项目与-worktree2026-10-14-开发候选)。工作台后续完善，现有 Agent 和资料不在本轮迁移或清理范围。
 
 ## 已有共同职责与共享 Skill
 

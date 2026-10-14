@@ -121,7 +121,7 @@ def test_new_shared_chat_keeps_original_project_intent_in_launch_receipt(app, tm
             return {'threadId': 'fixture-new-shared-chat', 'hostId': 'local'}
         return {'thread': {'id': 'fixture-new-shared-chat', 'cwd': str(common), 'hostId': 'local'}}
     adapter.call = call
-    adapter.create(binding)
+    adapter.create(binding, 'Explicit connection-only protocol fixture.')
     from agent_workspace import layout
     receipt = read_json(layout.local_path(root, 'launch.json'))
     assert receipt['project_id'] == 'shared-id' and receipt['project_directory'] == str(common)

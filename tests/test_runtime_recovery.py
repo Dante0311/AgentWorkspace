@@ -56,7 +56,7 @@ def desktop_owner(app, monkeypatch):
                 callback()
             return {"threadId": self.session, "turn": {"id": "original-turn"}}
 
-        def create(self, binding):
+        def create(self, binding, prompt):
             pytest.fail("Recovery must not create a native session")
 
         def close(self):
@@ -831,7 +831,7 @@ def test_read_only_desktop_needs_only_read_tool_and_refuses_execution(app):
     try:
         assert adapter.status() == "idle"
         with pytest.raises(Conflict):
-            adapter.create("original-binding")
+            adapter.create("original-binding", 'Explicit connection-only protocol fixture.')
         with pytest.raises(Conflict):
             adapter.notify("must not execute", "normal")
     finally:

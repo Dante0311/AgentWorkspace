@@ -164,6 +164,8 @@ aw -w sea message watch helper start --interval 5
 
 运行器通过 `create_thread` 在该项目创建真实新聊天，读取实际 ID 与 `cwd` 后才绑定。第一轮仅建立连接；正式进入材料随后作为输入交付。桌面 Agent 使用提示中的 `aw call --desktop-agent` 命令前缀，由真实 `CODEX_THREAD_ID` 约束平台身份，不继承管理权限。输入先通过 `runtime.receive-input` 关联当前原生轮次；只有该轮明确完成才记录完成并为初次进入发布检查点，发送回执或 idle 本身不算业务完成。
 
+建聊的连接提示先给本次已登记目标及个人 AGENTS.md/Skills 入口；此时 Binding 仍 starting、真实 session/cwd 尚未观测，不执行业务。绑定后的每次输入通知在领取命令前给当前 Agent、Binding、真实 session 与个人资料路径，避免共用项目里另一实例的角色被当成本人。项目共同规则继续适用，个人身份以当前登记为准。业务正文仍通过原 request_id 的 receive-input 领取，不复制到通知中；已经 submitted 或结果未知的原输入不会因此重发或改回 queued。
+
 用户已经在新 Codex 聊天里发起接手时，在该真实聊天内运行下面的命令：
 
 ```sh

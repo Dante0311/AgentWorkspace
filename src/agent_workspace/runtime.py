@@ -32,20 +32,24 @@ class _ReadStopped(Exception):
     """The local monitor was stopped while waiting for an authoritative read."""
 
 
-def entry_prompt(app, workspace, agent_id, binding, root):
+def entry_context(workspace, agent_id, binding, root, item, entry):
     from .desktop_projects import project_directory
+    return {"workspace": workspace, "agent": agent_id, "binding": binding,
+            "binding_phase": entry["phase"], "session": entry["session"],
+            "entry_mode": "relay" if entry["handoff"] else "fork" if item.get("forked_from") else "initial",
+            "runtime_kind": entry["kind"], "instance_root": str(root), "instance_branch": item["branch"],
+            "instructions_file": str(root / "AGENTS.md"), "skills_directory": str(root / ".agents/skills"),
+            "selected_project_directory": str(project_directory(root)),
+            "native_cwd": entry.get("execution", {}).get("cwd")}
+
+
+def entry_prompt(app, workspace, agent_id, binding, root):
     snap = app.store(workspace).snapshot()
     entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
     item = app.agent(workspace, agent_id, snap)
     # Read installed guidance, not a potentially stale copy from an older checkpoint.
     capabilities = (files("agent_workspace") / "resources" / "prompts" / "capabilities.md").read_text(encoding="utf-8")
-    entry_mode = "relay" if entry["handoff"] else "fork" if item.get("forked_from") else "initial"
-    lines = [json.dumps({"workspace": workspace, "agent": agent_id, "binding": binding,
-                        "entry_mode": entry_mode, "runtime_kind": entry["kind"], "instance_root": str(root),
-                        "instance_branch": item["branch"], "instructions_file": str(root / "AGENTS.md"),
-                        "skills_directory": str(root / ".agents/skills"),
-                        "selected_project_directory": str(project_directory(root)),
-                        "native_cwd": entry.get("execution", {}).get("cwd")}, ensure_ascii=False),
+    lines = [json.dumps(entry_context(workspace, agent_id, binding, root, item, entry), ensure_ascii=False),
              (files("agent_workspace") / "resources/prompts/entry.md").read_text(encoding="utf-8"), capabilities,
              "平台命令使用 aw_execute 动态工具，或运行 aw。调用参数中的 workspace、agent_id、binding 必须使用上述值。"]
     required = requirements(app, workspace, root, snap)
@@ -545,7 +549,7 @@ class Desktop:
                               "Create it manually if missing; set project_id when more than one matches.")
         return matches[0]
 
-    def create(self, binding):
+    def create(self, binding, prompt):
         if self.read_only:
             raise Conflict("A stop observer cannot create a native session.")
         profile, validation = self.model_choice("create_thread", binding)
@@ -554,7 +558,6 @@ class Desktop:
         previous = read_json(path, {})
         if previous.get("binding") == binding and previous.get("attempted"):
             raise Conflict("Desktop creation was already attempted; inspect the original result before recovery.")
-        prompt = (files("agent_workspace") / "resources/prompts/desktop-connect.md").read_text(encoding="utf-8")
         arguments = {"target": {"type": "project", "projectId": project["projectId"],
                                 "environment": {"type": "local"}}, "prompt": prompt}
         arguments.update(model=profile["model"], thinking=profile["effort"])
@@ -1153,7 +1156,10 @@ class Runner:
             else:
                 self.adapter = Desktop(self.root, config, entry["session"])
                 if entry["session"] is None:
-                    native = self.adapter.create(self.binding)
+                    context = entry_context(workspace, aid, self.binding, self.root, item, entry)
+                    prompt = json.dumps(context, ensure_ascii=False) + "\n\n" + (
+                        files("agent_workspace") / "resources/prompts/desktop-connect.md").read_text(encoding="utf-8")
+                    native = self.adapter.create(self.binding, prompt)
                     app.bind(workspace, aid, self.binding, self.adapter.session, str(self.root), cwd=native["cwd"])
                     queue_input(app, workspace, aid, entry_prompt(app, workspace, aid, self.binding, self.root),
                                 purpose="initial", directory=str(self.root), request_id="boot-" + self.binding)
@@ -1451,8 +1457,8 @@ class Runner:
                 return
             if self.adapter.status() == "busy" and item["delivery"] == "normal":
                 return
-            self._shared_read("input_qualification", self.app.require_binding,
-                              self.workspace, self.agent_id, self.binding)
+            owner, entry = self._shared_read("input_qualification", self.app.require_binding,
+                                            self.workspace, self.agent_id, self.binding)
             if isinstance(self.adapter, Desktop):
                 profile, validation = self.adapter.model_choice("send_message_to_thread", self.binding)
                 item["model_profile"] = model_profiles.receipt(profile, validation)
@@ -1464,7 +1470,10 @@ class Runner:
                 if isinstance(self.adapter, Desktop):
                     args = desktop_cli(self.app, self.workspace, self.agent_id) + ["runtime.receive-input", "--arguments",
                            json.dumps({"request_id": item["id"]}, ensure_ascii=False)]
-                    prompt = "平台有一条待处理输入。先执行以下参数数组对应的命令，读取返回 text 后按其内容工作；already_received 时不要重复执行。\n" + json.dumps(args, ensure_ascii=False)
+                    context = entry_context(self.workspace, self.agent_id, self.binding, self.root, owner, entry)
+                    prompt = "\n\n".join([json.dumps(context, ensure_ascii=False), (
+                        files("agent_workspace") / "resources/prompts/desktop-input.md").read_text(encoding="utf-8"),
+                        json.dumps(args, ensure_ascii=False)])
                 else:
                     prompt = item["text"]
                 response = self.adapter.notify(prompt, item["delivery"])

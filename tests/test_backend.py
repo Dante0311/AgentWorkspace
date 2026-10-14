@@ -208,10 +208,12 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
             assert session is None
             self.session = None
 
-        def create(self, expected):
+        def create(self, expected, prompt):
             assert expected == binding
+            assert json.loads(prompt.split('\n\n')[0])['binding'] == binding
             creations.append(expected)
             self.session = "explicit-original-chat"
+            return {"id": self.session, "hostId": "local", "cwd": str(root)}
 
         def status(self):
             observed.set()

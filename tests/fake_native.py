@@ -1,6 +1,7 @@
 """An isolated protocol peer, NOT a Codex implementation or a live model test."""
 import json
 import sys
+from pathlib import Path
 
 mode = sys.argv[1]
 session = 'fake-native-session'
@@ -16,15 +17,22 @@ for line in sys.stdin:
     method, params = request.get('method'), request.get('params', {})
     result = {}
     event = None
-    if mode in ('desktop', 'desktop-readonly'):
+    if mode in ('desktop', 'desktop-readonly', 'desktop-project'):
         assert request.get('jsonrpc') == '2.0'
         if method == 'tools/list':
             result = {'tools':[{'name':'read_thread'}]}
-            if mode == 'desktop':
+            if mode in ('desktop', 'desktop-project'):
                 result['tools'].append({'name':'send_message_to_thread'})
+            if mode == 'desktop-project':
+                result['tools'].extend([{'name':'list_projects'}, {'name':'create_thread'}])
         elif method == 'tools/call':
             assert params['_meta']['openai/threadId'] == 'caller'
-            if params['name'] == 'read_thread':
+            if params['name'] == 'list_projects':
+                value = {'projects':[{'projectId':'fixture-project','projectKind':'local',
+                                     'hostId':'local','path':str(Path.cwd())}]}
+            elif params['name'] == 'create_thread':
+                value = {'threadId':session,'hostId':'local'}
+            elif params['name'] == 'read_thread':
                 value = {'thread':{'id':params['arguments']['threadId'],'status':{'type':'idle'}}, 'turns':[]}
             else:
                 value = {'threadId':params['arguments']['threadId'],'sent':True}

@@ -14,7 +14,9 @@
 
 Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)`：复用已有资料根、从既有分支准备缺失目录，新布局副本使用真实 Git worktree，旧普通副本保留。`agent connect`、创建、同步和检查点共用准备能力；`root` 仍只查询登记路径，不因只读或权限识别调用创建目录。返回身份、分支、资料路径、保存基线 revision、worktree/prepared 事实和职责文件路径；准备不创建身份、Binding 或消费 handoff。保存与同步维护实际 Git 分支及索引，保留用户本地提交和无冲突的本机改动，冲突不重置目录。
 
-`Binding.execution.directory` 继续表示个人资料根；`App.bind(..., cwd=None)` 只在调用方提供真实新会话的 cwd 时保存 `execution.cwd`，不从个人资料根推测，也不回填历史。Runtime / Adapter 负责真实观测、共用项目与交接集成；独立 E2E 按最终候选验证两名 Agent 共用项目、资料分别保存、缺失目录自动准备以及同一 Agent 的正常 handoff/relay。Core 的本机真 Git 开发验证不替代真实原生、远端 GitHub 或跨机器验收；现有 daily 数据与安装未改变。
+`Binding.execution.directory` 继续表示个人资料根；`App.bind(..., cwd=None)` 只在调用方提供真实新会话的 cwd 时保存 `execution.cwd`，不从个人资料根推测，也不回填历史。Runtime 已接入所选项目目录、真实会话目录和个人资料根的分离：按真实 session 的索引识别调用者，换命令 cwd 不改变身份或恢复旧资格；Desktop 创建、原建聊核对与手动绑定保存实际 cwd，观察按该事实核对，历史无 cwd 的记录仍按原独立项目规则检查。进入材料明确给出身份、实例分支、职责文件、Skills、所选项目和实际 cwd，并附原交接检查点。
+
+`agent start --here` 核验用户已打开的新 Desktop 聊天，准备个人资料目录并绑定此聊天，直接返回进入材料，不调用建聊或输入发送接口。模型或强度已报告且不符时拒绝绑定；没有原生报告时明确 unconfirmed。未知原创建、已有 controller 或已绑定入口不允许被替换。默认 `agent start` 保持自动建聊路径；准备及捕获、绑定、交接调用公共目录准备接口。开发验证使用隔离 Git 与协议夹具；独立 E2E 按最终候选验证两名 Agent 共用项目、资料分别保存、缺失目录自动准备以及同一 Agent 的正常 handoff/relay。开发验证不替代真实原生、远端 GitHub 或跨机器验收；现有 daily 数据与安装未改变。
 
 ## 模块
 

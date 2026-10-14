@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from functools import partial
+from pathlib import Path
 import inspect
 
 from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout, web_courier
@@ -50,19 +51,22 @@ def assets(app, operation, workspace, agent_id, path=None, content=None, revisio
 
 
 def bind_entry(app, workspace, agent_id, binding, session, directory=None):
-    root = app.root(workspace, agent_id, directory)
     snap = app.store(workspace).snapshot()
     entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
     if entry is None:
         raise Error("Binding not found.")
+    root = Path(app.prepare_agent_directory(workspace, agent_id, directory)["directory"])
     if entry["kind"] == "desktop":
         config = read_json(layout.local_path(root, "runtime.json"), {})
         adapter = runtime.Desktop(root, config, session)
         try:
-            if adapter.status() == "unknown":
+            native = adapter.read()
+            thread = native["thread"]
+            if runtime.desktop_native_state(native) == "unknown" or thread.get("hostId") != "local" or not thread.get("cwd"):
                 raise Error("Desktop cannot verify this new session; entry was not activated.")
         finally:
             adapter.close()
+        return app.bind(workspace, agent_id, binding, session, directory, cwd=thread["cwd"])
     return app.bind(workspace, agent_id, binding, session, directory)
 
 

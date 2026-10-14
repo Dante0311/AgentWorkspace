@@ -12,9 +12,12 @@ description: 首次进入或接手同一 Agent，加载必要材料，不抢占�
 ```sh
 aw -w sea agent start helper
 aw -w sea agent start helper --open
+aw -w sea agent start helper --here
 ```
 
 本工具在尚无入口时预留唯一 binding。已捕获控制连接并准备项目的 Codex Desktop 由运行器创建、核验和绑定真实新聊天。manual 或尚未捕获连接的 Desktop 会返回手动入口提示词，用户在新原生会话中发送后，按提示绑定真实会话 ID。不要把已有/历史会话登记成新入口。Codex ID 可从真实 CODEX_THREAD_ID 取得，不编造 ID。桌面 Agent 的平台操作使用进入材料提供的 `aw call --desktop-agent` 前缀，不能自行替换调用身份。
+
+用户已经在当前新 Codex Desktop 聊天发起 relay 时使用 `--here`，不使用默认自动建聊。此模式读取真实环境和原生聊天事实，返回 `bound_current_chat`、个人路径、实际 cwd 与完整进入材料，不调用建聊或发送输入。先完整读取返回的 prompt 和其中指定的职责、Skills、共同资料及检查点，再继续工作；返回状态不表示模型已读。需要已配置该实例真实 Desktop MCP 命令及模型选择；未配置时先在这条聊天 capture-desktop，不编造 pipe/thread。已交出的旧聊天、已绑定入口或原建聊结果未知不能用 --here 重新登记；失败或未知先核对原 Binding 和 launch-show，不再开聊天。
 
 进入沿用同一 Agent 和实例分支。先由公共准备操作核对本机资料副本；支持 worktree 的版本在 Workspace 内自动准备或复用，缺少时由工具取得分支并创建，不把手动 clone 或建目录交给用户作为前置步骤。Workspace 尚未接入时，使用已经明确的访问地址和权限接入；缺失的是访问条件才询问。当前安装尚未提供自动准备时如实说明限制，不强制覆盖旧目录或假报成功。
 

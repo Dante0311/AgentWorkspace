@@ -112,6 +112,7 @@ def parser():
     ag["promote"].add_argument("--path", dest="paths", action="append", required=True)
     ag["promote"].add_argument("--destination", required=True)
     ag["start"].add_argument("--open", dest="open_app", action="store_true")
+    ag["start"].add_argument("--here", action="store_true", help="Relay into this real Codex Desktop chat without creating another chat.")
     ag["bind"].add_argument("--binding", required=True)
     ag["bind"].add_argument("--session", required=True)
     ag["stop"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
@@ -152,6 +153,7 @@ def parser():
     ag["desktop-project-save"].add_argument("--project-name", required=True)
     ag["desktop-project-save"].add_argument("--section-name", default="")
     ag["desktop-project-save"].add_argument("--product-path", dest="product_paths", action="append")
+    ag["desktop-project-save"].add_argument("--project-directory", help="Existing native project root; omit to keep the chosen project.")
     ag["desktop-project-save"].add_argument("--revision")
 
     ag["desktop-prepare"].add_argument("--request-id", required=True)
@@ -270,6 +272,9 @@ def main(argv=None):
     try:
         actor = None
         operation = options.get("command") if domain == "call" else domain + "." + str(action)
+        if (operation == "agent.start" and options.get("here")
+                or domain == "call" and operation == "agent.start" and parse_json(options["arguments"]).get("here")):
+            operation = "agent.start-here"
         software_operation = operation in SOFTWARE_OPERATIONS or domain == "serve"
         # Local software control uses the host's tool permissions, not an Agent's execution entry.
         if not software_operation and os.environ.get("AW_BINDING") and os.environ.get("AW_AGENT"):

@@ -40,8 +40,20 @@ def test_launch_show_is_read_only_and_limits_original_receipt(app, pending):
     peer.notify.assert_not_called()
 
 
-def test_reconcile_original_chat_binds_once_preserves_unknown_boot_and_receipt(app, pending, monkeypatch):
-    root, binding, receipt, _, peer, constructor = pending
+@pytest.mark.parametrize('shared_project', [False, True], ids=['legacy-independent', 'shared-project'])
+def test_reconcile_original_chat_binds_once_preserves_unknown_boot_and_receipt(app, pending, monkeypatch, tmp_path, shared_project):
+    root, binding, receipt, facts, peer, constructor = pending
+    if shared_project:
+        from agent_workspace import desktop_projects
+        common = tmp_path / 'original-shared-project'
+        common.mkdir()
+        receipt['project_directory'] = str(common)
+        write_json(layout.local_path(root, 'launch.json'), receipt)
+        facts['thread']['cwd'] = str(common)
+        later = tmp_path / 'later-desired-project'
+        later.mkdir()
+        # Recovery must use the original launch facts, not a subsequently edited preference.
+        desktop_projects.save(app, 'sea', 'alice', 'codex', 'Later desired project', project_directory=str(later))
     spawn = Mock(side_effect=AssertionError("Reconcile does not start observation or a model turn"))
     monkeypatch.setattr(runtime, "spawn_runner", spawn)
     result = execute(app, "runtime.reconcile-create", {"workspace": "sea", "agent_id": "alice",
@@ -61,6 +73,8 @@ def test_reconcile_original_chat_binds_once_preserves_unknown_boot_and_receipt(a
         assert saved[key] == value
     assert saved["reconciled"]["session"] == "original-chat"
     assert app.show("sea", "alice")["binding"]["session"] == "original-chat"
+    execution = app.require_binding('sea', 'alice', binding)[1]['execution']
+    assert execution['directory'] == str(root) and execution['cwd'] == facts['thread']['cwd']
     spawn.assert_not_called()
     peer.create.assert_not_called()
     peer.notify.assert_not_called()

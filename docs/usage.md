@@ -138,7 +138,13 @@ aw --home /path/to/isolated-acceptance-home mcp --completion-config /path/to/com
 
 ### 4.2 Codex Desktop
 
-先在 Codex 手动建立或选择一个已有本地项目，把该 Agent 的实例目录设为主目录；项目和分区沿用用户既有布局。随后在用户授权的真实 Codex 桌面聊天中捕获桌面自己的 MCP 控制连接：
+先在 Codex 手动建立或选择一个已有本地项目。默认使用该 Agent 的个人资料目录作为主目录，也可让多个 Agent 共用 Workspace 或产品项目；项目和分区沿用用户既有布局。选择共用项目时，先读 `agent desktop-project helper` 的 revision，再保存本机引用：
+
+```sh
+aw -w sea agent desktop-project-save helper --harness codex --project-name "Shared project" --project-directory ACTUAL_PROJECT_DIRECTORY --revision READ_REVISION
+```
+
+省略 `--project-directory` 保留原选择；明确传入个人资料根可恢复独立项目。保存引用不修改原生项目、Binding 或附加目录权限。切换目录后用 `desktop-prepare --project-id` 明确采用实际匹配项目，旧项目 ID 不会静默指向另一个目录。随后在用户授权的真实 Codex 桌面聊天中捕获桌面自己的 MCP 控制连接：
 
 ```sh
 aw -w sea agent capture-desktop helper --command '["node","ACTUAL_INSTALLED_CODEX_APP_TOOLS/server.mjs"]'
@@ -154,9 +160,19 @@ aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-模型和强度必须明确选择，保存在 `.agentworkspace/config.json` 的 `codex` 段；本机文件只保存连接和项目信息。可选 Definition 提供创建模板，实例此后独立维护；详见[实例模型配置](instance-model-profiles.md)。同一实例主目录匹配多个项目时，用 `--project-id` 明确选择。配置和启动都会读取实际项目列表核对主目录。缺配置、项目或控制接口时先报错，不预留第二个执行入口。
+模型和强度必须明确选择，保存在 `.agentworkspace/config.json` 的 `codex` 段；本机文件只保存连接和项目信息。可选 Definition 提供创建模板，实例此后独立维护；详见[实例模型配置](instance-model-profiles.md)。所选项目目录匹配多个项目时，用 `--project-id` 明确选择。配置和自动启动都会读取实际项目列表核对所选目录。缺配置、项目或控制接口时先报错，不预留第二个执行入口。
 
 运行器通过 `create_thread` 在该项目创建真实新聊天，读取实际 ID 与 `cwd` 后才绑定。第一轮仅建立连接；正式进入材料随后作为输入交付。桌面 Agent 使用提示中的 `aw call --desktop-agent` 命令前缀，由真实 `CODEX_THREAD_ID` 约束平台身份，不继承管理权限。输入先通过 `runtime.receive-input` 关联当前原生轮次；只有该轮明确完成才记录完成并为初次进入发布检查点，发送回执或 idle 本身不算业务完成。
+
+用户已经在新 Codex 聊天里发起接手时，在该真实聊天内运行下面的命令：
+
+```sh
+aw -w sea agent start helper --here
+```
+
+`--here` 使用真实环境变量和 `read_thread` 核验当前聊天，不调用 `create_thread`，不重新发送进入提示词。它返回 `bound_current_chat`、Binding、实际 `native_cwd`、个人资料目录和完整 `prompt`，并将同一份进入材料保存为 `prompt_file`。当前 Agent 实际阅读自己的 AGENTS.md、Skills、共同职责以及交接检查点后接续业务；工具返回不证明模型已经读过这些材料。个人资料根与 native cwd 分别登记，提示词中的路径不表示已经切换目录。已绑定或已交出的旧聊天不能用此选项取得新资格。
+
+此模式需要该实例已配置真实 Desktop MCP 命令与模型选择；连接从当前新聊天捕获，不沿用旧聊天的 pipe/thread。首次接入本机时 `agent connect` 可省略目录，由平台准备已保存分支；然后在当前聊天 `capture-desktop --command`。准备、启动、绑定和交接均复用 Core 的目录准备能力；缺失目录仅恢复已保存资料，普通副本仍保留。原建聊已经尝试而结果未知时，`--here` 也拒绝替换，必须核对原 `runtime launch-show` 和 `reconcile-create`。绑定或后台请求结果未知时先读取 `agent show`、进入材料文件及原状态，不再次预留或重绑。`runner` 仅说明后台连接请求状态，不能代替模型完成、真实 E2E 或跨机器验收。
 
 `agent renew` 在旧会话保存检查点、stop 并被观察到 idle 后，自动在同一项目创建新聊天。未知创建结果保留原回执，不自动重试开第二个聊天。自动 transfer 也接受含真实控制连接的 `desktop` 配置；其他入口不会暗中替代 Desktop。
 

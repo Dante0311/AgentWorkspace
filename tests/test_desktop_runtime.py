@@ -30,7 +30,7 @@ def desktop(app, monkeypatch):
             return {'threadId': 'native-chat', 'hostId': 'local'}
         if name == 'read_thread':
             assert 1 <= arguments['turnLimit'] <= 10
-            return {'thread': {'id': self.session, 'cwd': state['cwd'], 'status': {'type': state['status']}},
+            return {'thread': {'id': self.session, 'hostId': 'local', 'cwd': state['cwd'], 'status': {'type': state['status']}},
                     'turns': state['turns'], 'page': {'nextCursor': None}}
         return {'threadId': self.session}
 

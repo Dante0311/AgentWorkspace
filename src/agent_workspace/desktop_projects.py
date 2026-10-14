@@ -20,6 +20,11 @@ def _path(app, workspace, agent_id, harness):
     return root, layout.local_path(root, "desktop-projects") / (harness + ".json")
 
 
+def project_directory(root, harness="codex"):
+    value = read_json(layout.local_path(root, "desktop-projects") / (harness + ".json"), {})
+    return Path(value["project_directory"]).resolve() if "project_directory" in value else root.resolve()
+
+
 def plan(app, workspace, agent_id, harness="codex"):
     root, path = _path(app, workspace, agent_id, harness)
     try:
@@ -35,15 +40,18 @@ def plan(app, workspace, agent_id, harness="codex"):
     if (not isinstance(project["product_paths"], list)
             or not all(isinstance(p, str) for p in project["product_paths"])):
         raise Error("Invalid product folder references; the original file was not changed.")
+    project_root = project_directory(root, harness)
     return {"workspace": workspace, "agent_id": agent_id, "harness": harness,
-            "primary_folder": str(root), "project": project,
+            "primary_folder": str(project_root), "instance_root": str(root),
+            "project_mode": "independent" if project_root == root else "shared", "project": project,
             "revision": digest(data) if data is not None else None,
             "state": "manual_setup_required", "native_project_verified": False,
             "path_status": [{"path": p, "exists": Path(p).is_dir()} for p in project["product_paths"]],
             "instructions": (files("agent_workspace") / "resources/prompts/desktop-projects.md").read_text(encoding="utf-8")}
 
 
-def save(app, workspace, agent_id, harness, project_name, section_name="", product_paths=None, revision=None):
+def save(app, workspace, agent_id, harness, project_name, section_name="", product_paths=None, revision=None,
+         project_directory=None):
     root, path = _path(app, workspace, agent_id, harness)
     for key, value in (("project_name", project_name), ("section_name", section_name)):
         if not isinstance(value, str) or len(value) > 160 or any(ord(c) < 32 for c in value):
@@ -54,6 +62,10 @@ def save(app, workspace, agent_id, harness, project_name, section_name="", produ
         raise Error("Automatic/native sections are not verified for this desktop. Leave section_name empty.")
     if product_paths is None:
         product_paths = []
+    if project_directory is not None:
+        project_directory = Path(project_directory).expanduser().resolve(strict=True)
+        if not project_directory.is_dir():
+            raise Error("Select an existing native project directory.")
     if not isinstance(product_paths, list) or len(product_paths) > 20:
         raise Error("Select up to 20 explicit existing product folders.")
     paths = []
@@ -71,6 +83,8 @@ def save(app, workspace, agent_id, harness, project_name, section_name="", produ
         if revision != actual:
             raise Conflict("Desktop project preferences changed; read them again before saving.")
         previous = read_json(path, {})
+        if project_directory is not None:
+            previous = {**previous, "project_directory": str(project_directory)}
         write_json(path, {**previous, "project_name": project_name, "section_name": section_name,
                           "product_paths": paths, "updated_at": now()})
     return {**plan(app, workspace, agent_id, harness), "saved": "local_reference_only",
@@ -93,9 +107,10 @@ def _discover(adapter, root, preferred):
     if 'list_projects' not in adapter.tools:
         raise Unavailable('The captured connection cannot list local projects.')
     listed = adapter.call('list_projects', {})['projects']
+    project_root = project_directory(root)
     projects = [{k: p.get(k) for k in ('projectId', 'label', 'path')} for p in listed
                 if p.get('projectKind') == 'local' and p.get('hostId') == 'local' and p.get('path')
-                and Path(p['path']).resolve() == root.resolve()]
+                and Path(p['path']).resolve() == project_root]
     matching = [p for p in projects if p['projectId'] == preferred] if preferred else projects
     selected = matching[0] if len(matching) == 1 else None
     capabilities = {'create_project': False, 'edit_folders': False,

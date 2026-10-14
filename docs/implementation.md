@@ -8,6 +8,12 @@
 
 近期优先用户自己的 Codex Desktop 与 ChatGPT Web。Web 保留手动 Message 协议；Web Courier 候选经受限本机连接取得一条原通知，由用户确认后点击一次，网页观察与真实 AW ACK 分别记录。模拟 DOM 与隔离 HTTP 不代替真实 Chrome 加载、ChatGPT 页面及接收工具验收。tclaude 待实际验证。已有 CLI/SDK、模型配置和企业微信接口继续保留，但不作为本轮扩展目标。工作台集中显示 Agent 与环境、消息历史和本机后台；创建、配置和交接通过 CLI、Skills 与原生客户端操作。
 
+## 共用项目与 worktree（2026-10-14 待实现）
+
+用户已授权实现[设计第 3.1.3 节](design.md#313-实例分支与-worktree-自动准备2026-10-14)：保留独立项目选择，支持多个 Agent 共用 Codex 项目；个人资料使用各自实例分支的真实 Git worktree，平台在进入、保存和交接流程中检查并准备；首次进入、handoff、relay 和 fork 明确提供身份、职责及工作背景。工作台后续完善，本轮只使用隔离环境和新建测试实例，不迁移、升级、归档或删除现有 Agent 与资料。
+
+当前代码仍按实例目录匹配 Desktop 项目和会话 cwd，`agent connect` 取得分支文件后准备普通目录，尚未创建 Git worktree。当前目录存在、旧接续测试或这次文档更新都不能证明新路径已实现。Core 负责 worktree、资料保存与同步；Runtime / Adapter 负责共用项目、真实会话识别和交接集成；独立 E2E 按最终提交验证两名 Agent 共用项目、资料分别保存、缺失目录自动准备以及同一 Agent 的正常 handoff/relay。真实跨机器结果另行记录，两个本地目录不算跨机器验收。
+
 ## 模块
 
 | 文件 | 当前职责 |

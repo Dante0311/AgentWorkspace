@@ -10,6 +10,8 @@ AgentWorkspace 在用户已有的 Agent 客户端之上提供协作：保存 Age
 
 Codex Desktop 已有在本地项目中的自动创建、真实会话绑定、持续投递和同 Agent 交接；需要先准备项目并从真实桌面聊天取得控制连接。历史限定实测见 [实现进展](docs/implementation.md#codex-desktop-自动接入2026-10-08)，操作和限制见 [Codex Desktop](docs/usage.md#42-codex-desktop)。这些结果不代替本轮新增功能的验收。
 
+2026-10-14 已确认下一批实现：Agent 可选独立或共用 Codex 项目，各自保留实例分支和个人资料 worktree；进入与交接时自动准备缺失的本地资料，并重新提供身份、职责与工作背景。工作台后续完善，现有 Agent 和资料不在本轮迁移或清理范围。此处记录开发方向，当前功能状态见[实现范围](docs/implementation.md#共用项目与-worktree2026-10-14-待实现)。
+
 ## 已有共同职责与共享 Skill
 
 共同职责可通过 AGENTS.md 的 `@workspace-read` 指引，从所属 Workspace 同一 Git 提交读取；共享 `skills/` 可在创建时选择、后续安装更新，Definition 自带 Skill 保留并保护私人修改。Codex 准备入口发现/复用真实项目，分区仅在实际接口 schema 相符时执行，项目创建及文件夹编辑仍明确手动降级。[使用说明](docs/shared-materials.md)和[统一验收](https://github.com/Dante0311/AW-Workspace/blob/5ec6e5e99dcc68b8ec58e701a7ff9d7b119974e8/development/archive/2026-10-10-unified-57446de/docs/shared-materials-acceptance.md)区分开发回归、原生协议与待执行实机验证。

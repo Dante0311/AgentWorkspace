@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import shutil
 
 import pytest
@@ -6,6 +7,7 @@ import pytest
 from agent_workspace import instance_worktrees, layout
 from agent_workspace.app import App
 from agent_workspace.util import Conflict, read_json, write_bytes, write_json
+from agent_workspace import runtime
 
 
 def git(root, *args):
@@ -167,3 +169,43 @@ def test_native_cwd_is_optional_and_does_not_replace_personal_directory(app, tmp
         else:
             assert entry['execution']['cwd'] == shared
         assert app.require_binding('sea', name, binding)[1]['session'] == 'native-' + name
+
+
+def test_checkpoint_keeps_historical_origin_and_relay_uses_its_new_entry(app, tmp_path):
+    app.create('sea', 'alice'); original_root = app.root('sea', 'alice')
+    old = app.reserve('sea', 'alice')['binding']
+    old_cwd = str(tmp_path / 'previous-project')
+    app.bind('sea', 'alice', old, 'old-native-session', cwd=old_cwd)
+    content = 'Continue the saved work; the previous external result is still unknown.'
+    point = app.checkpoint('sea', 'alice', 'handoff facts', content, binding=old, checkpoint_id='c-origin')
+    store = app.store('sea')
+    raw = store.snapshot(revision=point['revision']).bytes(point['path'])
+    origin = json.loads(raw)['origin']
+    assert origin == {'workspace': 'sea', 'workspace_locator': app.workspace_show('sea')['locator'],
+                      'agent': 'alice', 'instance_branch': 'instance/alice', 'instance_root': str(original_root),
+                      'instructions_file': str(original_root / 'AGENTS.md'), 'binding': old,
+                      'session': 'old-native-session', 'runtime_kind': 'manual', 'native_cwd': old_cwd}
+    app.stop('sea', 'alice', old, point['id'])
+    app.finish_stop('sea', 'alice', old, observed_idle=True)
+    root = tmp_path / 'new-material-copy'
+    app.prepare_agent_directory('sea', 'alice', root)
+    current = app.reserve('sea', 'alice', directory=root)['binding']
+    app.bind('sea', 'alice', current, 'new-native-session', directory=root)
+    prompt = runtime.entry_prompt(app, 'sea', 'alice', current, root)
+    identity = json.loads(prompt.split('\n\n', 1)[0])
+    assert identity['binding'] == current and identity['entry_mode'] == 'relay'
+    assert identity['instance_root'] == str(root) and identity['instructions_file'] == str(root / 'AGENTS.md')
+    assert identity['native_cwd'] is None
+    historical = json.loads(prompt.rsplit('交接点与检查点：\n', 1)[1])
+    assert historical['record']['origin'] == origin and historical['record']['content'] == content
+    before = store.head('instance/alice')
+    assert app.checkpoint('sea', 'alice', 'handoff facts', content, binding=current,
+                          directory=root, checkpoint_id='c-origin') == point
+    assert store.head('instance/alice') == before
+    assert store.snapshot(revision=point['revision']).bytes(point['path']) == raw
+    with pytest.raises(Conflict):
+        app.checkpoint('sea', 'alice', 'old entry cannot save', binding=old, directory=root)
+    fresh = app.checkpoint('sea', 'alice', 'new entry facts', binding=current, directory=root)
+    new_origin = app.checkpoint_show('sea', 'alice', fresh['id'])['record']['origin']
+    assert new_origin['instance_root'] == str(root) and new_origin['binding'] == current
+    assert new_origin['session'] == 'new-native-session' and new_origin['native_cwd'] is None

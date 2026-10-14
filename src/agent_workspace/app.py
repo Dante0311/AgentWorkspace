@@ -498,8 +498,9 @@ class App:
     def checkpoint(self, workspace, agent_id, summary, content="", binding=None, directory=None,
                    checkpoint_id=None, references=None):
         item = self.agent(workspace, agent_id)
+        entry = None
         if item["current"] or binding:
-            self.require_binding(workspace, agent_id, binding, allow_stopping=True)
+            item, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True)
         root = Path(self.prepare_agent_directory(workspace, agent_id, directory)['directory'])
         cp = slug(checkpoint_id or uid("c"))
         store = self.store(workspace)
@@ -523,6 +524,14 @@ class App:
             if (layout.instance_path(root, f"checkpoints/{cp}.json")).exists():
                 raise Conflict("Checkpoint file already exists without a publication receipt; inspect its saved revision before continuing.")
             record = {"id": cp, "created_at": now(), "summary": summary, "content": content,
+                      "origin": {"workspace": workspace,
+                                 "workspace_locator": self.local()["workspaces"][workspace]["locator"],
+                                 "agent": agent_id, "instance_branch": item["branch"],
+                                 "instance_root": str(root), "instructions_file": str(root / "AGENTS.md"),
+                                 "binding": entry["id"] if entry else None,
+                                 "session": entry["session"] if entry else None,
+                                 "runtime_kind": entry["kind"] if entry else None,
+                                 "native_cwd": entry.get("execution", {}).get("cwd") if entry else None},
                       "record_refs": references or [], "scope": "Saved instance files; external/runtime-unavailable state is not implied."}
             point_path = layout.instance_relpath(root, f'checkpoints/{cp}.json')
             sha, skipped = self._save_files(workspace, agent_id, root,

@@ -226,6 +226,8 @@ aw -w sea checkpoint create helper --binding BINDING --summary "累计摘要" --
 aw -w sea agent stop helper --binding BINDING --checkpoint CHECKPOINT_ID
 ```
 
+新检查点的 `origin` 由程序记录 Workspace 及 locator、Agent、实例分支、实际资料根和职责文件，以及保存时的 Binding、会话类型、session 和已知原生 cwd。未知 cwd 保存为 `null`。这些字段是历史来源；后继仍解析自己的本机路径并取得本次入口，不使用旧 Binding 或路径恢复执行资格。原检查点及同一 ID 的原请求内容保持不变，旧记录不补写这些字段。
+
 Desktop/CLI 的停工确认由原运行器观察，不能用参数伪造。仅 manual 模式允许当前拥有者加 `--confirm-stopped`，表示使用者明确确认停工；不是操作系统隔离保证。
 
 ```sh

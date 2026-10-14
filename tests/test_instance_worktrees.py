@@ -53,6 +53,13 @@ def test_missing_registered_worktree_restores_only_saved_materials(app, tmp_path
     write_bytes(root / 'unsaved.md', b'Never published')
     assert root.resolve().is_relative_to(tmp_path.resolve())
     shutil.rmtree(root)
+    inspected = app.show('sea', 'alice')
+    assert inspected['copies'][0]['unknown_reason'] == 'directory_missing'
+    assert not root.exists()
+    root.mkdir(parents=True)
+    empty = app.show('sea', 'alice')
+    assert empty['copies'][0]['unknown_reason'] == 'copy_not_prepared'
+    assert not any(root.iterdir())
     restored = app.prepare_agent_directory('sea', 'alice')
     assert restored['prepared'] and restored['revision'] == point['revision']
     assert (root / 'notes.md').read_bytes() == b'Saved material'

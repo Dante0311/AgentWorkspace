@@ -671,7 +671,15 @@ class App:
 
     def _observe_copy(self, root, binding, installation):
         source = {"installation_id": installation, "directory": str(root), "kind": "local_copy"}
+        if not root.is_dir():
+            return {"directory": str(root), "observation_source": source,
+                    "unknown_reason": "directory_missing",
+                    "observation_error": "The registered material directory is missing; prepare its saved copy before observing local state."}
         try:
+            if not layout.local_path(root, 'context.json').is_file():
+                return {"directory": str(root), "observation_source": source,
+                        "unknown_reason": "copy_not_prepared",
+                        "observation_error": "The registered copy has no local context; prepare its saved material before observing local state."}
             local_entry = read_json(layout.local_path(root, "entry.json"), {})
             status = read_json(layout.local_path(root, "status.json"), {"state": "not_running"})
             try:

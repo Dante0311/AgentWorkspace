@@ -25,6 +25,8 @@ def parser():
     serve = domains.add_parser("serve", help="Local workbench and authenticated HTTP tools.")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--open", action="store_true")
+    review = domains.add_parser("model-review", help="Review one saved model-default change locally.")
+    review.add_argument("request_id")
     setup = domains.add_parser("setup", help="Open first-use setup; detect dependencies, never install them.")
     setup.add_argument("--port", type=int, default=8765)
     setup.add_argument("--open", action="store_true")
@@ -344,7 +346,8 @@ def main(argv=None):
         return 0
     try:
         actor = None
-        operation = options.get("command") if domain == "call" else domain + "." + str(action)
+        operation = (options.get("command") if domain == "call" else
+                     "agent.model-change-review" if domain == "model-review" else domain + "." + str(action))
         if (operation in ("agent.start", "worker.start") and options.get("here")
                 or domain == "call" and operation in ("agent.start", "worker.start") and parse_json(options["arguments"]).get("here")):
             operation = "agent.start-here"
@@ -395,7 +398,10 @@ def main(argv=None):
                     raise Error("Inherited identity differs from the actual Desktop session.")
                 actor = desktop_identity
         else:
-            command, args = domain + "." + action, options
+            if domain == "model-review":
+                command, args = "agent.model-change-review", {"request_id": options["request_id"]}
+            else:
+                command, args = domain + "." + action, options
             file = args.pop("content_file", None)
             if file:
                 if args.get("content") is not None:
@@ -432,7 +438,8 @@ def main(argv=None):
         # Agent business operations retain their inherited identity and target permissions.
         result = execute(app, command, args, actor=actor)
         print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
-        if isinstance(result, dict) and result.get("state") in ("pending", "outcome_unknown"):
+        if (isinstance(result, dict) and result.get("confirmation") != "cancelled"
+                and result.get("state") in ("pending", "outcome_unknown")):
             return 2
         return 0
     except (Error, ValueError, OSError) as exc:

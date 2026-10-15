@@ -65,6 +65,7 @@ Runtime、Backend、Message 与公共接口已采用同一 Worker 归属：
 | `onboarding.py` | 只发现和引导的首次使用、只读 Git 检查、三份管家定义/实例和本机准备。 |
 | `harness_config.py` | Codex/Claude 原生模型选项查询、三种受管入口的实例独立模型配置；凭据只保存引用。 |
 | `model_profiles.py` | `.agentworkspace/config.json` 中的 Codex 模型选择、本机旧配置迁移、每入口采用快照、适用目录与请求事实。 |
+| `model_changes.py` | 当前 Agent 准备有限模型变更，Windows 原生确认框接受用户一次确认后保存；记录目标原值与新值，不授予长期管理权限。 |
 | `runtime.py`、`rpc.py`、`native_sdk.py` | 实际原生入口、持续事件、工具边界、初始接入、独占 Runner 与停工观测。 |
 | `compaction.py` | Codex 同步 PreCompact 入口、当前会话核对、原文快照与沿用业务总结的自动检查点；不生成新总结或交出入口。 |
 | `backend.py` | 每个 AW_HOME 的本机服务、Runner、消息检查与维护线程，原会话共同恢复，以及启停、重启和限定日志读取。 |

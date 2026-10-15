@@ -43,6 +43,8 @@ checkpoint 可以在继续工作的过程中单独使用。完成重要阶段、
 ## 实例管理与共享资产
 
 Codex 模型选择在 `.agentworkspace/config.json` 的 `codex` 对象中保存 `model` 和 `effort`，自动启动要求两者明确填写。Definition 可提供 `runtime.json` 创建模板；Agent 此后独立维护。通用 configure 接收原生连接配置；原有 model / effort 参数会存入 Agent 文件。不要将实例配置当成本机连接文件，也不要从发起者设置补值。保存不启动模型，活动会话继续使用当前入口的采用记录。
+
+用户明确要求代办其他实例的模型设置时，可调用 `agent.model-change-request`，参数为 `request_id` 和 `changes: [{agent_id, model, effort}]`，沿用真实 workspace、调用身份与当前 Binding。只准备本次变更，不取得通用 configure 或长期管理权限。然后用 `aw -w WORKSPACE model-review REQUEST_ID`（Desktop 也可用真实命令前缀调用 `agent.model-change-review`）打开 Windows 系统确认框，让用户核对旧值、新值并选择“是”保存；“否”或“取消”不写配置，此入口不启后台、Runner 或巡检。其他平台当前不支持。完成后用 `agent.model-change-show` 和 `agent.show` 读回。不得代点击、模拟按键或清除身份绕开确认，也不能把聊天转述或自填 confirmed 当作用户确认。当前宿主没有参数级批准凭据，所以即使用户已在聊天里要求代办，仍需一次系统弹窗确认。重复 ID 只读原请求；配置变化先重新查看，中途未知不盲重做。详细参数见产品文档 `docs/instance-model-profiles.md`。
 AW 软件和受管材料由统一安装与后台维护，`software update` 一次处理本机登记的副本，不要求逐 Agent 接单。用户改过的文件保留并报告，结果含各副本状态；旧目录须先明确迁移。`agent upgrade-tools` 只保留为单副本入口。升级不重置自有职责和资料，也不替运行中的模型重载材料。`agent update` 只更新选定职责来源；报告本地差异时先交由使用者处理，不自动合并。
 提升只发布用户明确选择的文件，不整体合并实例分支，不删除原资料，不自动替别人更新。
 归档整个 Agent 前须处理全部 Worker 的有效入口，只交出默认 Worker 还不够；解除归档不自动进入。只结束某个 Worker 时处理该 Worker，不归档整个 Agent。已有外部目录可用 agent import --from-directory --asset 明确导入选定文件，原目录不改变。

@@ -5,7 +5,7 @@ from functools import partial
 from pathlib import Path
 import inspect
 
-from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout, model_profiles, web_courier
+from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout, model_profiles, web_courier, model_changes
 from .messages import Messages
 from .direct_messages import DirectMessages
 from .util import Conflict, Error, digest, inside, read_json, relpath, user_asset_path, write_bytes, write_json
@@ -16,7 +16,8 @@ READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "ag
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
              "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status", "layout.plan", "web-courier.status"}
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status", "layout.plan", "web-courier.status",
+             "agent.model-change-show"}
 
 SOFTWARE_OPERATIONS = {"backend.start", "backend.stop", "backend.restart", "backend.status", "backend.log", "backend.run",
                        "software.status", "software.update"}
@@ -175,7 +176,7 @@ def bridge_status(app, workspace, agent_id, directory=None, worker_id=None):
     return {p.stem: read_json(p) for p in layout.local_path(root, "bridges/status", worker_id).glob("*.json")}
 
 
-def command_map(app):
+def command_map(app, *, actor=None):
     messages = Messages(app)
     direct_messages = DirectMessages(app)
     return {
@@ -220,6 +221,9 @@ def command_map(app):
         "maintenance.status": partial(maintenance.status, app),
         "maintenance.repair": partial(maintenance.repair, app),
         "agent.create": app.create, "agent.list": app.agents, "agent.show": app.show, "agent.history": app.history,
+        "agent.model-change-request": partial(model_changes.prepare, app, actor),
+        "agent.model-change-show": partial(model_changes.show, app),
+        "agent.model-change-review": partial(model_changes.review, app, actor),
         "agent.connect": app.connect_agent, "agent.configure": app.configure,
         "agent.update": app.update, "agent.versions": app.versions, "agent.promote": app.promote,
         "agent.archive": app.archive, "agent.fork": app.fork, "agent.takeover": app.takeover,
@@ -263,7 +267,7 @@ def command_map(app):
 
 
 def execute(app, command, arguments, *, actor=None):
-    commands = command_map(app)
+    commands = command_map(app, actor=actor)
     if command not in commands:
         raise Error(f"Unknown operation: {command}")
     handler = commands[command]

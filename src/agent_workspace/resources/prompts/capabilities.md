@@ -22,6 +22,8 @@ Worker 分别保存执行入口、输入队列、消息和检查点。来源从�
 
 持久 Codex 实例在 `.agentworkspace/config.json` 的 `codex` 段明确保存 `model` 与 `effort`；缺项时 AW 不创建原生会话或发送模型输入。`.agentworkspace/local/runtime/runtime.json` 只保存本机连接与服务信息。运行中的入口继续采用原选择，编辑文件或模板不立即切换。请求值、原生接受和实际设置确认分别记录；这项参数合同已提供，真实 Desktop 设置效果仍需受控复验。
 
+当前 Agent 可按用户明确要求用 `agent.model-change-request` 准备有限的未来模型变更，只接受同一 Workspace 内 Codex / Desktop 的 `model`、`effort`。`model-review` / `agent.model-change-review` 打开 Windows 系统确认框，不启后台、Runner 或巡检；用户核对后选择“是”保存，Agent 用 `agent.model-change-show` 及 `agent.show` 读回。“否”或“取消”不写配置；其他平台当前不支持。当前宿主没有参数级聊天批准凭据，仍需一次系统确认，Agent 不得代点、模拟按键或自填确认参数。通用配置、长期管家授权和当前入口采用值保持原规则。
+
 | 入口 | 已提供的能力 | 当前不支持 / 待确认 |
 | --- | --- | --- |
 | Codex 受管 CLI（`codex`） | 自动创建、持续通信、normal/insert、三种受管 CLI 之间自动交接、模型/强度元数据查询 | 真实账号、自有 API 的模型与强度效果待实机验收 |

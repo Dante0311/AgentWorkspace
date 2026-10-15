@@ -27,8 +27,15 @@ def _lock_held(app):
         return True
 
 
+def _read_connection(app):
+    # Windows readers can deny replacement of this file. Keep the snapshot
+    # closed before releasing the same lock used by the publishing process.
+    with locked(app.home / "backend/connection.lock"):
+        return read_json(app.home / "backend/connection.json", {})
+
+
 def _request(app, command, arguments=None):
-    connection = read_json(app.home / "backend/connection.json")
+    connection = _read_connection(app)
     if not connection:
         raise Unavailable("The local backend is not ready; use backend start.")
     url = f"http://127.0.0.1:{connection['port']}/api/execute"
@@ -357,7 +364,7 @@ def status(app):
         return {"state": "stopped", "running": False, "ready": False, "home": str(app.home), "observed_at": now()}
     try:
         return _request(app, "backend.status")
-    except (Unavailable, Error, ValueError):
+    except (Unavailable, Error, OSError, ValueError):
         return {"state": "unknown", "running": True, "ready": False, "home": str(app.home),
                 "unknown_reason": "Backend lock is held but its control endpoint could not be read.", "observed_at": now()}
 
@@ -370,10 +377,10 @@ def start(app, port=None, open_app=False):
         if _lock_held(app):
             result = status(app)
             if open_app and result["ready"]:
-                connection = read_json(app.home / "backend/connection.json")
+                connection = _read_connection(app)
                 webbrowser.open(result["url"] + "#token=" + connection["token"])
             return {**result, "start_requested": False}
-        connection = read_json(app.home / "backend/connection.json", {})
+        connection = _read_connection(app)
         port = port if port is not None else connection.get("port", 8765)
         args = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "backend", "run", "--port", str(port)]
         if open_app:
@@ -476,7 +483,7 @@ def log(app, workspace=None, agent_id=None, directory=None, lines=100):
         content_lines = content.splitlines()
         truncated = bool(offset) or len(content_lines) > lines
         content = "\n".join(content_lines[-lines:])
-    connection = read_json(app.home / "backend/connection.json", {})
+    connection = _read_connection(app)
     if connection.get("token"):
         content = content.replace(connection["token"], "[redacted]")
     content = re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", content)
@@ -487,13 +494,14 @@ def log(app, workspace=None, agent_id=None, directory=None, lines=100):
 def run(app, port=None, open_app=False, setup=False):
     from .server import make_server
     with locked(app.home / "backend/service.lock", wait=0):
-        connection = read_json(app.home / "backend/connection.json", {})
+        connection = _read_connection(app)
         port = port if port is not None else connection.get("port", 8765)
         http = make_server(app, port, connection.get("token"))
         manager = Backend(app, http)
         app.backend = manager
-        write_json(app.home / "backend/connection.json", {"port": http.server_port, "pid": os.getpid(),
-                   "token": http.control_token, "started_at": now()})
+        with locked(app.home / "backend/connection.lock"):
+            write_json(app.home / "backend/connection.json", {"port": http.server_port, "pid": os.getpid(),
+                       "token": http.control_token, "started_at": now()})
         url = f"http://127.0.0.1:{http.server_port}/" + ("setup" if setup else "") + "#token=" + http.control_token
         print("本机工作台（地址包含控制凭据，请勿分享）：\n" + url, flush=True)
         try:

@@ -62,6 +62,7 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 | `harness_config.py` | Codex/Claude 原生模型选项查询、三种受管入口的实例独立模型配置；凭据只保存引用。 |
 | `model_profiles.py` | `.agentworkspace/config.json` 中的 Codex 模型选择、本机旧配置迁移、每入口采用快照、适用目录与请求事实。 |
 | `runtime.py`、`rpc.py`、`native_sdk.py` | 实际原生入口、持续事件、工具边界、初始接入、独占 Runner 与停工观测。 |
+| `compaction.py` | Codex 同步 PreCompact 入口、当前会话核对、原文快照与沿用业务总结的自动检查点；不生成新总结或交出入口。 |
 | `backend.py` | 每个 AW_HOME 的本机服务、Runner、消息检查与维护线程，原会话共同恢复，以及启停、重启和限定日志读取。 |
 | `transfer.py` | 原绑定和固定后继的持久 handoff/relay，结果未知不重新创建会话。 |
 | `shared.py`、`skills.py` | 同一共享提交的职责材料读取，以及共享 Skill 发现、安装、来源比较与受保护更新。 |
@@ -107,6 +108,8 @@ message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确�
 每次发送与回复由 Skill 核对双方当前有效入口和当次本机 Codex 观察，再选择原生直发或正式 Message。`direct-message.record/list/show` 将可选直发历史单独保存在调用方 Workspace 的 `.agentworkspace/direct-messages/`，不双写收件方空间，不进入正式索引、ACK、FIFO 或重试。保存失败不影响交流；原生发送结果未知只核对原发送。保存和读取接口已有隔离 Git 验证，真实客户端中的发送及模型遵循新版 Skill 仍需按最终版本实测。
 
 ## 验证层次
+
+主动 checkpoint 指引与 Codex 压缩前保存分别实现。`aw codex-hook` 接收原生 `PreCompact` 输入，保存可核对的 transcript 原字节与实例资料，并标明旧业务总结的来源。无模型身份的原生 hook 按已有 session 索引找到当前入口；已有身份时不降级为用户调用。隔离 Git 已验证保存、重复调用、身份限制与原发布恢复；Codex 0.154.0 CLI 配合本机回环模型夹具，真实自动压缩触发了该命令并生成一个检查点。该结果不是付费模型或 Desktop 验收：独立 app-server 手动压缩实验中的 hook 仍为未信任，未执行 handler；日常聊天尚未配置/信任这个 hook。配置、原文共享范围和失败行为见 [Codex 压缩前保存](codex-compaction.md)。
 
 - 默认 CI：仅 Windows，配置 Python 3.11/3.13、Chromium 工作台、独立 npm 与 wheel 安装检查；npm 检查使用包内运行时并移除 PATH 中的系统 Python，覆盖资源、CLI/HTTP 和替换程序后保留原数据。当前不自动运行 Linux 兼容性回归；配置了检查不等于该提交已通过 CI。
 - `Native SDK contracts`：Linux 手动工作流，固定 SDK 版本、原生客户端回环 API、平台工具与自动交接；不随 PR 自动运行。实际测试范围以该提交的工作流和日志为准。

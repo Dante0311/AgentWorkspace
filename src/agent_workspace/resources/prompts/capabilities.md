@@ -27,7 +27,7 @@
 
 ## 用户与 Agent 遇到限制时
 
-checkpoint 可在继续工作时单独保存。完成重要阶段、形成关键决定或准备切换任务时，Agent 可按 agent Skill 主动建议保存；已有按阶段保存授权时直接执行。具体内容与提醒频率见 `.agentworkspace/prompts/checkpoints.md`。这是主动使用已有命令的指引，本版尚未接入上下文压缩钩子自动保存，也不代表已归档完整原始会话。
+checkpoint 可在继续工作时单独保存。完成重要阶段、形成关键决定或准备切换任务时，Agent 可按 agent Skill 主动建议保存；已有按阶段保存授权时直接执行。具体内容与提醒频率见 `.agentworkspace/prompts/checkpoints.md`。Codex 可另行配置并信任 `PreCompact` hook，调用 `aw codex-hook` 自动保存当前 AW 会话可取得的原文与实例资料；业务总结仍来自之前已保存的检查点，不能冒充新总结。未配置或未获原生信任时不会自动运行；不承诺导出 Codex 未公开的内部状态或压缩摘要。
 
 每次发送与回复按 message Skill 判断路径：核对自己已获授 Binding 与双方的当次 `runtime.desktop-observe`；确认双方当前 active 且本机 Codex 会话可寻址，才原生直发。缺少读取能力、无法确认同机或其他入口时，首次发送走正式 AW Message；自己已失权时不产生副作用。原生发送已尝试而结果未知只核对原发送，不切换通路重发。`direct-message.record/list/show` 是可选的独立历史，不发送消息、不生成正式 ACK，也不参与投递重试。记录或回执缺失不能推断发送失败或业务未完成。
 

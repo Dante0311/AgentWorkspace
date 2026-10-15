@@ -30,6 +30,7 @@ def parser():
     setup.add_argument("--open", action="store_true")
     mcp = domains.add_parser("mcp", help="MCP stdio tools; use AW_* environment to bind model identity.")
     mcp.add_argument("--completion-config", help="Local configuration for identity-bound completion tools only.")
+    domains.add_parser("codex-hook", help="Save the current AW session before compaction; reads Codex hook JSON on stdin.")
 
     def actions(domain, names):
         sub = domains.add_parser(domain).add_subparsers(dest="action", required=True)
@@ -269,6 +270,15 @@ def main(argv=None):
     home, workspace = options.pop("home"), options.pop("workspace")
     domain, action = options.pop("domain"), options.pop("action", None)
     app = App(home)
+    if domain == "codex-hook":
+        from .compaction import run
+        try:
+            payload = json.load(sys.stdin)
+            result = run(app, payload)
+        except (Error, ValueError, OSError) as exc:
+            result = {"continue": True, "systemMessage": f"AW 压缩前检查点未确认保存：{exc}"}
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
     try:
         actor = None
         operation = options.get("command") if domain == "call" else domain + "." + str(action)

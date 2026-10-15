@@ -1,6 +1,6 @@
 ---
 name: agent
-description: 创建、完善和管理持久 Agent 身份，以及显式发布选定的共享资产。
+description: 创建、完善和管理持久 Agent 身份，在重要工作节点主动建议保存检查点，以及显式发布选定的共享资产。
 ---
 
 # agent
@@ -33,6 +33,12 @@ agent connect 只为已有 Agent 准备或复用本地副本，不创建身份�
 agent show 分别列出当前 Binding、各本地副本的观察和历史入口；历史聊天不等于当前执行入口。副本中保存的旧状态不能证明另一个目录或环境的当前聊天正在运行，来源不明时保留未知。
 
 Definition 可选，职责可在自己的资料根逐步完善。没有来源是正常状态。自然语言初始化参见该资料根下的 `.agentworkspace/prompts/initialization.md`。
+
+## 主动保存检查点
+
+checkpoint 可以在继续工作的过程中单独使用。完成重要阶段、积累了新的决定或排错证据、准备切换任务或更换会话时，判断一次保存是否能减少以后恢复工作的成本；合适时简短向用户说明具体值得保存的内容。已获准按阶段保存时直接执行，不重复确认；建议未获采纳时继续原任务，不每轮提醒或把保存建议当成停工理由。时机、授权和保存方法统一见 `.agentworkspace/prompts/checkpoints.md`。
+
+## 实例管理与共享资产
 
 Codex 模型选择在 `.agentworkspace/config.json` 的 `codex` 对象中保存 `model` 和 `effort`，自动启动要求两者明确填写。Definition 可提供 `runtime.json` 创建模板；Agent 此后独立维护。通用 configure 接收原生连接配置；原有 model / effort 参数会存入 Agent 文件。不要将实例配置当成本机连接文件，也不要从发起者设置补值。保存不启动模型，活动会话继续使用当前入口的采用记录。
 AW 软件和受管材料由统一安装与后台维护，`software update` 一次处理本机登记的副本，不要求逐 Agent 接单。用户改过的文件保留并报告，结果含各副本状态；旧目录须先明确迁移。`agent upgrade-tools` 只保留为单副本入口。升级不重置自有职责和资料，也不替运行中的模型重载材料。`agent update` 只更新选定职责来源；报告本地差异时先交由使用者处理，不自动合并。

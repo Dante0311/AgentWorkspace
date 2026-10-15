@@ -34,7 +34,7 @@ aw workspace connect sea git@github.com:OWNER/SEA-WORKSPACE.git
 aw workspace connect sea github:OWNER/SEA-WORKSPACE
 ```
 
-前者通过 Git，后者通过 GitHub REST 对 Git 对象读写，不要求本地 clone。远端必须包含平台 workspace.json。已由用户创建的空仓可显式初始化：
+前者通过 Git，后者通过 GitHub REST 对 Git 对象读写，不要求本地 clone。新版远端保存 `.agentworkspace/workspace.json`，旧仓仍按自身布局读取，不自动迁移。已由用户创建的空仓可显式初始化：
 
 ```sh
 aw workspace bootstrap-remote sea github:OWNER/SEA-WORKSPACE
@@ -57,10 +57,13 @@ aw -w sea agent create helper --description "分析构建日志，修改前向�
 aw -w sea agent create ui --definition definitions/ui --directory /data/aw/sea/ui
 aw -w sea agent list
 aw -w sea agent show helper
+aw -w sea agent connect helper
 aw -w sea agent connect helper --directory /path/to/helper-copy
 ```
 
-实例名可为中文，未指定 ID 时工具生成安全 ID；自动化可使用 `--id helper`。默认实例目录在 `AW_HOME/instances/WORKSPACE/ID`。`--directory` 可选择其他本机绝对路径或另一磁盘；目录只是本机副本位置。`connect` 可增加多个目录，目录存在不授予执行权。
+实例名可为中文，未指定 ID 时工具生成安全 ID；自动化可使用 `--id helper`。新布局的默认资料目录在本机 Workspace 的 `.agentworkspace/local/worktrees/ID` 中，是 `instance/ID` 分支的真实 Git worktree。仅有远端地址时，本机 Workspace 区域位于 `AW_HOME/workspaces/WORKSPACE`。`--directory` 仍可选择其他本机路径；已有普通副本不搬迁。`connect` 省略目录时复用原登记副本，缺失时从已保存的实例分支准备；目录存在不授予执行权，也不恢复尚未保存的资料。
+
+新 worktree 需要 Git 及该 Workspace 的 Git 访问权限；`github:owner/repo` 的 REST 读取凭据不等于 Git transport 已可访问。准备只恢复资料，不启动会话或消费 handoff。身份、分支、已有目录或 Git 历史冲突会保留现场并报错。保存包括本次选定的实际文件与对应暂存内容，并更新 worktree 分支和索引；同一文件的暂存版本与工作文件不同、或本地和远端历史已经分叉时，先解决差异。同步保留不重叠的本机修改，`.git`、本机运行数据和嵌套仓库不进入实例快照。
 
 已有外部目录的保守导入形式：
 
@@ -87,6 +90,18 @@ aw -w sea agent bind helper --binding BINDING --session REAL_NEW_SESSION_ID
 
 手动入口不具备自动推送能力，使用 `message receive` 主动收件。连接云端模型需要使用方配置实际可达的工具接入；本包提供 MCP stdio 与本机 HTTP，不包含公网代理、TLS 部署或自动创建 ChatGPT 云会话。
 
+可选的 [Web Courier 扩展](../extensions/web-courier/README.md)用于人工确认投递一条正式 Message。先准备实际 ChatGPT 会话、对应的 active manual Binding 和可用的收件工具，再在 Chrome 加载构建包内的扩展。它不替代接收方执行 `message receive` 或通过 Git 发布真实 ACK。
+
+在用户管理终端中，为实际会话与扩展 ID 创建受限连接；端口必须与该 `AW_HOME` 的后台实际监听端口一致：
+
+```sh
+aw -w sea web-courier connect web-agent --binding CURRENT_BINDING --target-url "https://chatgpt.com/c/CONVERSATION_ID" --extension-id EXTENSION_ID --request-id courier-one --port 8765
+aw web-courier status courier-one
+aw web-courier revoke courier-one --request-id revoke-courier-one
+```
+
+这三个命令都只供用户管理终端调用，普通 Agent 不能凭连接 ID 查询会话地址或尝试记录。只将 connect 返回的连接 JSON 粘贴到扩展设置，不把后台管理 Token 交给扩展。status 不返回连接密钥，并分别显示网页观察和真实 ACK。原发送返回丢失或页面结果未知时只查询原记录，不再次点击；撤销保留连接与尝试记录。首批只支持单条 normal Message，真实 Chrome 加载、登录和页面效果由具体候选的 E2E 结果说明。
+
 MCP 启动命令是 `aw mcp`。给对应会话的进程配置 `AW_HOME`、`AW_WORKSPACE`、`AW_AGENT`、`AW_BINDING`，使工具以实际运行绑定核对身份。`aw_execute` 接受 `{command, arguments}`，例如：
 
 ```json
@@ -95,15 +110,47 @@ MCP 启动命令是 `aw mcp`。给对应会话的进程配置 `AW_HOME`、`AW_WO
 
 不要把无绑定的管理工具入口当成跨 Agent 的权限隔离。第一版是可信本机协作模型。
 
+云端完成报告使用单独的受限 stdio 入口，不把通用 `aw_execute` 交给云会话：
+
+```sh
+aw --home /path/to/isolated-acceptance-home mcp --completion-config /path/to/completion.json
+```
+
+本机用户保存的配置示例（替换为实际隔离验收身份，不编造 Binding）：
+
+```json
+{
+  "enabled": true,
+  "workspace": "acceptance",
+  "agent_id": "cloud-report",
+  "binding": "ACTUAL_GRANTED_BINDING",
+  "recipient": "local-receiver",
+  "material_paths": ["knowledge/completion-brief.md"]
+}
+```
+
+这个入口只公开 `aw_read_materials`（读取配置中的共享材料）、`aw_report_completion`（用稳定的 `request_id` 和 `content` 向固定收件人发正式 Message）及 `aw_report_status`（只查本配置身份和收件人对应的原请求）。调用方不能改 Workspace、Agent、Binding、收件人或材料路径，也不能用配置替换进程已继承的执行身份。共享材料仍受 `workspace.read` 的路径与大小约束。
+
+每次调用都核对配置；将 `enabled` 改为 `false` 会拒绝后续调用。修改身份或其他范围后必须重新启动入口，不能让原进程静默改用新资格。Binding 停止或换会话后，旧配置不能再次发报告或读取材料，但仍可在配置未停用时只读核对自己原报告的发布回执。撤销不表示已经开始的发布已回滚。
+
+发送回复丢失或结果未知时，只用原 `request_id` 查 `aw_report_status`；`not_recorded` 不表示可以盲目重发。返回的 `notification_acknowledged` 只说明正式 ACK 存在，不表示本机接收者已完成业务处理。MCP 握手、正式 Message 发布、接收者实际阅读与保存结果、真实云端模型调用分别验收。
+
+
 ### 4.2 Codex Desktop
 
-先在 Codex 手动建立或选择一个已有本地项目，把该 Agent 的实例目录设为主目录；项目和分区沿用用户既有布局。随后在用户授权的真实 Codex 桌面聊天中捕获桌面自己的 MCP 控制连接：
+先在 Codex 手动建立或选择一个已有本地项目。默认使用该 Agent 的个人资料目录作为主目录，也可让多个 Agent 共用 Workspace 或产品项目；项目和分区沿用用户既有布局。选择共用项目时，先读 `agent desktop-project helper` 的 revision，再保存本机引用：
+
+```sh
+aw -w sea agent desktop-project-save helper --harness codex --project-name "Shared project" --project-directory ACTUAL_PROJECT_DIRECTORY --revision READ_REVISION
+```
+
+省略 `--project-directory` 保留原选择；明确传入个人资料根可恢复独立项目。保存引用不修改原生项目、Binding 或附加目录权限。切换目录后用 `desktop-prepare --project-id` 明确采用实际匹配项目，旧项目 ID 不会静默指向另一个目录。随后在用户授权的真实 Codex 桌面聊天中捕获桌面自己的 MCP 控制连接：
 
 ```sh
 aw -w sea agent capture-desktop helper --command '["node","ACTUAL_INSTALLED_CODEX_APP_TOOLS/server.mjs"]'
 ```
 
-这里路径由安装环境确定，不是仓库提供的文件。命令读取该会话真实的 `CODEX_APP_TOOLS_PIPE_PATH` 和 `CODEX_THREAD_ID`，只保存到 `.aw-local/runtime.json`。不能从外部终端编造这两个值。
+这里路径由安装环境确定，不是仓库提供的文件。命令读取该会话真实的 `CODEX_APP_TOOLS_PIPE_PATH` 和 `CODEX_THREAD_ID`，只保存到 `.agentworkspace/local/runtime/runtime.json`。不能从外部终端编造这两个值。
 
 回到用户终端，保存模型选择并启动：
 
@@ -113,9 +160,21 @@ aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-模型和强度必须明确选择，保存在实例根 `runtime.json` 的 `codex` 段；本机文件只保存连接和项目信息。可选 Definition 提供创建模板，实例此后独立维护；详见[实例模型配置](instance-model-profiles.md)。同一实例主目录匹配多个项目时，用 `--project-id` 明确选择。配置和启动都会读取实际项目列表核对主目录。缺配置、项目或控制接口时先报错，不预留第二个执行入口。
+模型和强度必须明确选择，保存在 `.agentworkspace/config.json` 的 `codex` 段；本机文件只保存连接和项目信息。可选 Definition 提供创建模板，实例此后独立维护；详见[实例模型配置](instance-model-profiles.md)。所选项目目录匹配多个项目时，用 `--project-id` 明确选择。配置和自动启动都会读取实际项目列表核对所选目录。缺配置、项目或控制接口时先报错，不预留第二个执行入口。
 
 运行器通过 `create_thread` 在该项目创建真实新聊天，读取实际 ID 与 `cwd` 后才绑定。第一轮仅建立连接；正式进入材料随后作为输入交付。桌面 Agent 使用提示中的 `aw call --desktop-agent` 命令前缀，由真实 `CODEX_THREAD_ID` 约束平台身份，不继承管理权限。输入先通过 `runtime.receive-input` 关联当前原生轮次；只有该轮明确完成才记录完成并为初次进入发布检查点，发送回执或 idle 本身不算业务完成。
+
+建聊的连接提示先给本次已登记目标及个人 AGENTS.md/Skills 入口；此时 Binding 仍 starting、真实 session/cwd 尚未观测，不执行业务。绑定后的每次输入通知在领取命令前给当前 Agent、Binding、真实 session 与个人资料路径，避免共用项目里另一实例的角色被当成本人。项目共同规则继续适用，个人身份以当前登记为准。业务正文仍通过原 request_id 的 receive-input 领取，不复制到通知中；已经 submitted 或结果未知的原输入不会因此重发或改回 queued。
+
+用户已经在新 Codex 聊天里发起接手时，在该真实聊天内运行下面的命令：
+
+```sh
+aw -w sea agent start helper --here
+```
+
+`--here` 使用真实环境变量和 `read_thread` 核验当前聊天，不调用 `create_thread`，不重新发送进入提示词。它返回 `bound_current_chat`、Binding、实际 `native_cwd`、个人资料目录和完整 `prompt`，并将同一份进入材料保存为 `prompt_file`。当前 Agent 实际阅读自己的 AGENTS.md、Skills、共同职责以及交接检查点后接续业务；工具返回不证明模型已经读过这些材料。个人资料根与 native cwd 分别登记，提示词中的路径不表示已经切换目录。已绑定或已交出的旧聊天不能用此选项取得新资格。
+
+此模式需要该实例已配置真实 Desktop MCP 命令与模型选择；连接从当前新聊天捕获，不沿用旧聊天的 pipe/thread。首次接入本机时 `agent connect` 可省略目录，由平台准备已保存分支；然后在当前聊天 `capture-desktop --command`。准备、启动、绑定和交接均复用 Core 的目录准备能力；缺失目录仅恢复已保存资料，普通副本仍保留。原建聊已经尝试而结果未知时，`--here` 也拒绝替换，必须核对原 `runtime launch-show` 和 `reconcile-create`。绑定或后台请求结果未知时先读取 `agent show`、进入材料文件及原状态，不再次预留或重绑。`runner` 仅说明后台连接请求状态，不能代替模型完成、真实 E2E 或跨机器验收。
 
 `agent renew` 在旧会话保存检查点、stop 并被观察到 idle 后，自动在同一项目创建新聊天。未知创建结果保留原回执，不自动重试开第二个聊天。自动 transfer 也接受含真实控制连接的 `desktop` 配置；其他入口不会暗中替代 Desktop。
 
@@ -133,7 +192,7 @@ aw -w sea agent start helper
 aw -w sea message watch helper start --interval 5
 ```
 
-程序通过 app-server 创建原生线程、提交初始化输入、记录事件；`aw_execute` 动态工具直接调用公共操作，不要求模型切到开发目录。实例须明确选择 `model` 与 `effort`，保存到根 `runtime.json`；`modelProvider` 与 `sandbox` 留在本机连接配置，sandbox 默认 `workspace-write`。旧模型覆盖首次使用时迁移并保留来源，缺项不继承原生默认。原生审批/额外授权请求不会被自动批准。
+程序通过 app-server 创建原生线程、提交初始化输入、记录事件；`aw_execute` 动态工具直接调用公共操作，不要求模型切到开发目录。实例须明确选择 `model` 与 `effort`，保存到 `.agentworkspace/config.json`；`modelProvider` 与 `sandbox` 留在本机连接配置，sandbox 默认 `workspace-write`。旧模型覆盖首次使用时迁移并保留来源，缺项不继承原生默认。原生审批/额外授权请求不会被自动批准。
 
 Windows npm `.cmd` 启动器有单独的 argv 处理；未在真实 Windows/Codex 环境完成验收。CLI 成功不等于 Desktop 成功。
 
@@ -169,6 +228,8 @@ aw -w sea checkpoint create helper --binding BINDING --summary "累计摘要" --
 aw -w sea agent stop helper --binding BINDING --checkpoint CHECKPOINT_ID
 ```
 
+新检查点的 `origin` 由程序记录 Workspace 及 locator、Agent、实例分支、实际资料根和职责文件，以及保存时的 Binding、会话类型、session 和已知原生 cwd。未知 cwd 保存为 `null`。这些字段是历史来源；后继仍解析自己的本机路径并取得本次入口，不使用旧 Binding 或路径恢复执行资格。原检查点及同一 ID 的原请求内容保持不变，旧记录不补写这些字段。
+
 Desktop/CLI 的停工确认由原运行器观察，不能用参数伪造。仅 manual 模式允许当前拥有者加 `--confirm-stopped`，表示使用者明确确认停工；不是操作系统隔离保证。
 
 ```sh
@@ -184,7 +245,7 @@ Fork 已保存目标分支但登记或目录准备未完成时，用原来源 Ag
 aw -w sea agent fork helper --checkpoint CHECKPOINT_ID --name explorer --new-id explorer --resume
 ```
 
-程序核对原目标的 `.aw/fork.json` 和资料版本，只补缺失步骤；已登记目标只准备或复用本地副本，已有用户修改保留。原发表结果未知时先读回原分支和登记，不重发。换机器或 `AW_HOME` 前，先在原环境核实尚未确认的发表；新环境没有本机凭据不能证明原操作未发生。旧 Fork 没有该来源记录时不支持这条继续路径；已经登记的旧目标仍可使用 `agent connect`。
+程序核对原目标的 `.agentworkspace/fork.json` 和资料版本，只补缺失步骤；旧分支按原布局读取。已登记目标只准备或复用本地副本，已有用户修改保留。原发表结果未知时先读回原分支和登记，不重发。换机器或 `AW_HOME` 前，先在原环境核实尚未确认的发表；新环境没有本机凭据不能证明原操作未发生。旧 Fork 没有该来源记录时不支持这条继续路径；已经登记的旧目标仍可使用 `agent connect`。
 
 `runtime stop helper` 只停止本机监视任务，**不释放实例资格**；不是 handoff。已有归档/解除归档不启动会话。跨目录运行器还要在共享 binding 上条件登记 controller，不能只靠同机 PID。硬崩溃留下未释放 controller 时保持阻塞，不自动接管。
 
@@ -252,15 +313,18 @@ aw -w sea asset read helper --path AGENTS.md
 aw -w sea asset write helper --path notes.md --content "记录" --revision FILE_HASH
 aw -w sea agent versions helper
 aw -w sea agent update helper --revision SOURCE_COMMIT
-aw -w sea agent upgrade-tools helper
+aw software status
+aw software update
 aw -w sea agent promote helper --path AGENTS.md --destination definitions/build-helper
 ```
 
 新文件写入不传 revision；覆盖必须传读取时的哈希。工具资源更新不重置 AGENTS.md。来源更新发现本地修改就保留并报告，不自动三方合并。无关共享消息提交不触发来源过期提示。
 
-实例的 `.aw/` 为受管身份、工具版本、提示词和检查点；`.aw-local/` 为当前环境资料，不进入实例 Git。source.json 只在确有来源时出现。
+实例的 `.agentworkspace/` 保存受管身份、配置、材料来源、提示词、检查点和平台记录；`.agentworkspace/local/` 保存当前环境资料，不进入实例 Git。`.agentworkspace/source.json` 只在确有来源时出现。`AGENTS.md`、原生 `.agents/skills/` 与用户自己的文档留在原位置。旧实例在明确迁移前继续使用旧布局，旧检查点仍从原提交读取。
 
-默认排除 `.git`、`.aw-local`、`.local`、`secrets`、`.env*`、`__pycache__`。排除列表在本机 context.json 的 `exclude` 中明确可见；这是简单名称/路径 glob，不声称实现完整 `.gitignore` 语法。单文件 50 MiB 上限，外部大附件需明确引用。symlink/submodule 不自动穿透。已保存快照的范围和排除项会返回；外部产品、原生隐藏状态、未同步的本机发送事实不自动成为完整备份。
+旧数据先用 `aw -w sea layout plan` 查看范围，再由用户显式迁移；实例迁移和共享 main 迁移分别选择，后者还需核实完整写入端集合。[迁移操作与原请求继续](runtime-and-maintenance.md#1-安装和依赖)说明参数、冲突和中断处理，不通过手工搬动目录混合两种布局。
+
+默认排除 `.git`、`.agentworkspace/local`、旧 `.aw-local`、`.local`、`secrets`、`.env*`、`__pycache__`。排除列表在本机 context.json 的 `exclude` 中明确可见；本机运行目录也由收集器强制排除，不只依赖 `.gitignore`。自定义排除是简单名称/路径 glob，不声称实现完整 `.gitignore` 语法。单文件 50 MiB 上限，外部大附件需明确引用。symlink/submodule 不自动穿透。已保存快照的范围和排除项会返回；外部产品、原生隐藏状态、未同步的本机发送事实不自动成为完整备份。
 
 本机待发送 journal 不会被 Fork 自动执行。需要保留其中的业务事实时，按用户选择写进检查点或实例材料；平台不自动重做，也不禁止查阅。
 

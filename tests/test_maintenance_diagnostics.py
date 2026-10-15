@@ -1,7 +1,7 @@
 """Health observations do not turn stopped or unobserved workers into success."""
 import pytest
 
-from agent_workspace import maintenance, runtime
+from agent_workspace import backend, maintenance, runtime
 from agent_workspace.util import encode, locked, read_json, write_json
 
 
@@ -18,8 +18,8 @@ def test_stopping_without_observer_remains_visible_after_handoff_request(desktop
     app, binding, root = desktop_entry
     checkpoint = app.checkpoint("sea", "alice", "original stop", binding=binding)
     app.stop("sea", "alice", binding, checkpoint["id"])
-    write_json(root / ".aw-local/control.json", {"handoff": binding})
-    write_json(root / ".aw-local/status.json", {"binding": binding, "state": "failed"})
+    write_json(root / ".agentworkspace/local/runtime/control.json", {"handoff": binding})
+    write_json(root / ".agentworkspace/local/runtime/status.json", {"binding": binding, "state": "failed"})
 
     report = maintenance.doctor(app, "sea")
 
@@ -35,9 +35,9 @@ def test_busy_stop_with_live_observer_is_not_a_missing_runner(desktop_entry):
     app, binding, root = desktop_entry
     checkpoint = app.checkpoint("sea", "alice", "wait for busy turn", binding=binding)
     app.stop("sea", "alice", binding, checkpoint["id"])
-    write_json(root / ".aw-local/status.json", {"binding": binding, "state": "handoff_waiting_idle"})
+    write_json(root / ".agentworkspace/local/runtime/status.json", {"binding": binding, "state": "handoff_waiting_idle"})
 
-    with locked(root / ".aw-local/runner.lock"):
+    with locked(root / ".agentworkspace/local/runtime/runner.lock"):
         report = maintenance.doctor(app, "sea")
 
     assert report["state"] == "healthy"
@@ -49,8 +49,8 @@ def test_busy_stop_with_live_observer_is_not_a_missing_runner(desktop_entry):
 
 def test_monitor_stop_does_not_hide_recorded_failure(desktop_entry):
     app, binding, root = desktop_entry
-    write_json(root / ".aw-local/control.json", {"stop": binding})
-    write_json(root / ".aw-local/status.json", {"binding": binding, "state": "connection_failed"})
+    write_json(root / ".agentworkspace/local/runtime/control.json", {"stop": binding})
+    write_json(root / ".agentworkspace/local/runtime/status.json", {"binding": binding, "state": "connection_failed"})
 
     report = maintenance.doctor(app, "sea")
 
@@ -64,18 +64,20 @@ def test_retry_and_unknown_stop_observation_are_not_reported_as_healthy(desktop_
     app.stop("sea", "alice", binding, checkpoint["id"])
     for state, code in (("shared_read_backoff", "runtime_shared_read_backoff"),
                         ("stop_observation_unknown", "stop_observation_unknown")):
-        write_json(root / ".aw-local/status.json", {"binding": binding, "state": state,
+        write_json(root / ".agentworkspace/local/runtime/status.json", {"binding": binding, "state": state,
                    "attempts": 2, "retry_seconds": 4, "reason": "observation temporarily unavailable"})
-        with locked(root / ".aw-local/runner.lock"):
+        with locked(root / ".agentworkspace/local/runtime/runner.lock"):
             report = maintenance.doctor(app, "sea")
         assert report["state"] == "degraded"
         assert {item["code"] for item in report["issues"]} == {code}
         assert report["local_observations"]["alice"]["runtime"]["retry_seconds"] == 4
 
 
-def test_watch_configuration_and_unknown_runtime_are_separate(desktop_entry):
+def test_watch_configuration_and_unknown_runtime_are_separate(desktop_entry, monkeypatch):
     app, binding, root = desktop_entry
-    write_json(root / ".aw-local/control.json", {"stop": binding})
+    # This check reads metadata; Runtime tests cover the actual background service.
+    monkeypatch.setattr(backend, "start", lambda app: {"state": "isolated-checker-fixture"})
+    write_json(root / ".agentworkspace/local/runtime/control.json", {"stop": binding})
     observation = maintenance.doctor(app, "sea")["local_observations"]["alice"]
     assert observation["runtime"] is None
     assert observation["watch"]["state"] == "not_configured"
@@ -85,7 +87,7 @@ def test_watch_configuration_and_unknown_runtime_are_separate(desktop_entry):
     observation = maintenance.doctor(app, "sea")["local_observations"]["alice"]
     assert observation["watch"]["state"] == "enabled"
     assert observation["runner_observed"] is False
-    write_json(root / ".aw-local/watch.json", {"enabled": True, "binding": "old-entry"})
+    write_json(root / ".agentworkspace/local/runtime/watch.json", {"enabled": True, "binding": "old-entry"})
     assert maintenance.doctor(app, "sea")["local_observations"]["alice"]["watch"]["state"] == "binding_mismatch"
 
 
@@ -116,7 +118,7 @@ def test_another_installations_schedule_is_unobserved(app, tmp_path):
 
 def test_unreadable_scheduler_identity_preserves_other_observations(desktop_entry):
     app, binding, root = desktop_entry
-    write_json(root / ".aw-local/status.json", {"binding": binding, "state": "failed"})
+    write_json(root / ".agentworkspace/local/runtime/status.json", {"binding": binding, "state": "failed"})
     maintenance.schedule(app, "sea", True)
     identity = app.home / "installation.json"
     identity.write_text("{broken", encoding="utf-8")
@@ -134,17 +136,17 @@ def queued_notice(app, monkeypatch):
     app.create("sea", "sentinel")
     store = app.store("sea")
     snap = store.snapshot()
-    meta = snap.json("workspace.json")
+    meta = snap.json(".agentworkspace/workspace.json")
     meta["caretakers"] = {"sentinel": "sentinel"}
-    store.change("main", {"workspace.json": encode(meta)},
-                 {"workspace.json": snap.entries["workspace.json"]}, "Register test sentinel")
+    store.change("main", {".agentworkspace/workspace.json": encode(meta)},
+                 {".agentworkspace/workspace.json": snap.entries[".agentworkspace/workspace.json"]}, "Register test sentinel")
     binding = app.reserve("sea", "sentinel")["binding"]
     app.bind("sea", "sentinel", binding, "sentinel-test-session")
     monkeypatch.setattr(maintenance, "doctor", lambda *args: {
         "state": "degraded", "issues": [{"code": "test_fault"}]})
     maintenance.schedule(app, "sea", True, notify=True)
     run = maintenance.tick(app, "sea")
-    path = app.root("sea", "sentinel") / ".aw-local/inputs" / (run["notice"]["id"] + ".json")
+    path = app.root("sea", "sentinel") / ".agentworkspace/local/operations/inputs" / (run["notice"]["id"] + ".json")
     return app, path
 
 

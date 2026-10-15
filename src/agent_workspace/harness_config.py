@@ -16,7 +16,8 @@ import urllib.parse
 
 from . import __version__
 from .rpc import Rpc
-from .util import Conflict, Error, locked
+from . import layout
+from .util import Conflict, Error
 
 
 def _check_http_consent(base_url, allow_http):
@@ -132,7 +133,7 @@ def configure_codex(app, workspace, agent_id, model="", effort="", base_url="", 
     config = codex_config(model, effort, base_url, env_key, executable, allow_http=allow_http)
     root = app.root(workspace, agent_id)
     # Lifecycle operations remain explicit. Saving a profile never starts a session.
-    with locked(root / ".aw-local/runner.lock", wait=0):
+    with layout.lock(root, "runner.lock", wait=0):
         if app.agent(workspace, agent_id)["current"]:
             raise Conflict("先完成 handoff，再改变此实例的 Harness 或模型服务配置。")
         result = app.configure(workspace, agent_id, config)
@@ -171,7 +172,7 @@ def configure_sdk(app, workspace, agent_id, kind, model="", effort="", base_url=
                   allowed_tools=None, *, allow_http=False):
     config = sdk_config(kind, model, effort, base_url, env_key, executable, allowed_tools, allow_http=allow_http)
     root = app.root(workspace, agent_id)
-    with locked(root / ".aw-local/runner.lock", wait=0):
+    with layout.lock(root, "runner.lock", wait=0):
         if app.agent(workspace, agent_id)["current"]:
             raise Conflict("Handoff before replacing an instance's runtime profile.")
         result = app.configure(workspace, agent_id, config)

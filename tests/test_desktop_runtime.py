@@ -1,3 +1,4 @@
+from agent_workspace import layout
 import json
 from pathlib import Path
 import sys
@@ -29,7 +30,7 @@ def desktop(app, monkeypatch):
             return {'threadId': 'native-chat', 'hostId': 'local'}
         if name == 'read_thread':
             assert 1 <= arguments['turnLimit'] <= 10
-            return {'thread': {'id': self.session, 'cwd': state['cwd'], 'status': {'type': state['status']}},
+            return {'thread': {'id': self.session, 'hostId': 'local', 'cwd': state['cwd'], 'status': {'type': state['status']}},
                     'turns': state['turns'], 'page': {'nextCursor': None}}
         return {'threadId': self.session}
 
@@ -46,10 +47,10 @@ def test_desktop_create_verifies_saved_project_and_never_repeats_unknown(desktop
     root, config, state, adapter = desktop
     state['unknown'] = True
     with pytest.raises(Unavailable):
-        adapter.create('one-binding')
-    assert read_json(root / '.aw-local/launch.json')['attempted']
+        adapter.create('one-binding', 'Explicit connection-only protocol fixture.')
+    assert read_json(layout.local_path(root, 'launch.json'))['attempted']
     with pytest.raises(Conflict):
-        adapter.create('one-binding')
+        adapter.create('one-binding', 'Explicit connection-only protocol fixture.')
     assert state['creates'] == 1
     assert state['creation']['target'] == {'type': 'project', 'projectId': 'saved-project', 'environment': {'type': 'local'}}
     assert state['creation']['model'] == 'chosen-model'
@@ -60,8 +61,8 @@ def test_desktop_creation_preserves_wrong_directory_receipt(desktop, tmp_path):
     root, config, state, adapter = desktop
     state['cwd'] = str(tmp_path / 'another-folder')
     with pytest.raises(Unavailable, match='directory'):
-        adapter.create('one-binding')
-    assert read_json(root / '.aw-local/launch.json')['result']['threadId'] == 'native-chat'
+        adapter.create('one-binding', 'Explicit connection-only protocol fixture.')
+    assert read_json(layout.local_path(root, 'launch.json'))['result']['threadId'] == 'native-chat'
 
 
 def test_desktop_project_must_be_unique_and_match_explicit_selection(desktop):
@@ -80,7 +81,7 @@ def test_manual_desktop_bootstrap_allows_only_capture_and_bind(app, desktop, mon
     assert runtime.desktop_directory_actor(app, 'agent.bind') is None
     with pytest.raises(Conflict):
         runtime.desktop_directory_actor(app, 'asset.write')
-    write_json(root / '.aw-local/launch.json', {'attempted': True})
+    write_json(layout.local_path(root, 'launch.json'), {'attempted': True})
     with pytest.raises(Conflict):
         runtime.desktop_directory_actor(app, 'agent.bind')
 
@@ -100,7 +101,7 @@ def test_desktop_input_receipt_uses_native_identity_and_turn(app, desktop, monke
     binding = app.reserve('sea', 'alice')['binding']
     app.bind('sea', 'alice', binding, 'native-chat')
     item = runtime.queue_input(app, 'sea', 'alice', 'actual requested work', request_id='input-one')
-    path = root / '.aw-local/inputs/input-one.json'
+    path = layout.local_path(root, 'inputs/input-one.json')
     write_json(path, {**item, 'state': 'dispatching'})
     monkeypatch.setenv('CODEX_THREAD_ID', 'another-chat')
     with pytest.raises(Conflict):
@@ -125,7 +126,7 @@ def test_desktop_completion_requires_received_turn_not_idle_or_another_turn(app,
     runner = runtime.Runner(app, 'sea', 'alice')
     runner.binding, runner.adapter = binding, adapter
     item = runtime.queue_input(app, 'sea', 'alice', 'init', purpose='initial', request_id='boot-' + binding)
-    path = root / '.aw-local/inputs' / (item['id'] + '.json')
+    path = layout.local_path(root, 'inputs') / (item['id'] + '.json')
     write_json(path, {**item, 'state': 'submitted', 'result': {'threadId': 'native-chat'}})
     state['turns'] = [{'id': 'unrelated', 'status': 'completed'}]
     runner._complete_inputs()
@@ -137,7 +138,7 @@ def test_desktop_completion_requires_received_turn_not_idle_or_another_turn(app,
     runner._complete_inputs()
     assert read_json(path)['state'] == 'completed'
     assert read_json(path)['checkpoint_revision']
-    observation = read_json(root / 'records' / binding / 'desktop-turns/our-turn.json')
+    observation = read_json(layout.instance_path(root, 'records') / binding / 'desktop-turns/our-turn.json')
     assert observation['turn'] == {'id': 'our-turn', 'status': 'completed'}
 
 
@@ -149,7 +150,7 @@ def test_desktop_dispatch_error_preserves_a_concurrent_native_receipt(app, deskt
     runner = runtime.Runner(app, 'sea', 'alice')
     runner.binding, runner.adapter = binding, adapter
     item = runtime.queue_input(app, 'sea', 'alice', 'work', request_id='concurrent-receipt')
-    path = root / '.aw-local/inputs/concurrent-receipt.json'
+    path = layout.local_path(root, 'inputs/concurrent-receipt.json')
     calls = []
 
     def accepted_then_disconnected(prompt, delivery):
@@ -167,6 +168,84 @@ def test_desktop_dispatch_error_preserves_a_concurrent_native_receipt(app, deskt
     state['turns'] = [{'id': 'actual-turn', 'status': 'completed'}]
     runner._complete_inputs()
     assert read_json(path)['state'] == 'completed'
+
+
+@pytest.mark.parametrize('relay', [False, True], ids=['initial', 'relay'])
+def test_shared_project_identity_precedes_connection_and_receive_without_copying_business(app, desktop, tmp_path, monkeypatch, relay):
+    from agent_workspace import desktop_projects
+    root, config, state, adapter = desktop
+    app.configure('sea', 'alice', {**config, 'command': config['command'][:-1] + ['desktop-project']})
+    common = tmp_path / 'old-project'
+    common.mkdir()
+    old_rules = b'# test-a\nOld personal identity: test-a; old binding: fixture-old-test-a.\n'
+    (common / 'AGENTS.md').write_bytes(old_rules)
+    choice = desktop_projects.plan(app, 'sea', 'alice')
+    desktop_projects.save(app, 'sea', 'alice', 'codex', 'Existing shared project',
+                          project_directory=str(common), revision=choice['revision'])
+    if relay:
+        old = app.reserve('sea', 'alice')['binding']
+        app.bind('sea', 'alice', old, 'fixture-previous-alice-chat')
+        point = app.checkpoint('sea', 'alice', 'Saved fixture work', 'Keep prior work paused.', binding=old)
+        app.stop('sea', 'alice', old, point['id'])
+        app.finish_stop('sea', 'alice', old, observed_idle=True)
+    binding = app.reserve('sea', 'alice')['binding']
+    state['cwd'] = str(common)
+    runner = runtime.Runner(app, 'sea', 'alice')
+    original_call = runtime.Desktop.call
+    received = []
+    notifications = []
+
+    def call(self, name, arguments):
+        if name == 'list_projects':
+            return {'projects': [{'projectId': 'shared-fixture-project', 'projectKind': 'local',
+                                  'hostId': 'local', 'path': str(common)}]}
+        if name in ('create_thread', 'send_message_to_thread'):
+            header = json.loads(arguments['prompt'].split('\n\n')[0])
+            assert header['workspace'] == 'sea' and header['agent'] == 'alice' and header['binding'] == binding
+            assert header['entry_mode'] == ('relay' if relay else 'initial')
+            assert header['instance_branch'] == 'instance/alice' and header['instance_root'] == str(root)
+            assert header['instructions_file'] == str(root / 'AGENTS.md')
+            assert header['skills_directory'] == str(root / '.agents/skills')
+            assert header['selected_project_directory'] == str(common)
+            assert '# 实例进入材料' not in arguments['prompt']
+            assert 'Keep prior work paused.' not in arguments['prompt']
+            if name == 'create_thread':
+                assert header['binding_phase'] == 'starting' and header['session'] is None
+                assert header['native_cwd'] is None
+                assert '只建立原生连接' in arguments['prompt']
+                assert 'runtime.receive-input' not in arguments['prompt']
+            else:
+                assert header['binding_phase'] == 'active' and header['session'] == 'native-chat'
+                assert header['native_cwd'] == str(common)
+                command = json.loads(arguments['prompt'].split('\n\n')[-1])
+                assert command == runtime.desktop_cli(app, 'sea', 'alice') + ['runtime.receive-input', '--arguments',
+                       json.dumps({'request_id': 'boot-' + binding}, ensure_ascii=False)]
+                assert command[-3] == 'runtime.receive-input'
+                notifications.append(arguments['prompt'])
+                state.update(status='active', turns=[{'id': 'fixture-received-turn', 'status': 'inProgress'}])
+                boot = read_json(layout.local_path(root, 'inputs') / f'boot-{binding}.json')
+                result = execute(app, 'runtime.receive-input', {'request_id': 'boot-' + binding},
+                                 actor=runtime.desktop_actor(app, 'sea', 'alice'))
+                assert result['text'] == boot['text']
+                assert '# 实例进入材料' in result['text']
+                if relay:
+                    assert 'Keep prior work paused.' in result['text']
+                received.append(result)
+                runner.stop_event.set()
+        return original_call(self, name, arguments)
+
+    monkeypatch.setattr(runtime.Desktop, 'call', call)
+    monkeypatch.setenv('CODEX_THREAD_ID', 'native-chat')
+    runner.run()
+    boot = read_json(layout.local_path(root, 'inputs') / f'boot-{binding}.json')
+    assert state['creates'] == 1 and len(notifications) == 1 and len(received) == 1
+    assert boot['state'] == 'submitted' and boot['result']['turn']['id'] == 'fixture-received-turn'
+    assert app.require_binding('sea', 'alice', binding)[1]['session'] == 'native-chat'
+    assert (common / 'AGENTS.md').read_bytes() == old_rules
+    original = boot.copy()
+    runner._inputs()
+    assert len(notifications) == 1
+    assert read_json(layout.local_path(root, 'inputs') / f'boot-{binding}.json') == original
 
 
 @pytest.mark.parametrize('target_kind', ['desktop', 'codex'])

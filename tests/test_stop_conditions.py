@@ -34,9 +34,9 @@ def finish(owner):
 def assert_still_owned(owner):
     app, binding, _ = owner
     snap = app.store("sea").snapshot()
-    assert snap.json("agents/alice.json")["current"] == binding
-    assert snap.json(f"bindings/{binding}.json")["phase"] == "stopping"
-    assert f"handoffs/h{binding[1:]}.json" not in snap.entries
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] == binding
+    assert snap.json(f".agentworkspace/bindings/{binding}.json")["phase"] == "stopping"
+    assert f".agentworkspace/handoffs/h{binding[1:]}.json" not in snap.entries
 
 
 def test_stop_repeat_preserves_original_request(owner):
@@ -74,7 +74,7 @@ def test_checkpoint_must_belong_and_remain_available(stopping, damage):
     app, _, checkpoint = stopping
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"checkpoints/alice/{checkpoint}.json"
+    path = f".agentworkspace/checkpoints/alice/{checkpoint}.json"
     pointer = snap.json(path)
     if damage == "missing":
         content = None
@@ -83,7 +83,7 @@ def test_checkpoint_must_belong_and_remain_available(stopping, damage):
             pointer["agent"] = "another-agent"
         elif damage == "foreign-material":
             pointer["revision"] = store.commit(pointer["revision"], {
-                ".aw/identity.json": encode({"agent": "another-agent", "workspace": snap.json("workspace.json")["locator"]})
+                ".agentworkspace/identity.json": encode({"agent": "another-agent", "workspace": snap.json(".agentworkspace/workspace.json")["locator"]})
             }, "foreign fixture material with the same checkpoint ID")
         else:
             pointer["revision"] = store.commit(pointer["revision"], {pointer["path"]: None}, "missing fixture material")
@@ -105,7 +105,7 @@ def test_changed_checkpoint_cannot_be_committed_from_old_snapshot(owner, monkeyp
         if message == stage and not raced:
             raced.append(True)
             snap = store.snapshot()
-            path = f"checkpoints/alice/{checkpoint}.json"
+            path = f".agentworkspace/checkpoints/alice/{checkpoint}.json"
             pointer = snap.json(path)
             pointer["excluded"] = ["fixture peer revision"]
             change(store, branch, {path: encode(pointer)}, {path: snap.entries[path]}, "fixture peer change")
@@ -117,9 +117,9 @@ def test_changed_checkpoint_cannot_be_committed_from_old_snapshot(owner, monkeyp
         else:
             finish(owner)
     snap = app.store("sea").snapshot()
-    assert snap.json("agents/alice.json")["current"] == binding
-    assert snap.json(f"bindings/{binding}.json")["phase"] == ("active" if stage == "Prepare handoff" else "stopping")
-    assert f"handoffs/h{binding[1:]}.json" not in snap.entries
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] == binding
+    assert snap.json(f".agentworkspace/bindings/{binding}.json")["phase"] == ("active" if stage == "Prepare handoff" else "stopping")
+    assert f".agentworkspace/handoffs/h{binding[1:]}.json" not in snap.entries
 
 
 def test_lost_publication_reply_returns_one_saved_handoff(stopping, monkeypatch):
@@ -135,9 +135,9 @@ def test_lost_publication_reply_returns_one_saved_handoff(stopping, monkeypatch)
     assert finish(stopping) == result
     assert len(attempts) == 1
     snap = app.store("sea").snapshot()
-    assert snap.json("agents/alice.json")["current"] is None
-    assert snap.json(f"bindings/{binding}.json")["phase"] == "released"
-    assert len([p for p in snap.entries if p.startswith("handoffs/")]) == 1
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] is None
+    assert snap.json(f".agentworkspace/bindings/{binding}.json")["phase"] == "released"
+    assert len([p for p in snap.entries if p.startswith(".agentworkspace/handoffs/")]) == 1
 
 
 def test_failed_result_lookup_is_unknown_not_retryable(stopping, monkeypatch):
@@ -162,7 +162,7 @@ def test_failed_result_lookup_is_unknown_not_retryable(stopping, monkeypatch):
 @pytest.mark.parametrize("result_record", ["binding", "handoff"])
 def test_failed_result_blob_read_is_unknown_not_retryable(stopping, monkeypatch, result_record):
     app, binding, _ = stopping
-    path = f"bindings/{binding}.json" if result_record == "binding" else f"handoffs/h{binding[1:]}.json"
+    path = f".agentworkspace/bindings/{binding}.json" if result_record == "binding" else f".agentworkspace/handoffs/h{binding[1:]}.json"
     publish, snapshot, blob = GitStore.publish, GitStore.snapshot, GitStore.blob
     attempts, unreadable = [], []
 
@@ -185,9 +185,9 @@ def test_failed_result_blob_read_is_unknown_not_retryable(stopping, monkeypatch,
 
     assert len(attempts) == 1
     snap = app.store("sea").snapshot()
-    assert snap.json("agents/alice.json")["current"] is None
-    assert snap.json(f"bindings/{binding}.json")["phase"] == "released"
-    assert len([p for p in snap.entries if p.startswith("handoffs/")]) == 1
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] is None
+    assert snap.json(f".agentworkspace/bindings/{binding}.json")["phase"] == "released"
+    assert len([p for p in snap.entries if p.startswith(".agentworkspace/handoffs/")]) == 1
 
 
 def test_concurrent_observers_publish_one_handoff(stopping, monkeypatch):
@@ -203,8 +203,8 @@ def test_concurrent_observers_publish_one_handoff(stopping, monkeypatch):
         results = list(pool.map(lambda _: finish(stopping), range(2)))
     assert results[0] == results[1]
     snap = app.store("sea").snapshot()
-    assert snap.json(f"bindings/{binding}.json")["phase"] == "released"
-    assert len([p for p in snap.entries if p.startswith("handoffs/")]) == 1
+    assert snap.json(f".agentworkspace/bindings/{binding}.json")["phase"] == "released"
+    assert len([p for p in snap.entries if p.startswith(".agentworkspace/handoffs/")]) == 1
 
 
 def test_released_repeat_does_not_change_the_successor(stopping):
@@ -227,7 +227,7 @@ def test_released_entry_requires_its_matching_handoff(stopping):
     finish(stopping)
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"handoffs/h{binding[1:]}.json"
+    path = f".agentworkspace/handoffs/h{binding[1:]}.json"
     store.change("main", {path: None}, {path: snap.entries[path]}, "missing fixture handoff")
     with pytest.raises(Error):
         finish(stopping)

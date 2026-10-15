@@ -1,4 +1,5 @@
 """Isolated runtime recovery; native peers below are protocol fixtures, not Desktop acceptance."""
+from agent_workspace import layout
 from pathlib import Path
 import sys
 import threading
@@ -10,7 +11,7 @@ import pytest
 from agent_workspace import backend, model_profiles, runtime
 from agent_workspace.commands import execute
 from agent_workspace.gitstore import GitStore
-from agent_workspace.util import (Conflict, Error, LockBusy, RetryableRead, Uncertain,
+from agent_workspace.util import (Conflict, Error, LockBusy, RetryableRead, Unavailable, Uncertain,
                                   encode, locked, read_json, write_json)
 
 
@@ -55,7 +56,7 @@ def desktop_owner(app, monkeypatch):
                 callback()
             return {"threadId": self.session, "turn": {"id": "original-turn"}}
 
-        def create(self, binding):
+        def create(self, binding, prompt):
             pytest.fail("Recovery must not create a native session")
 
         def close(self):
@@ -129,7 +130,7 @@ def test_read_retry_retains_original_session_binding_and_single_input(desktop_ow
     assert native["attached"] == ["original-chat"]
     assert len(native["sent"]) == 1
     assert app.agent("sea", "alice")["current"] == binding
-    item = read_json(root / ".aw-local/inputs/one-input.json")
+    item = read_json(layout.local_path(root, "inputs/one-input.json"))
     assert item["binding"] == binding and item["state"] == "submitted"
     assert item["result"]["turn"]["id"] == "original-turn"
 
@@ -158,7 +159,7 @@ def test_recovered_read_checks_new_stop_before_dispatch(desktop_owner, monkeypat
     monkeypatch.setattr(runner.stop_event, "wait", wait)
     runner.run()
     assert not native["sent"]
-    assert read_json(root / ".aw-local/inputs/queued-input.json")["state"] == "queued"
+    assert read_json(layout.local_path(root, "inputs/queued-input.json"))["state"] == "queued"
     assert app.show("sea", "alice")["current"] is None
 
 
@@ -169,7 +170,7 @@ def test_watch_read_failure_after_submission_does_not_repeat_input(desktop_owner
     app.bind("sea", "bob", sender, "sender-chat")
     runtime.Messages(app).send("sea", "bob", sender, "alice", "explicit message fixture", request_id="original-message")
     runtime.queue_input(app, "sea", "alice", "one model input", request_id="one-input")
-    runtime.watch(app, "sea", "alice", "start", interval=.5)
+    write_json(layout.local_path(root, "watch.json"), {"enabled": True, "binding": binding, "interval": .5})
     runner = runtime.Runner(app, "sea", "alice")
     delays = fast_wait(runner, monkeypatch)
     original_head, original_poll = GitStore.head, runtime.Messages.poll
@@ -202,8 +203,9 @@ def test_watch_read_failure_after_submission_does_not_repeat_input(desktop_owner
     assert len(native["sent"]) == 2  # One model input and one original Message notification.
     assert "one-input" in native["sent"][0][1]
     assert "original-message" in native["sent"][1][1]
-    assert read_json(root / ".aw-local/inputs/one-input.json")["state"] == "submitted"
-    assert app.store("sea").snapshot().json("dispatch/alice.json")["attempts"] == 1
+    assert read_json(layout.local_path(root, "inputs/one-input.json"))["state"] == "submitted"
+    snap = app.store("sea").snapshot()
+    assert snap.json(layout.shared_path(snap, "dispatch/alice.json"))["attempts"] == 1
 
 
 def test_persistent_read_failure_remains_visible_and_keeps_adapter(desktop_owner, monkeypatch):
@@ -221,7 +223,7 @@ def test_persistent_read_failure_remains_visible_and_keeps_adapter(desktop_owner
     read = Mock(side_effect=RetryableRead("still offline"))
     with pytest.raises(runtime._ReadStopped):
         runner._shared_read("ownership", read)
-    status = read_json(root / ".aw-local/status.json")
+    status = read_json(layout.local_path(root, "status.json"))
     assert status["state"] == "shared_read_backoff" and status["attempts"] == 3
     assert status["reason"] == "still offline" and status["retry_seconds"] == 8
     assert not native["closed"] and app.agent("sea", "alice")["current"] == binding
@@ -259,7 +261,7 @@ def test_cleanup_does_not_replace_original_failure(desktop_owner, monkeypatch):
     with pytest.raises(Error) as raised:
         runner.run()
     assert raised.value is original
-    status = read_json(root / ".aw-local/status.json")
+    status = read_json(layout.local_path(root, "status.json"))
     assert status["reason"] == "original access failure"
     assert status["cleanup_errors"] == ["native close failed", "cleanup read failed"]
 
@@ -267,18 +269,18 @@ def test_cleanup_does_not_replace_original_failure(desktop_owner, monkeypatch):
 def test_stopping_observer_waits_then_releases_only_original_request(desktop_owner, monkeypatch):
     app, root, binding, native = desktop_owner
     # Existing sessions without an adopted model must still be stoppable.
-    local = read_json(root / ".aw-local/entry.json")
+    local = read_json(layout.local_path(root, "entry.json"))
     local.pop("model_profile", None)
-    write_json(root / ".aw-local/entry.json", local)
-    (root / "runtime.json").unlink()
+    write_json(layout.local_path(root, "entry.json"), local)
+    (layout.instance_path(root, "config.json")).unlink()
     runtime.queue_input(app, "sea", "alice", "remain queued", request_id="untouched")
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
     store.change("main", {path: encode({**snap.json(path), "controller": "original-controller"})},
                  {path: snap.entries[path]}, "Record original fixture controller")
     point = request_stop(desktop_owner)
-    write_json(root / ".aw-local/renew.json", {"binding": binding, "requested": True})
+    write_json(layout.local_path(root, "renew.json"), {"binding": binding, "requested": True})
     native["states"] = ["busy", "unknown", "idle"]
     runner = runtime.Runner(app, "sea", "alice", stop_binding=binding)
     fast_wait(runner, monkeypatch)
@@ -287,13 +289,14 @@ def test_stopping_observer_waits_then_releases_only_original_request(desktop_own
     monkeypatch.setattr(bridges, "BridgeManager", Mock(side_effect=AssertionError("no bridge")))
     runner.run()
     released = app.show("sea", "alice")
-    handoff = app.store("sea").snapshot().json(f"handoffs/{released['handoff']}.json")
+    snap = app.store("sea").snapshot()
+    handoff = snap.json(layout.shared_path(snap, f"handoffs/{released['handoff']}.json"))
     assert handoff["entry"] == binding and handoff["checkpoint"] == point["id"]
     assert native["attached"] == ["original-chat"] and not native["sent"]
     assert native["read_only"] == [True]
-    assert read_json(root / ".aw-local/inputs/untouched.json")["state"] == "queued"
-    assert read_json(root / ".aw-local/renew.json")["requested"]
-    assert read_json(root / ".aw-local/status.json")["state"] == "released"
+    assert read_json(layout.local_path(root, "inputs/untouched.json"))["state"] == "queued"
+    assert read_json(layout.local_path(root, "renew.json"))["requested"]
+    assert read_json(layout.local_path(root, "status.json"))["state"] == "released"
 
 
 def test_unknown_native_status_keeps_stop_owned(desktop_owner, monkeypatch):
@@ -304,7 +307,7 @@ def test_unknown_native_status_keeps_stop_owned(desktop_owner, monkeypatch):
     native["on_status"] = runner.stop_event.set
     runner.run()
     assert app.show("sea", "alice")["binding"]["phase"] == "stopping"
-    assert read_json(root / ".aw-local/status.json")["state"] == "stop_observation_unknown"
+    assert read_json(layout.local_path(root, "status.json"))["state"] == "stop_observation_unknown"
 
 
 @pytest.mark.parametrize("stop_only", [False, True])
@@ -343,7 +346,7 @@ def test_public_cancel_stops_observation_without_release_or_successor(desktop_ow
     assert detail["binding"]["session"] == "original-chat" and detail["binding"]["checkpoint"] == point["id"]
     assert native["attached"] == ["original-chat"] and not native["sent"] and native["closed"] == 1
     assert native["read_only"] == [stop_only]
-    assert read_json(root / ".aw-local/inputs/untouched.json")["state"] == "queued"
+    assert read_json(layout.local_path(root, "inputs/untouched.json"))["state"] == "queued"
     assert detail["runtime"]["state"] == "monitor_stopped" and not detail["runtime"]["runner_alive"]
     finish.assert_not_called()
     spawn.assert_not_called()
@@ -371,9 +374,9 @@ def test_revoked_runner_cannot_consume_forced_handoff(desktop_owner, monkeypatch
     app, root, binding, native = desktop_owner
     point = app.checkpoint("sea", "alice", "explicit takeover materials", binding=binding)
     if continuation == "renew":
-        write_json(root / ".aw-local/renew.json", {"binding": binding, "requested": True})
+        write_json(layout.local_path(root, "renew.json"), {"binding": binding, "requested": True})
     else:
-        write_json(root / ".aw-local/transfer.json", {"old_binding": binding, "target_binding": "chosen-successor", "state": "handoff_requested"})
+        write_json(layout.local_path(root, "transfer.json"), {"old_binding": binding, "target_binding": "chosen-successor", "state": "handoff_requested"})
     runner = runtime.Runner(app, "sea", "alice")
     taken = False
 
@@ -393,12 +396,12 @@ def test_revoked_runner_cannot_consume_forced_handoff(desktop_owner, monkeypatch
     runner.run()
     snap = app.store("sea").snapshot()
     owner = app.agent("sea", "alice", snap)
-    handoff = snap.json(f"handoffs/{owner['handoff']}.json")
-    assert owner["current"] is None and snap.json(f"bindings/{binding}.json")["phase"] == "revoked"
+    handoff = snap.json(layout.shared_path(snap, f"handoffs/{owner['handoff']}.json"))
+    assert owner["current"] is None and snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))["phase"] == "revoked"
     assert handoff["forced"] and handoff["consumed_by"] is None and not handoff["native_stop_confirmed"]
     assert not native["sent"]
     if continuation == "renew":
-        assert read_json(root / ".aw-local/renew.json")["requested"]
+        assert read_json(layout.local_path(root, "renew.json"))["requested"]
     start.assert_not_called()
     advance.assert_not_called()
 
@@ -408,9 +411,9 @@ def test_normal_released_handoff_still_allows_requested_continuation(desktop_own
     app, root, binding, native = desktop_owner
     point = app.checkpoint("sea", "alice", "normal handoff", binding=binding)
     if continuation == "renew":
-        write_json(root / ".aw-local/renew.json", {"binding": binding, "requested": True})
+        write_json(layout.local_path(root, "renew.json"), {"binding": binding, "requested": True})
     else:
-        write_json(root / ".aw-local/transfer.json", {"old_binding": binding, "target_binding": "chosen-successor", "state": "handoff_requested"})
+        write_json(layout.local_path(root, "transfer.json"), {"old_binding": binding, "target_binding": "chosen-successor", "state": "handoff_requested"})
     runner = runtime.Runner(app, "sea", "alice")
     stopping = False
 
@@ -428,13 +431,14 @@ def test_normal_released_handoff_still_allows_requested_continuation(desktop_own
     monkeypatch.setattr(runtime, "start", start)
     monkeypatch.setattr(transfer, "advance", advance)
     runner.run()
-    assert app.store("sea").snapshot().json(f"bindings/{binding}.json")["phase"] == "released"
+    snap = app.store("sea").snapshot()
+    assert snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))["phase"] == "released"
     assert not native["sent"]
     if continuation == "renew":
         start.assert_called_once()
         assert start.call_args.kwargs["expected_handoff"] == "h" + binding[1:]
         advance.assert_not_called()
-        assert not read_json(root / ".aw-local/renew.json")["requested"]
+        assert not read_json(layout.local_path(root, "renew.json"))["requested"]
     else:
         advance.assert_called_once()
         start.assert_not_called()
@@ -451,7 +455,7 @@ def test_automatic_continuation_cannot_reuse_another_starting_binding(app):
     with pytest.raises(Conflict, match="automatic continuation"):
         runtime.start(app, "sea", "alice", expected_handoff=released["id"])
     assert app.agent("sea", "alice")["current"] == current
-    assert not read_json(app.root("sea", "alice") / ".aw-local/launch.json", {}).get("attempted")
+    assert not read_json(layout.local_path(app.root("sea", "alice"), "launch.json"), {}).get("attempted")
     with pytest.raises(Error, match="internal"):
         execute(app, "agent.start", {"workspace": "sea", "agent_id": "alice", "expected_handoff": released["id"]})
 
@@ -469,7 +473,7 @@ def test_changed_stop_facts_cannot_be_released(desktop_owner, monkeypatch, field
         changed = True
         store = app.store("sea")
         snap = store.snapshot()
-        path = f"bindings/{binding}.json"
+        path = layout.shared_path(snap, f"bindings/{binding}.json")
         entry = snap.json(path)
         entry[field] = "changed-after-observation"
         store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Change isolated stop fact")
@@ -478,15 +482,16 @@ def test_changed_stop_facts_cannot_be_released(desktop_owner, monkeypatch, field
     with pytest.raises(Conflict):
         runtime.Runner(app, "sea", "alice", stop_binding=binding).run()
     assert app.agent("sea", "alice")["current"] == binding
-    assert app.store("sea").snapshot().json("handoffs/h" + binding[1:] + ".json") is None
+    snap = app.store("sea").snapshot()
+    assert snap.json(layout.shared_path(snap, "handoffs/h" + binding[1:] + ".json")) is None
 
 
 def test_missing_checkpoint_prevents_observation_and_release(desktop_owner):
     app, _, binding, native = desktop_owner
     point = request_stop(desktop_owner)
     store = app.store("sea")
-    path = f"checkpoints/alice/{point['id']}.json"
     snap = store.snapshot()
+    path = layout.shared_path(snap, f"checkpoints/alice/{point['id']}.json")
     store.change("main", {path: None}, {path: snap.entries[path]}, "Remove isolated fixture checkpoint")
     with pytest.raises(Error):
         runtime.Runner(app, "sea", "alice", stop_binding=binding).run()
@@ -503,7 +508,7 @@ def test_unknown_stop_publication_is_not_replayed(desktop_owner, monkeypatch):
         runtime.Runner(app, "sea", "alice", stop_binding=binding).run()
     assert finish.call_count == 1 and not native["sent"]
     assert app.show("sea", "alice")["binding"]["checkpoint"] == point["id"]
-    assert read_json(root / ".aw-local/status.json")["error_code"] == "outcome_unknown"
+    assert read_json(layout.local_path(root, "status.json"))["error_code"] == "outcome_unknown"
 
 
 
@@ -524,7 +529,7 @@ def test_stop_preflight_read_retry_reobserves_original_request(desktop_owner, mo
         if not stopping:
             stopping = True
             app.stop("sea", "alice", binding, point["id"])
-        status = read_json(root / ".aw-local/status.json", {})
+        status = read_json(layout.local_path(root, "status.json"), {})
         recorded_states.append(status.get("state"))
         return False
 
@@ -555,15 +560,15 @@ def test_stop_preflight_read_retry_reobserves_original_request(desktop_owner, mo
     monkeypatch.setattr(bridges.BridgeManager, "tick", Mock(side_effect=AssertionError("no bridge events during stop")))
     runner.run()
     snap = app.store("sea").snapshot()
-    handoffs = [path for path in snap.entries if path.startswith("handoffs/")]
-    assert handoffs == ["handoffs/h" + binding[1:] + ".json"]
+    handoffs = [path for path in snap.entries if path.startswith(layout.shared_path(snap, "handoffs/"))]
+    assert handoffs == [layout.shared_path(snap, "handoffs/h" + binding[1:] + ".json")]
     assert app.agent("sea", "alice", snap)["current"] is None
     assert len(calls) == 2 and calls[0] == calls[1]
     assert calls[0]["expected_session"] == "original-chat"
     assert calls[0]["expected_checkpoint"] == point["id"]
     assert native["attached"] == ["original-chat", "original-chat"] and not native["sent"]
     assert 2 in waits and "stop_observation_unknown" in recorded_states
-    assert read_json(root / ".aw-local/inputs/untouched.json")["state"] == "queued"
+    assert read_json(layout.local_path(root, "inputs/untouched.json"))["state"] == "queued"
 
 
 def test_regular_stop_unknown_publication_does_not_spawn_observer(desktop_owner, monkeypatch):
@@ -597,7 +602,7 @@ def test_controller_cleanup_retries_only_its_failed_preflight_read(desktop_owner
     runner.binding, runner.controller = binding, "original-controller"
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
     entry = snap.json(path)
     store.change("main", {path: encode({**entry, "controller": runner.controller})},
                  {path: snap.entries[path]}, "Isolated controller claim")
@@ -633,7 +638,7 @@ def test_continue_reuses_live_runner(desktop_owner, monkeypatch):
     point = request_stop(desktop_owner)
     spawn = Mock()
     monkeypatch.setattr(runtime, "spawn_runner", spawn)
-    with locked(root / ".aw-local/runner.lock", wait=0):
+    with locked(layout.local_path(root, "runner.lock"), wait=0):
         result = runtime.continue_stop(app, "sea", "alice", binding, expected_checkpoint=point["id"])
     assert result["state"] == "runner_present"
     spawn.assert_not_called()
@@ -660,11 +665,11 @@ def test_stop_command_starts_only_stop_observer(desktop_owner, monkeypatch):
 def test_stop_after_public_monitor_pause_confirms_original_idle_session(desktop_owner, monkeypatch):
     app, root, binding, native = desktop_owner
     runtime.queue_input(app, "sea", "alice", "do not execute during stop recovery", request_id="untouched")
-    queued = root / ".aw-local/inputs/untouched.json"
+    queued = layout.local_path(root, "inputs/untouched.json")
     original_bytes = queued.read_bytes()
     point = app.checkpoint("sea", "alice", "saved original stop", binding=binding)
     execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
-    assert read_json(root / ".aw-local/control.json")["stop"] == binding
+    assert read_json(layout.local_path(root, "control.json"))["stop"] == binding
     launches = []
 
     def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None):
@@ -677,7 +682,7 @@ def test_stop_after_public_monitor_pause_confirms_original_idle_session(desktop_
     execute(app, "agent.stop", {"workspace": "sea", "agent_id": "alice", "binding": binding,
                                "checkpoint": point["id"]}, actor=("sea", "alice", binding))
     snap = app.store("sea").snapshot()
-    entry = snap.json(f"bindings/{binding}.json")
+    entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
     assert entry["phase"] == "released" and entry["session"] == "original-chat"
     assert entry["checkpoint"] == point["id"] and app.agent("sea", "alice", snap)["current"] is None
     assert launches == [binding] and native["read_only"] == [True] and not native["sent"]
@@ -712,7 +717,7 @@ def test_explicit_stop_repair_resumes_original_observation_and_can_be_cancelled_
         attached = list(native["attached"])
         repeated = execute(app, "maintenance.repair", args)
         assert repeated["verification"]["stop"]["state"] == "stopping"
-        assert native["attached"] == attached and read_json(root / ".aw-local/control.json")["stop"] == binding
+        assert native["attached"] == attached and read_json(layout.local_path(root, "control.json"))["stop"] == binding
         native["states"] = ["idle"]
         native.pop("on_status")
         resumed = execute(app, "maintenance.repair", {**args, "request_id": "new-confirmation-attempt"})
@@ -720,10 +725,10 @@ def test_explicit_stop_repair_resumes_original_observation_and_can_be_cancelled_
         manager.runners[root]["thread"].join(30)
         assert not manager.runners[root]["thread"].is_alive()
         snap = app.store("sea").snapshot()
-        assert snap.json(f"bindings/{binding}.json")["phase"] == "released"
-        handoff = snap.json(f"handoffs/h{binding[1:]}.json")
+        assert snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))["phase"] == "released"
+        handoff = snap.json(layout.shared_path(snap, f"handoffs/h{binding[1:]}.json"))
         assert handoff["checkpoint"] == point["id"] and handoff["entry"] == binding
-        assert snap.json(f"bindings/{binding}.json")["session"] == "original-chat"
+        assert snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))["session"] == "original-chat"
         assert native["read_only"] == [True, True] and not native["sent"]
         verified = execute(app, "maintenance.repair", args)
         assert verified["verification"]["stop"]["state"] == "released"
@@ -826,12 +831,12 @@ def test_read_only_desktop_needs_only_read_tool_and_refuses_execution(app):
     try:
         assert adapter.status() == "idle"
         with pytest.raises(Conflict):
-            adapter.create("original-binding")
+            adapter.create("original-binding", 'Explicit connection-only protocol fixture.')
         with pytest.raises(Conflict):
             adapter.notify("must not execute", "normal")
     finally:
         adapter.close()
-    assert not (root / ".aw-local/launch.json").exists()
+    assert not (layout.local_path(root, "launch.json")).exists()
 
 
 def test_stop_command_real_windows_process_and_git_protocol_peer(app, monkeypatch):
@@ -845,21 +850,21 @@ def test_stop_command_real_windows_process_and_git_protocol_peer(app, monkeypatc
     point = app.checkpoint("sea", "alice", "real child stop observer", binding=binding)
     monkeypatch.setenv("PYTHONPATH", str(Path(runtime.__file__).parents[1]))
     # This fixture provides observation tools only, so startup must not resume execution.
-    write_json(root / ".aw-local/control.json", {"stop": binding})
+    write_json(layout.local_path(root, "control.json"), {"stop": binding})
     backend.start(app, port=0)
     try:
         deadline = time.monotonic() + 90
         while backend.status(app).get("restoring") and time.monotonic() < deadline:
             time.sleep(.1)
         assert not backend.status(app).get("restoring")
-        write_json(root / ".aw-local/control.json", {"stop": None})
+        write_json(layout.local_path(root, "control.json"), {"stop": None})
         result = execute(app, "agent.stop", {"workspace": "sea", "agent_id": "alice", "binding": binding,
                                             "checkpoint": point["id"]}, actor=("sea", "alice", binding))
         assert result["observation"]["state"] == "starting_stop_observer"
         deadline = time.monotonic() + 90
         status = {}
         while time.monotonic() < deadline:
-            status = read_json(root / ".aw-local/status.json", {})
+            status = read_json(layout.local_path(root, "status.json"), {})
             if status.get("state") in ("released", "failed"):
                 break
             time.sleep(.1)
@@ -867,10 +872,30 @@ def test_stop_command_real_windows_process_and_git_protocol_peer(app, monkeypatc
         assert status["session"] == "original-protocol-chat"
         assert status["pid"] == backend.status(app)["pid"]
         assert app.agent("sea", "alice")["current"] is None
-        assert not list((root / ".aw-local/inputs").glob("*.json"))
+        assert not list((layout.local_path(root, "inputs")).glob("*.json"))
     finally:
         backend.stop(app)
         deadline = time.monotonic() + 90
         while backend.status(app)["running"] and time.monotonic() < deadline:
             time.sleep(.1)
         assert not backend.status(app)["running"]
+
+
+def test_stop_connection_recovery_is_bounded_and_preserves_original_request(desktop_owner, monkeypatch):
+    app, root, binding, native = desktop_owner
+    point = request_stop(desktop_owner)
+    original = app.show("sea", "alice")["binding"]
+    runner = runtime.Runner(app, "sea", "alice", stop_binding=binding)
+    delays = fast_wait(runner, monkeypatch)
+
+    def disconnected(*args):
+        raise Unavailable("original native endpoint disconnected")
+
+    monkeypatch.setattr(runtime.Desktop, "status", disconnected)
+    runner.run()
+    assert native["attached"] == ["original-chat"] * 5 and native["read_only"] == [True] * 5
+    assert delays == [2, 4, 8, 16] and not native["sent"]
+    assert app.show("sea", "alice")["binding"] == original
+    state = read_json(layout.local_path(root, 'status.json'))
+    assert state["state"] == "stop_observation_unknown" and state["recovery_paused"]
+    assert state["stop_request"]["checkpoint"] == point["id"] and state["retry_seconds"] == 0

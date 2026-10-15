@@ -152,7 +152,7 @@ def test_agent_detail_does_not_turn_unknown_observation_into_stopped(ui, observa
         app.change_local(lambda registry: registry["workspaces"]["sea"]["instances"].pop("alice"))
         expected = "本机无副本，未观测"
     else:
-        (app.root("sea", "alice") / ".aw-local/status.json").write_bytes(b"{broken")
+        (app.root("sea", "alice") / ".agentworkspace/local/runtime/status.json").write_bytes(b"{broken")
         expected = "本机状态读取失败"
     page.locator("#refresh").click()
     page.wait_for_function("!document.getElementById('refresh').disabled")
@@ -176,10 +176,10 @@ def test_current_copy_is_not_replaced_by_stale_copy_and_history_is_separate(ui, 
     app.connect_agent("sea", "alice", second)
     current = app.reserve("sea", "alice", second)["binding"]
     app.bind("sea", "alice", current, "fixture-current-session", second)
-    write_json(first / ".aw-local/status.json", {"binding": old, "session": "native-alice", "state": "fixture-old-busy"})
+    write_json(first / ".agentworkspace/local/runtime/status.json", {"binding": old, "session": "native-alice", "state": "fixture-old-busy"})
     if damaged_old_copy:
-        (first / ".aw-local/status.json").write_bytes(b"{broken")
-    write_json(second / ".aw-local/status.json", {"binding": current, "session": "fixture-current-session", "state": "fixture-current-idle"})
+        (first / ".agentworkspace/local/runtime/status.json").write_bytes(b"{broken")
+    write_json(second / ".agentworkspace/local/runtime/status.json", {"binding": current, "session": "fixture-current-session", "state": "fixture-current-idle"})
     page.locator("#refresh").click()
     page.wait_for_function("!document.getElementById('refresh').disabled")
     assert page.locator("#agent-count").inner_text() == "2"

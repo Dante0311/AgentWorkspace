@@ -7,7 +7,8 @@ from agent_workspace.util import Conflict
 
 @pytest.fixture
 def released_agent(app, monkeypatch):
-    monkeypatch.setattr(app, "_resources", lambda: {"AGENTS.md": b"Responsibilities\n"})
+    resources = app._resources
+    monkeypatch.setattr(app, "_resources", lambda: {**resources(), "AGENTS.md": b"Responsibilities\n"})
     app.create("sea", "alice")
     point = app.checkpoint("sea", "alice", "saved material", checkpoint_id="saved-point")
     old = app.reserve("sea", "alice")["binding"]
@@ -21,9 +22,9 @@ def test_matching_handoff_can_be_consumed(released_agent):
     app, _, handoff = released_agent
     result = app.reserve("sea", "alice", binding_id="matched-successor", expected_handoff=handoff["id"])
     snap = app.store("sea").snapshot()
-    assert snap.json("agents/alice.json")["current"] == result["binding"]
-    assert snap.json(f"bindings/{result['binding']}.json")["handoff"] == handoff["id"]
-    assert snap.json(f"handoffs/{handoff['id']}.json")["consumed_by"] == result["binding"]
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] == result["binding"]
+    assert snap.json(f".agentworkspace/bindings/{result['binding']}.json")["handoff"] == handoff["id"]
+    assert snap.json(f".agentworkspace/handoffs/{handoff['id']}.json")["consumed_by"] == result["binding"]
 
 
 def test_old_continuation_rejects_forced_successor_but_manual_reserve_can_use_it(released_agent):
@@ -33,22 +34,22 @@ def test_old_continuation_rejects_forced_successor_but_manual_reserve_can_use_it
     forced = app.takeover("sea", "alice", intervening, checkpoint, confirm=True)["handoff"]
     store = app.store("sea")
     before = store.head("main")
-    local_entry = app.root("sea", "alice") / ".aw-local/entry.json"
+    local_entry = app.root("sea", "alice") / ".agentworkspace/local/runtime/entry.json"
     before_entry = local_entry.read_bytes()
     with pytest.raises(Conflict):
         app.reserve("sea", "alice", binding_id="stale-before-read", expected_handoff=old_handoff["id"])
     snap = store.snapshot()
     assert snap.revision == before
-    assert snap.json("agents/alice.json")["handoff"] == forced["id"]
-    assert snap.json("agents/alice.json")["current"] is None
-    assert snap.json(f"handoffs/{forced['id']}.json")["consumed_by"] is None
-    assert "bindings/stale-before-read.json" not in snap.entries
+    assert snap.json(".agentworkspace/agents/alice.json")["handoff"] == forced["id"]
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] is None
+    assert snap.json(f".agentworkspace/handoffs/{forced['id']}.json")["consumed_by"] is None
+    assert ".agentworkspace/bindings/stale-before-read.json" not in snap.entries
     assert local_entry.read_bytes() == before_entry
     # Explicit manual entry preparation keeps the existing default behavior.
     manual = app.reserve("sea", "alice", binding_id="manual-successor")
     snap = store.snapshot()
-    assert snap.json(f"handoffs/{forced['id']}.json")["consumed_by"] == manual["binding"]
-    assert snap.json("agents/alice.json")["current"] == manual["binding"]
+    assert snap.json(f".agentworkspace/handoffs/{forced['id']}.json")["consumed_by"] == manual["binding"]
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] == manual["binding"]
 
 
 def test_change_after_handoff_read_is_rejected_by_existing_version_conditions(released_agent, tmp_path, monkeypatch):
@@ -59,7 +60,7 @@ def test_change_after_handoff_read_is_rejected_by_existing_version_conditions(re
     store = app.store("sea")
     change = store.change
     forced_results = []
-    local_entry = app.root("sea", "alice") / ".aw-local/entry.json"
+    local_entry = app.root("sea", "alice") / ".agentworkspace/local/runtime/entry.json"
     before_entry = local_entry.read_bytes()
 
     def change_after_read(branch, changes, expected, message, **kwargs):
@@ -75,15 +76,16 @@ def test_change_after_handoff_read_is_rejected_by_existing_version_conditions(re
     assert len(forced_results) == 1
     forced = forced_results[0]
     snap = store.snapshot()
-    assert snap.json("agents/alice.json")["handoff"] == forced["id"]
-    assert snap.json("agents/alice.json")["current"] is None
-    assert snap.json(f"handoffs/{forced['id']}.json")["consumed_by"] is None
-    assert "bindings/stale-after-read.json" not in snap.entries
+    assert snap.json(".agentworkspace/agents/alice.json")["handoff"] == forced["id"]
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] is None
+    assert snap.json(f".agentworkspace/handoffs/{forced['id']}.json")["consumed_by"] is None
+    assert ".agentworkspace/bindings/stale-after-read.json" not in snap.entries
     assert local_entry.read_bytes() == before_entry
 
 
 def test_expected_handoff_cannot_be_used_for_a_fresh_agent(app, monkeypatch):
-    monkeypatch.setattr(app, "_resources", lambda: {"AGENTS.md": b"Responsibilities\n"})
+    resources = app._resources
+    monkeypatch.setattr(app, "_resources", lambda: {**resources(), "AGENTS.md": b"Responsibilities\n"})
     app.create("sea", "alice")
     store = app.store("sea")
     before = store.head("main")
@@ -91,5 +93,5 @@ def test_expected_handoff_cannot_be_used_for_a_fresh_agent(app, monkeypatch):
         app.reserve("sea", "alice", binding_id="missing-handoff", expected_handoff="fixture-absent-handoff")
     snap = store.snapshot()
     assert snap.revision == before
-    assert snap.json("agents/alice.json")["current"] is None
-    assert "bindings/missing-handoff.json" not in snap.entries
+    assert snap.json(".agentworkspace/agents/alice.json")["current"] is None
+    assert ".agentworkspace/bindings/missing-handoff.json" not in snap.entries

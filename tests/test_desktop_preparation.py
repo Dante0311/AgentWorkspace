@@ -1,4 +1,5 @@
 """Native catalog schema fixtures, not a claim that Desktop was controlled here."""
+from agent_workspace import layout
 from copy import deepcopy
 
 import pytest
@@ -45,7 +46,7 @@ def test_discovery_matches_folder_and_reuses_id_without_native_creation(app, nat
     result = projects.prepare(app, 'sea', 'a', 'request', revision=found['revision'])
     assert result['state'] == 'ready' and result['native_project_verified']
     assert result['section_state'] == 'skipped' and not result['session_created']
-    assert read_json(app.root('sea', 'a') / '.aw-local/runtime.json')['project_id'] == 'p1'
+    assert read_json(layout.local_path(app.root('sea', 'a'), 'runtime.json'))['project_id'] == 'p1'
     calls = list(state['calls'])
     state['projects'][0]['label'] = 'User renamed again'
     assert projects.prepare(app, 'sea', 'a', 'request', revision=found['revision']) == result
@@ -99,7 +100,7 @@ def test_unknown_creation_does_not_create_another_section(app, native):
     current = projects.plan(app, 'sea', 'a')
     again = projects.prepare(app, 'sea', 'a', 'new-id', create_section=True, revision=current['revision'])
     assert again['section_state'] == 'outcome_unknown'
-    assert read_json(app.root('sea', 'a') / '.aw-local/runtime.json')['project_id'] == 'p1'
+    assert read_json(layout.local_path(app.root('sea', 'a'), 'runtime.json'))['project_id'] == 'p1'
     assert sum(n == 'create_sidebar_section' for n, _ in state['calls']) == 1
     assert app.agent('sea', 'a')['current'] is None
 
@@ -132,4 +133,4 @@ def test_ambiguous_section_is_preflight_failure_without_a_write_receipt(app, nat
     state, _ = native
     state['sections'] = [{'sectionId': f's{i}', 'name': 'AW · sea', 'itemKeys': []} for i in (1, 2)]
     with pytest.raises(Conflict): projects.prepare(app, 'sea', 'a', 'ambiguous', create_section=True)
-    assert not (app.root('sea', 'a') / '.aw-local/desktop-preparations/ambiguous.json').exists()
+    assert not (layout.local_path(app.root('sea', 'a'), 'desktop-preparations/ambiguous.json')).exists()

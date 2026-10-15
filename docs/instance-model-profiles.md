@@ -1,6 +1,6 @@
 # 实例的 Codex 模型选择
 
-持久实例在根目录的 `runtime.json` 保存自己的 Codex 模型和推理强度。Codex Desktop 和受管 Codex CLI 共用这一选择，AW 在创建、恢复和发送 normal 输入时显式传入，不沿用发起者的设置。无 Workspace 的普通会话仍使用原生配置，不受本文件影响。
+持久实例在 `.agentworkspace/config.json` 保存自己的 Codex 模型和推理强度。Codex Desktop 和受管 Codex CLI 共用这一选择，AW 在创建、恢复和发送 normal 输入时显式传入，不沿用发起者的设置。旧实例在明确迁移前仍按原布局读取根 `runtime.json`。无 Workspace 的普通会话仍使用原生配置，不受本文件影响。
 
 ```json
 {
@@ -15,17 +15,17 @@
 
 ## 模板、实例与本机连接
 
-共享 Definition 可包含 `definitions/<role>/runtime.json`。创建时现有导入机制将其复制到实例根，与 `AGENTS.md`、其他资产一起保存。模板是创建材料；修改模板不会覆盖已有实例。实例文件随资产、检查点和 Fork 保存；产品的通用角色不预设具体模型和强度。
+共享 Definition 可包含 `definitions/<role>/runtime.json`。创建时将其导入实例 `.agentworkspace/config.json`，与 `AGENTS.md`、其他资产一起保存。模板是创建材料；修改模板不会覆盖已有实例。实例文件随资产、检查点和 Fork 保存；产品的通用角色不预设具体模型和强度。
 
-`.aw-local/runtime.json` 只维护当前机器的入口、原生程序命令、Desktop 管道与项目、服务及凭据引用。它不是另一份模型选择。`agent configure-desktop`、`agent configure-codex` 及通用 `agent configure` 仍接受原有的 `model` / `effort` 参数；对 Codex 入口，保存时将它们放入实例文件，连接信息留在本机文件。只更新连接、不提供模型字段时保留实例选择。
+`.agentworkspace/local/runtime/runtime.json` 只维护当前机器的入口、原生程序命令、Desktop 管道与项目、服务及凭据引用。它不是另一份模型选择。`agent configure-desktop`、`agent configure-codex` 及通用 `agent configure` 仍接受原有的 `model` / `effort` 参数；对 Codex 入口，保存时将它们放入实例文件，连接信息留在本机文件。只更新连接、不提供模型字段时保留实例选择。
 
-旧本机配置的顶层 `model`、`effort` 和 Codex 命令中的模型、推理强度覆盖会迁入实例文件。只迁移已有的值；缺少强度仍然缺少。冲突的旧值会报错，原文件保留。迁移来源及原字段保存在 `codex.migrated_from`。实例已经有选择时，迁移不会覆盖它；被移除的旧选择及来源留在 `.aw-local/model-migration.json`。重复迁移不覆盖用户修改，也不改变连接、服务或凭据引用。
+旧本机配置的顶层 `model`、`effort` 和 Codex 命令中的模型、推理强度覆盖会迁入实例文件。只迁移已有的值；缺少强度仍然缺少。冲突的旧值会报错，原文件保留。迁移来源及原字段保存在 `codex.migrated_from`。实例已经有选择时，迁移不会覆盖它；被移除的旧选择及来源留在 `.agentworkspace/local/operations/model-migration.json`。重复迁移不覆盖用户修改，也不改变连接、服务或凭据引用。
 
 ## 保存与生效
 
-新的执行入口在 `.aw-local/entry.json` 保存采用的 `model_profile`，包含模型、强度和实例文件的 SHA-256 来源。这是本入口的采用事实，不是新的可编辑配置。运行中修改实例文件只影响后续明确启动的入口；当前会话的后续输入和恢复仍使用原采用值。Desktop 重新 capture 连接不会重选模型，renew / relay 在交接完成后采用实例当时的选择。transfer 在请求时保存目标选择，后续应用不受中途文件编辑影响。
+新的执行入口在 `.agentworkspace/local/runtime/entry.json` 保存采用的 `model_profile`，包含模型、强度和实例文件的 SHA-256 来源。这是本入口的采用事实，不是新的可编辑配置。运行中修改实例文件只影响后续明确启动的入口；当前会话的后续输入和恢复仍使用原采用值。Desktop 重新 capture 连接不会重选模型，renew / relay 在交接完成后采用实例当时的选择。transfer 在请求时保存目标选择，后续应用不受中途文件编辑影响。
 
-保存 profile 不启动模型。已有的 `configure-desktop` / `configure-codex` 管理命令仍要求活动实例先交接；用户或实例可按既有资产规则编辑根文件，为下一次入口准备选择。AW 不因此重启或恢复用户已停止的会话。直接调用原生工具的操作不在这项保证范围内。
+保存 profile 不启动模型。已有的 `configure-desktop` / `configure-codex` 管理命令仍要求活动实例先交接；用户或实例可按既有资产规则编辑实例配置，为下一次入口准备选择。AW 不因此重启或恢复用户已停止的会话。直接调用原生工具的操作不在这项保证范围内。
 
 Desktop 的 `create_thread` 和 `send_message_to_thread` 都带 `model` / `thinking`。本机控制端返回参数 schema 时，AW 按该 schema 拒绝已知不支持的字段或值；未返回模型目录时标记未确认，不用 CLI 或另一个账户的目录补证。Codex CLI 在同一 app-server 上查询 `model/list`；原生目录不可用或自有服务未提供适用目录时，明确填写的值仍以未确认状态使用。已知不支持的模型或组合报错，不换模型、强度或服务。
 

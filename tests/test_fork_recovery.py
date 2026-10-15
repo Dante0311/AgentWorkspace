@@ -8,8 +8,6 @@ from agent_workspace.util import Conflict, Error, RetryableRead, Uncertain, enco
 
 @pytest.fixture
 def source(app, monkeypatch):
-    # Bundle installation is covered elsewhere; keep these Git fixtures focused on Fork assets.
-    monkeypatch.setattr(app, "_resources", lambda: {"reference.txt": b"saved reference"})
     app.create("sea", "alice")
     binding = app.reserve("sea", "alice")["binding"]
     app.bind("sea", "alice", binding, "fixture-source-session")
@@ -50,7 +48,7 @@ def test_resume_registers_saved_branch_without_recreating_it(source, monkeypatch
     with pytest.raises(Error):
         fork(source)
     revision = store.snapshot("instance/target").revision
-    assert store.snapshot().json("agents/target.json") is None
+    assert store.snapshot().json(".agentworkspace/agents/target.json") is None
     monkeypatch.setattr(store, "change", change)
     result = fork(source, resume=True)
     assert result["revision"] == revision
@@ -151,8 +149,8 @@ def test_original_unknown_registration_can_be_read_after_it_finishes(source, mon
     with pytest.raises(Uncertain):
         fork(source, resume=True)
     # Simulate the original server operation finishing, using its exact saved record.
-    item = store.snapshot("instance/target").json(".aw/fork.json")
-    change("main", {"agents/target.json": encode(item)}, {"agents/target.json": None}, "fixture original finishes")
+    item = store.snapshot("instance/target").json(".agentworkspace/fork.json")
+    change("main", {".agentworkspace/agents/target.json": encode(item)}, {".agentworkspace/agents/target.json": None}, "fixture original finishes")
     shared = store.snapshot().revision
     result = fork(source, resume=True)
     assert result["id"] == "target"
@@ -167,19 +165,19 @@ def test_resume_rejects_changed_source_or_other_target_identity(source, monkeypa
     if conflict == "checkpoint":
         newer = app.checkpoint("sea", "alice", "later files", binding=binding)
         snap = store.snapshot()
-        path = f"checkpoints/alice/{point['id']}.json"
+        path = f".agentworkspace/checkpoints/alice/{point['id']}.json"
         changed = dict(point, revision=newer["revision"])
         store.change("main", {path: encode(changed)}, {path: snap.entries[path]}, "fixture changed pointer")
     elif conflict == "identity":
         snap = store.snapshot("instance/target")
-        store.change("instance/target", {".aw/identity.json": encode({"workspace": "local:sea", "agent": "other"})},
+        store.change("instance/target", {".agentworkspace/identity.json": encode({"workspace": "local:sea", "agent": "other"})},
                      {}, "fixture other identity", base=snap.revision)
     else:
         snap = store.snapshot()
-        item = snap.json("agents/target.json")
+        item = snap.json(".agentworkspace/agents/target.json")
         item["forked_from"]["agent"] = "other"
-        store.change("main", {"agents/target.json": encode(item)},
-                     {"agents/target.json": snap.entries["agents/target.json"]}, "fixture other registration")
+        store.change("main", {".agentworkspace/agents/target.json": encode(item)},
+                     {".agentworkspace/agents/target.json": snap.entries[".agentworkspace/agents/target.json"]}, "fixture other registration")
     with pytest.raises(Conflict):
         fork(source, resume=True)
 
@@ -224,7 +222,7 @@ def test_known_branch_failure_allows_same_target_retry(source, monkeypatch):
         with pytest.raises(Error):
             fork(source)
     assert store.snapshot("instance/target").revision == ""
-    assert store.snapshot().json("agents/target.json") is None
+    assert store.snapshot().json(".agentworkspace/agents/target.json") is None
     result = fork(source)
     assert result["id"] == "target" and result["current"] is None
     assert len([agent for agent in app.agents("sea") if agent["id"] == "target"]) == 1

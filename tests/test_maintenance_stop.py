@@ -24,10 +24,10 @@ def stop_team(app):
     app.stop("sea", "alice", binding, point["id"])
     store = app.store("sea")
     snap = store.snapshot()
-    meta = snap.json("workspace.json")
+    meta = snap.json(".agentworkspace/workspace.json")
     meta["caretakers"] = {"maintainer": "maintainer"}
-    store.change("main", {"workspace.json": encode(meta)},
-                 {"workspace.json": snap.entries["workspace.json"]}, "Register isolated maintainer")
+    store.change("main", {".agentworkspace/workspace.json": encode(meta)},
+                 {".agentworkspace/workspace.json": snap.entries[".agentworkspace/workspace.json"]}, "Register isolated maintainer")
     maintainer_binding = app.reserve("sea", "maintainer")["binding"]
     app.bind("sea", "maintainer", maintainer_binding, "maintainer-session")
     return app, ("sea", "maintainer", maintainer_binding), binding, point["id"]
@@ -81,7 +81,7 @@ def test_scoped_duplicate_stop_repair_delegates_once_and_observes_original_relea
 
     store = app.store("sea")
     snap = store.snapshot()
-    entry_path = f"bindings/{binding}.json"
+    entry_path = f".agentworkspace/bindings/{binding}.json"
     entry = snap.json(entry_path)
     entry["checkpoint"] = "changed-checkpoint"
     store.change("main", {entry_path: encode(entry)}, {entry_path: snap.entries[entry_path]}, "Isolated changed request")

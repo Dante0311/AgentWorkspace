@@ -1,7 +1,9 @@
 """Isolated home lifecycle and real Runner threads; Desktop is a protocol fixture."""
+from agent_workspace import layout
 import json
 import os
 from pathlib import Path
+import subprocess
 import threading
 import time
 from types import SimpleNamespace
@@ -12,7 +14,7 @@ import pytest
 from agent_workspace import backend, cli, model_profiles, runtime
 from agent_workspace.app import App
 from agent_workspace.commands import execute
-from agent_workspace.util import Conflict, Error, encode, read_json, write_json
+from agent_workspace.util import Conflict, Error, encode, locked, read_json, write_json
 
 
 def wait_for(read, check, timeout=90):
@@ -23,6 +25,91 @@ def wait_for(read, check, timeout=90):
             return value
         time.sleep(.05)
     pytest.fail(f"Timed out waiting for the original operation: {value}")
+
+
+def test_connection_snapshot_finishes_before_backend_start(tmp_path, monkeypatch):
+    app = App(tmp_path / 'connection-reader-home')
+    connection = app.home / 'backend/connection.json'
+    write_json(connection, {'port': 0, 'token': 'synthetic-reader-token'})
+    monkeypatch.setenv('PYTHONPATH', str(Path(runtime.__file__).parents[1]))
+    opened, release, start_reading = threading.Event(), threading.Event(), threading.Event()
+    processes, snapshots, starts, errors = [], [], [], []
+    actual_json, actual_snapshot, actual_popen = backend.read_json, backend._read_connection, subprocess.Popen
+
+    def held_read(path, default=None):
+        if path == connection and threading.current_thread().name == 'connection-reader':
+            with path.open(encoding='utf-8') as stream:
+                opened.set()
+                assert release.wait(10)
+                return json.load(stream)
+        return actual_json(path, default)
+
+    def snapshot(target):
+        if threading.current_thread().name == 'backend-starter':
+            start_reading.set()
+        return actual_snapshot(target)
+
+    def spawn(*args, **kwargs):
+        process = actual_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    def read():
+        try:
+            snapshots.append(backend._read_connection(app))
+        except BaseException as exc:
+            errors.append(exc)
+
+    def start():
+        try:
+            starts.append(backend.start(app, port=0))
+        except BaseException as exc:
+            errors.append(exc)
+
+    monkeypatch.setattr(backend, 'read_json', held_read)
+    monkeypatch.setattr(backend, '_read_connection', snapshot)
+    monkeypatch.setattr(backend.subprocess, 'Popen', spawn)
+    reader = threading.Thread(target=read, name='connection-reader')
+    starter = threading.Thread(target=start, name='backend-starter')
+    reader.start()
+    try:
+        assert opened.wait(10)
+        starter.start()
+        assert start_reading.wait(10)
+        assert not processes  # An open snapshot must close before starting its replacement writer.
+        release.set()
+        reader.join(10)
+        starter.join(30)
+        assert not reader.is_alive() and not starter.is_alive() and not errors
+        assert snapshots == [{'port': 0, 'token': 'synthetic-reader-token'}]
+        assert len(processes) == 1 and starts[0]['ready']
+        assert backend.status(app)['pid'] == processes[0].pid
+        assert backend._read_connection(app)['token'] == 'synthetic-reader-token'
+    finally:
+        release.set()
+        reader.join(10)
+        if starter.ident is not None:
+            starter.join(30)
+        backend.stop(app)
+        for process in processes:
+            assert process.wait(timeout=30) == 0
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows mandatory byte-range read denial')
+def test_unreadable_connection_with_live_lock_stays_unknown(tmp_path, monkeypatch):
+    app = App(tmp_path / 'unreadable-connection-home')
+    connection = app.home / 'backend/connection.json'
+    write_json(connection, {'port': 12345, 'token': 'synthetic-denied-token'})
+    original = connection.read_bytes()
+
+    def no_request(*args, **kwargs):
+        pytest.fail('An unreadable connection must not send a control request')
+
+    monkeypatch.setattr(backend.urllib.request, 'urlopen', no_request)
+    with locked(app.home / 'backend/service.lock'), locked(connection):
+        result = backend.status(app)
+    assert result['state'] == 'unknown' and result['running'] is True and result['ready'] is False
+    assert connection.read_bytes() == original
 
 
 def test_empty_home_actual_process_lifecycle_and_cli(tmp_path, monkeypatch, capsys):
@@ -62,17 +149,17 @@ def test_empty_home_actual_process_lifecycle_and_cli(tmp_path, monkeypatch, caps
         wait_for(lambda: backend.status(app), lambda state: state["running"] is False)
 
 
-def test_model_cannot_control_whole_home(pair, monkeypatch, capsys):
+def test_model_cannot_control_another_agents_runner(pair, monkeypatch, capsys):
     app, ids = pair
     actor = ("sea", "alice", ids["alice"])
-    for command in ("backend.start", "backend.stop", "backend.restart", "backend.attach", "backend.cancel"):
+    for command in ("backend.attach", "backend.cancel"):
         with pytest.raises(Error, match="user-management"):
             execute(app, command, {}, actor=actor)
     assert execute(app, "backend.status", {}, actor=actor)["running"] is False
     monkeypatch.setenv("AW_WORKSPACE", "sea")
     monkeypatch.setenv("AW_AGENT", "alice")
     monkeypatch.setenv("AW_BINDING", ids["alice"])
-    assert cli.main(["--home", str(app.home), "backend", "run"]) == 2
+    assert cli.main(["--home", str(app.home), "runtime", "run", "alice"]) == 2
     assert not json.loads(capsys.readouterr().err)["ok"]
 
 
@@ -88,9 +175,9 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
         app.bind("sea", name, binding, "native-" + name)
         runtime.queue_input(app, "sea", name, "keep queued while busy", request_id="queued-original")
         runtime.queue_input(app, "sea", name, "uncertain original", request_id="unknown-original")
-        unknown = root / ".aw-local/inputs/unknown-original.json"
+        unknown = layout.local_path(root, "inputs/unknown-original.json")
         write_json(unknown, {**read_json(unknown), "state": "outcome_unknown", "turn_id": "original-turn"})
-        roots[name], bindings[name], configured[name] = root, binding, read_json(root / ".aw-local/runtime.json")
+        roots[name], bindings[name], configured[name] = root, binding, read_json(layout.local_path(root, "runtime.json"))
     attached, closed, observed = [], [], {name: threading.Event() for name in roots}
 
     class DesktopPeer:
@@ -126,7 +213,7 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
     app.backend = manager
     try:
         # One damaged local copy must not prevent another Agent from resuming.
-        control = roots["alice"] / ".aw-local/control.json"
+        control = layout.local_path(roots["alice"], "control.json")
         control.write_text("invalid JSON", encoding="utf-8")
         manager._restore()
         assert observed["bob"].wait(90)
@@ -137,7 +224,7 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
         assert observed["alice"].wait(90)
         assert {item[2] for item in attached} == {os.getpid()}
         assert runtime.spawn_runner(app, "sea", "bob")["state"] == "runner_present"
-        (roots["alice"] / ".aw-local/status.json").write_text("not JSON", encoding="utf-8")
+        (layout.local_path(roots["alice"], "status.json")).write_text("not JSON", encoding="utf-8")
         state = manager.status()
         assert state["ready"] and len(state["runners"]) == 2
         assert next(item for item in state["runners"] if item["agent_id"] == "alice")["runtime"]["state"] == "unknown"
@@ -153,10 +240,10 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
     assert all(not task["thread"].is_alive() for task in manager.threads)
     snap = app.store("sea").snapshot()
     for name, binding in bindings.items():
-        entry = snap.json(f"bindings/{binding}.json")
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         assert entry["phase"] == "active" and entry["session"] == "native-" + name and not entry.get("controller")
-        assert read_json(roots[name] / ".aw-local/inputs/queued-original.json")["state"] == "queued"
-        assert read_json(roots[name] / ".aw-local/inputs/unknown-original.json")["state"] == "outcome_unknown"
+        assert read_json(layout.local_path(roots[name], "inputs/queued-original.json"))["state"] == "queued"
+        assert read_json(layout.local_path(roots[name], "inputs/unknown-original.json"))["state"] == "outcome_unknown"
     # Whole-backend stop is reversible. An explicit per-Agent cancellation is retained.
     observed["bob"].clear()
     renewed = backend.Backend(app, http)
@@ -179,18 +266,18 @@ def test_restore_does_not_repeat_unknown_creation_or_guess_execution(app, monkey
     binding = app.reserve("sea", "alice")["binding"]
     root = app.root("sea", "alice")
     receipt = {"binding": binding, "attempted": True, "result": {"clientThreadId": "original-client"}}
-    write_json(root / ".aw-local/launch.json", receipt)
+    write_json(layout.local_path(root, "launch.json"), receipt)
     manager = backend.Backend(app, SimpleNamespace(server_port=12345))
     monkeypatch.setattr(manager, "attach", lambda *args, **kwargs: pytest.fail("Unqualified record must not restart"))
     manager._restore()
-    assert not manager.runners and read_json(root / ".aw-local/launch.json") == receipt
+    assert not manager.runners and read_json(layout.local_path(root, "launch.json")) == receipt
     assert any("No confirmed native session" in note["reason"] for note in manager.resume_notes)
     store = app.store("sea")
     snap = store.snapshot()
-    entry = snap.json(f"bindings/{binding}.json")
+    entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
     entry.pop("execution")
-    store.change("main", {f"bindings/{binding}.json": encode(entry)},
-                 {f"bindings/{binding}.json": snap.entries[f"bindings/{binding}.json"]}, "Legacy execution fixture")
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
+    store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Legacy execution fixture")
     manager._restore()
     assert any("Execution source is missing" in note["reason"] for note in manager.resume_notes)
 
@@ -207,10 +294,12 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
             assert session is None
             self.session = None
 
-        def create(self, expected):
+        def create(self, expected, prompt):
             assert expected == binding
+            assert json.loads(prompt.split('\n\n')[0])['binding'] == binding
             creations.append(expected)
             self.session = "explicit-original-chat"
+            return {"id": self.session, "hostId": "local", "cwd": str(root)}
 
         def status(self):
             observed.set()
@@ -226,7 +315,7 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
         with pytest.raises(Conflict, match="original Binding changed"):
             backend.attach(app, "sea", "alice", expected_binding="older-original")
         assert not manager.runners
-        result = runtime.spawn_runner(app, "sea", "alice")
+        result = execute(app, "runtime.start", {"workspace": "sea", "agent_id": "alice"})
         assert result["binding"] == binding and result["pid"] == os.getpid()
         assert observed.wait(90)
     finally:
@@ -234,8 +323,8 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
         del app.backend
     assert creations == [binding]
     snap = app.store("sea").snapshot()
-    assert snap.json(f"bindings/{binding}.json")["session"] == "explicit-original-chat"
-    boot = read_json(root / ".aw-local/inputs" / f"boot-{binding}.json")
+    assert snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))["session"] == "explicit-original-chat"
+    boot = read_json(layout.local_path(root, "inputs") / f"boot-{binding}.json")
     assert boot["state"] == "queued" and boot["binding"] == binding
 
 
@@ -243,7 +332,8 @@ def test_log_is_bounded_registered_and_redacts_control_credentials(app):
     app.create("sea", "alice")
     root = app.root("sea", "alice")
     write_json(app.home / "backend/connection.json", {"token": "original-control-token"})
-    path = root / ".aw-local/runner.log"
+    path = layout.local_path(root, "runner.log")
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("old\noriginal-control-token Bearer secret-value https://user:password@host/path#token=secret\nlast\n", encoding="utf-8")
     result = execute(app, "backend.log", {"workspace": "sea", "agent_id": "alice", "lines": 2})
     assert result["truncated"] and result["source"]["directory"] == str(root)

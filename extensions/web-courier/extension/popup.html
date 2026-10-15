@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AW 网页投递员</title><link rel="stylesheet" href="popup.css"></head>
+<body><header><span class="tag">开发候选 · 0.2.0</span><h1>AW 网页投递员</h1><p>一条正式 Message · 人工确认 · 无后台轮询</p></header>
+<main><section><h2>1. 保存限定连接</h2><p class="muted">在 AW 中明确指定 Workspace、Agent、当前 Binding 和 ChatGPT 会话。把下面的扩展 ID 提供给 AW，再粘贴受限连接配置。</p><pre id="extension-id"></pre><textarea id="configuration" aria-label="AW 受限连接配置" placeholder="粘贴 AW 返回的连接 JSON"></textarea><button id="configure">保存连接</button><pre id="target">尚未配置目标</pre></section>
+<section><h2>2. 获取原消息</h2><button id="get">获取一条原通知</button><button id="inspect">检查页面 / 查询原 ACK</button><pre id="status" role="status" aria-live="polite">切到登记的 ChatGPT 会话后，手动获取原通知。</pre></section>
+<section><h2>3. 准备草稿</h2><p class="muted">将完整通知原样填入空输入框。已有草稿、附件或忙碌时停止。</p><button id="prepare" disabled>填入原通知</button><pre id="body">尚未获取</pre></section>
+<section><h2>4. 确认发送一次</h2><label><input id="confirm" type="checkbox">我确认向上述会话发送完整通知，会触发一次 ChatGPT 回复。</label><button id="send" class="primary" disabled>确认并发送一次</button></section>
+<section><h2>5. 分别核对网页与 ACK</h2><p>回复结束后，可手动刷新网页，再点击“检查页面 / 查询原 ACK”。真正接收方按 Message 协议确认收件。</p><p id="ack">尚未取得 AW ACK。网页发送事实不代表确认收件。</p><p class="muted">发送结果不明时只查询原记录。此连接只处理一条消息，不能通过覆盖配置重发。insert 暂不支持。</p></section>
+<details><summary>诊断信息（仅本地，不含凭据）</summary><pre id="details">无</pre></details></main><script src="popup.js"></script></body></html>

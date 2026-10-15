@@ -1,4 +1,5 @@
 """Exercise installed native SDK clients through an isolated transport, never a model."""
+from agent_workspace import layout
 import asyncio
 from collections import deque
 import importlib
@@ -103,7 +104,7 @@ def test_native_session_and_two_turns_use_one_client(connected):
     runner.binding, runner.adapter = adapter.binding, adapter
     adapter.completed.put(first)
     runner._complete_inputs()
-    boot = read_json(adapter.root / ".aw-local/inputs" / f"boot-{adapter.binding}.json")
+    boot = read_json(layout.local_path(adapter.root, "inputs") / f"boot-{adapter.binding}.json")
     assert boot["checkpoint_revision"]
     assert not app.work_list("sea")
 
@@ -187,7 +188,7 @@ def test_codex_runner_automatically_transfers_to_native_sdk(app, monkeypatch, ki
             if predicate():
                 return
             time.sleep(.05)
-        pytest.fail(f'Native runner did not reach expected state: {failures}; {read_json(root / ".aw-local/status.json")}')
+        pytest.fail(f'Native runner did not reach expected state: {failures}; {read_json(layout.local_path(root, "status.json"))}')
 
     monkeypatch.setattr(runtime, 'spawn_runner', spawn)
     try:

@@ -11,10 +11,10 @@ def test_creation_without_definition_or_work(app):
     root = Path(result['directory'])
     assert root.joinpath('AGENTS.md').is_file()
     assert len(list(root.glob('.agents/skills/*/SKILL.md'))) == 7
-    assert not root.joinpath('source.json').exists()
+    assert not root.joinpath('.agentworkspace/source.json').exists()
     assert app.agent('sea', result['id'])['current'] is None
     assert app.work_list('sea') == []
-    assert not root.joinpath('.aw-local/runtime.json').exists()
+    assert not root.joinpath('.agentworkspace/local/runtime/runtime.json').exists()
 
 
 def test_connect_multiple_copies(app, tmp_path):
@@ -66,7 +66,7 @@ def test_concurrent_handoff_claim(pair, tmp_path):
     with concurrent.futures.ThreadPoolExecutor(2) as pool:
         claims = list(pool.map(claim, [app, other]))
     assert len([v for v in claims if v]) == 1
-    assert app.store('sea').snapshot().json(f"handoffs/{point['id']}.json")['consumed_by'] in claims
+    assert app.store('sea').snapshot().json(f".agentworkspace/handoffs/{point['id']}.json")['consumed_by'] in claims
 
 
 def test_checkpoint_fork_preserves_exact_asset_version(pair):
@@ -105,7 +105,7 @@ def test_checkpoint_partial_registration(app, monkeypatch):
     monkeypatch.setattr(store, 'change', offline)
     with pytest.raises(Error):
         app.checkpoint('sea', 'alice', 'summary', checkpoint_id='cp')
-    receipt = read_json(app.root('sea', 'alice') / '.aw-local/checkpoint-operations/cp.json')
+    receipt = read_json(app.root('sea', 'alice') / '.agentworkspace/local/operations/checkpoint-operations/cp.json')
     monkeypatch.setattr(store, 'change', original)
     app.root('sea', 'alice').joinpath('new.txt').write_text('later')
     cp = app.checkpoint('sea', 'alice', 'summary', checkpoint_id='cp')
@@ -152,7 +152,7 @@ def test_import_and_promote_selected_files(app, tmp_path):
     app.promote('sea', 'alice', ['AGENTS.md'], 'definitions/published')
     assert app.store('sea').snapshot().bytes('definitions/published/definition.md') == b'# existing'
     assert app.root('sea', 'alice').joinpath('AGENTS.md').read_text() == '# existing'
-    assert not app.root('sea', 'alice').joinpath('source.json').exists()
+    assert not app.root('sea', 'alice').joinpath('.agentworkspace/source.json').exists()
 
 
 def test_archive_keeps_assets(pair):

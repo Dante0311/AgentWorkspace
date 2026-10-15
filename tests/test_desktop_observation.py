@@ -1,4 +1,5 @@
 """Current execution source plus read-only native facts; no real Desktop/model acceptance."""
+from agent_workspace import layout
 from unittest.mock import Mock
 
 import pytest
@@ -53,7 +54,7 @@ def test_missing_or_remote_execution_does_not_probe_native(app, desktop, executi
     _, binding, _, _, constructor = desktop
     store = app.store("sea")
     snap = store.snapshot()
-    path = f"bindings/{binding}.json"
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
     entry = snap.json(path)
     entry["execution"] = execution
     store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Fixture unavailable execution source")
@@ -78,20 +79,20 @@ def test_observation_rechecks_current_authority_after_native_read(app, desktop):
 def test_unavailable_native_connection_remains_unknown(app, desktop):
     root, _, _, peer, _ = desktop
     peer.read.side_effect = Unavailable("fixture connection lost")
-    before = read_json(root / ".aw-local/entry.json")
+    before = read_json(layout.local_path(root, "entry.json"))
     result = runtime.desktop_observe(app, "sea", "alice")
     assert not result["local_session_confirmed"] and result["unknown_reason"] == "native_observation_failed"
-    assert read_json(root / ".aw-local/entry.json") == before
+    assert read_json(layout.local_path(root, "entry.json")) == before
     peer.close.assert_called_once()
 
 
 def test_wrong_local_entry_and_read_only_control_cannot_qualify_direct_send(app, desktop):
     root, binding, _, peer, constructor = desktop
-    local = read_json(root / ".aw-local/entry.json")
-    write_json(root / ".aw-local/entry.json", {**local, "binding": "old-binding"})
+    local = read_json(layout.local_path(root, "entry.json"))
+    write_json(layout.local_path(root, "entry.json"), {**local, "binding": "old-binding"})
     assert not runtime.desktop_observe(app, "sea", "alice")["local_session_confirmed"]
     constructor.assert_not_called()
-    write_json(root / ".aw-local/entry.json", local)
+    write_json(layout.local_path(root, "entry.json"), local)
     peer.tools = {"read_thread"}
     result = runtime.desktop_observe(app, "sea", "alice")
     assert result["binding"] == binding and not result["local_session_confirmed"]

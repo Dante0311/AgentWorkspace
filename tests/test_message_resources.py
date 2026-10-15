@@ -13,16 +13,32 @@ MESSAGE_PATHS = (
     ".agents/skills/message/references/manual.md",
     ".agents/skills/message/references/direct.md",
     ".agents/skills/message/scripts/message_git.py",
-    ".aw/prompts/message-notification.json",
+    ".agentworkspace/prompts/message-notification.json",
 )
 
 
-def legacy_resources(fresh):
+def older_resources(fresh):
     legacy = {path: content for path, content in fresh.items()
-              if path not in MESSAGE_PATHS[1:] and path != ".aw/software.json"}
-    legacy[".aw/software.json"] = encode({"version": "isolated-old-version",
+              if path not in MESSAGE_PATHS[1:] and path != ".agentworkspace/software.json"}
+    legacy[".agentworkspace/software.json"] = encode({"version": "isolated-old-version",
         "files": {path: digest(content) for path, content in legacy.items()}})
     return legacy
+
+
+@pytest.fixture
+def older_instance_materials(app):
+    app.create("sea", "helper")
+    root = app.root("sea", "helper")
+    fresh = app._resources()
+    previous = older_resources(fresh)
+    # Connecting now refreshes managed materials, so seed the prior release afterwards.
+    for path in fresh:
+        target = root / path
+        if path in previous:
+            target.write_bytes(previous[path])
+        else:
+            target.unlink()
+    return root, fresh
 
 
 def test_new_instance_receives_complete_message_skill_and_template(app):
@@ -30,19 +46,16 @@ def test_new_instance_receives_complete_message_skill_and_template(app):
     app.create("sea", "helper")
     root = app.root("sea", "helper")
     assert len(list(root.glob(".agents/skills/*/SKILL.md"))) == 7
-    manifest = json.loads((root / ".aw/software.json").read_bytes())
+    manifest = json.loads((root / ".agentworkspace/software.json").read_bytes())
     for path in MESSAGE_PATHS:
         assert (root / path).read_bytes() == fresh[path]
         assert manifest["files"][path] == digest(fresh[path])
     assert not any("__pycache__" in path for path in fresh)
 
 
-def test_upgrade_adds_nested_resources_and_preserves_private_skills(app, monkeypatch):
-    fresh = app._resources()
-    with monkeypatch.context() as scoped:
-        scoped.setattr(app, "_resources", lambda: legacy_resources(fresh))
-        app.create("sea", "helper")
-    root = app.root("sea", "helper")
+def test_upgrade_adds_nested_resources_and_preserves_private_skills(app, older_instance_materials):
+    root, fresh = older_instance_materials
+    assert not (root / MESSAGE_PATHS[1]).exists()
     private = root / ".agents/skills/my-private/SKILL.md"
     private.parent.mkdir(parents=True)
     private.write_bytes(b"private instructions")
@@ -60,24 +73,21 @@ def test_upgrade_refuses_modified_skill_reference_or_script_before_any_write(app
     app.create("sea", "helper")
     root = app.root("sea", "helper")
     (root / changed).write_bytes(b"private change")
-    before = {path: (root / path).read_bytes() for path in (*MESSAGE_PATHS, ".aw/software.json")}
+    before = {path: (root / path).read_bytes() for path in (*MESSAGE_PATHS, ".agentworkspace/software.json")}
     with pytest.raises(Conflict):
         upgrade_tools(app, "sea", "helper")
     assert {path: (root / path).read_bytes() for path in before} == before
 
 
-def test_upgrade_does_not_overwrite_new_resource_path_owned_by_user(app, monkeypatch):
-    fresh = app._resources()
-    with monkeypatch.context() as scoped:
-        scoped.setattr(app, "_resources", lambda: legacy_resources(fresh))
-        app.create("sea", "helper")
-    root = app.root("sea", "helper")
+def test_upgrade_does_not_overwrite_new_resource_path_owned_by_user(app, older_instance_materials):
+    root, _ = older_instance_materials
     manual = root / MESSAGE_PATHS[2]
-    manual.parent.mkdir(parents=True)
+    assert not manual.exists()
+    manual.parent.mkdir(parents=True, exist_ok=True)
     manual.write_bytes(b"user's earlier manual")
-    before = (root / ".aw/software.json").read_bytes()
+    before = (root / ".agentworkspace/software.json").read_bytes()
     with pytest.raises(Conflict):
         upgrade_tools(app, "sea", "helper")
     assert manual.read_bytes() == b"user's earlier manual"
-    assert (root / ".aw/software.json").read_bytes() == before
+    assert (root / ".agentworkspace/software.json").read_bytes() == before
     assert not (root / MESSAGE_PATHS[3]).exists()

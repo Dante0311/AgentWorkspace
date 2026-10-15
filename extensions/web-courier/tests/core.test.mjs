@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {canonicalTarget,isTarget,connectionConfig,canSend,canPrepare,reconcile} from '../extension/core.mjs';
+const target='https://chatgpt.com/c/11111111-1111-4111-8111-111111111111';
+const extensionId='a'.repeat(32);
+const config={backend_url:'http://127.0.0.1:8765',connection_id:'courier-test',workspace:'test',agent_id:'receiver',binding:'binding-test',target_url:target,extension_id:extensionId,token:'t'.repeat(43)};
+test('explicit target normalizes harmless query/hash',()=>{assert.equal(canonicalTarget(target+'/?x=y#end'),target);assert.ok(isTarget(target+'?x=y',target));assert.equal(isTarget(target),false);});
+for(const bad of ['https://chatgpt.com','https://chatgpt.com/c/other/extra',target.replace('https:','http:'),target.replace('chatgpt.com','chatgpt.com.evil.test'),'not a URL',target.replace('chatgpt.com','a:b@chatgpt.com')])test('reject target '+bad,()=>assert.throws(()=>canonicalTarget(bad)));
+test('different valid session rejected',()=>assert.equal(isTarget('https://chatgpt.com/c/other',target),false));
+test('connection binds extension and loopback endpoint',()=>{assert.equal(connectionConfig(config,extensionId).backend_url,config.backend_url);for(const patch of [{backend_url:'http://localhost:8765'},{backend_url:'https://remote.test:8765'},{backend_url:'http://127.0.0.1:8765/api/execute'},{extension_id:'b'.repeat(32)},{token:'short'},{binding:''}])assert.throws(()=>connectionConfig({...config,...patch},extensionId));});
+test('only fetched can prepare, only prepared can send',()=>{assert.ok(canPrepare({phase:'fetched'}));assert.ok(canSend({phase:'prepared'}));for(const phase of ['submitting','observed','reload_verified']){assert.equal(canSend({phase}),false);assert.equal(canPrepare({phase}),false);}assert.equal(canPrepare(null),false);});
+test('absent or wrong-session observation retains uncertainty',()=>{const r={phase:'submitting',submitEpoch:1};for(const p of [{target:true,receipt:false},{target:false,receipt:true}])assert.equal(reconcile(r,p),r);});
+test('page facts do not invent ACK',()=>{const r={phase:'submitting',submitEpoch:1};const p=reconcile(r,{target:true,receipt:true,pageEpoch:2});assert.equal(p.phase,'reload_verified');assert.equal(p.ack,undefined);assert.equal(reconcile(r,{target:true,receipt:true,pageEpoch:1}).phase,'observed');});

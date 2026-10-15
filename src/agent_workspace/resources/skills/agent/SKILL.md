@@ -5,7 +5,7 @@ description: 创建、完善和管理持久 Agent 身份，以及显式发布选
 
 # agent
 
-Agent 是持久身份，工作根是它的一份本地资料副本，不是产品目录。同一 Agent 可以在不同位置准备副本；准备副本、启动原生会话和取得执行权是三件事。
+Agent 是持久身份，资料根保存它自己的职责、Skills 和工作资料；原生项目与会话 cwd 可以指向别处。同一 Agent 保留自己的实例分支，可以在不同环境准备副本；准备副本、启动原生会话和取得执行权是三件事。使用入口材料给出的资料路径，不把当前目录自动当成个人资料根。
 
 ```sh
 aw -w sea agent create helper --description "构建排错助手"
@@ -21,18 +21,21 @@ aw -w sea agent configure helper --config @native-connection.json
 aw -w sea agent versions helper
 aw -w sea agent update helper --revision SOURCE_COMMIT
 aw -w sea agent sync helper
-aw -w sea agent upgrade-tools helper
+aw software status
+aw software update
 aw -w sea agent promote helper --path AGENTS.md --destination definitions/build-helper
 aw -w sea agent archive helper
 aw -w sea agent unarchive helper
 ```
 
-agent connect 只为已有 Agent 准备或复用本地副本，不创建身份、不启动聊天、不取得 Binding。agent show 分别列出当前 Binding、各本地副本的观察和历史入口；历史聊天不等于当前执行入口。副本中保存的旧状态不能证明另一个目录或环境的当前聊天正在运行，来源不明时保留未知。
+agent connect 只为已有 Agent 准备或复用本地副本，不创建身份、不启动聊天、不取得 Binding。支持 worktree 的版本由公共准备操作在 Workspace 内检出该 Agent 的实例分支；目录缺失由工具准备，不要求用户先手动 clone。已有目录的身份、分支或未保存修改冲突时保留并报告，不强制重置。实际安装能力以入口附带的 capabilities.md 为准，旧普通副本不因新版设计自动迁移。
 
-Definition 可选，职责可在本目录逐步完善。没有来源是正常状态。自然语言初始化参见 `.aw/prompts/initialization.md`。
+agent show 分别列出当前 Binding、各本地副本的观察和历史入口；历史聊天不等于当前执行入口。副本中保存的旧状态不能证明另一个目录或环境的当前聊天正在运行，来源不明时保留未知。
 
-Codex 模型选择在 Agent 资料根 `runtime.json` 的 `codex` 对象中保存 `model` 和 `effort`，自动启动要求两者明确填写。Definition 可提供此文件作为创建模板；Agent 此后独立维护。通用 configure 接收原生连接配置；原有 model / effort 参数会存入 Agent 文件。不要将根配置当成本机连接文件，也不要从发起者设置补值。保存不启动模型，活动会话继续使用当前入口的采用记录。
-工具升级不重置自有职责和资料。update 只更新选定来源；报告本地差异时先交由使用者处理，不自动合并。
+Definition 可选，职责可在自己的资料根逐步完善。没有来源是正常状态。自然语言初始化参见该资料根下的 `.agentworkspace/prompts/initialization.md`。
+
+Codex 模型选择在 `.agentworkspace/config.json` 的 `codex` 对象中保存 `model` 和 `effort`，自动启动要求两者明确填写。Definition 可提供 `runtime.json` 创建模板；Agent 此后独立维护。通用 configure 接收原生连接配置；原有 model / effort 参数会存入 Agent 文件。不要将实例配置当成本机连接文件，也不要从发起者设置补值。保存不启动模型，活动会话继续使用当前入口的采用记录。
+AW 软件和受管材料由统一安装与后台维护，`software update` 一次处理本机登记的副本，不要求逐 Agent 接单。用户改过的文件保留并报告，结果含各副本状态；旧目录须先明确迁移。`agent upgrade-tools` 只保留为单副本入口。升级不重置自有职责和资料，也不替运行中的模型重载材料。`agent update` 只更新选定职责来源；报告本地差异时先交由使用者处理，不自动合并。
 提升只发布用户明确选择的文件，不整体合并实例分支，不删除原资料，不自动替别人更新。
 归档前先 handoff；解除归档不自动进入。已有外部目录可用 agent import --from-directory --asset 明确导入选定文件，原目录不改变。
 
@@ -44,10 +47,12 @@ aw -w sea agent takeover helper --binding CURRENT_BINDING --checkpoint SAVED_CHE
 
 此操作撤销旧 Binding 的 AW 执行资格并保存同一 Agent 的交接点，不停止旧聊天、不启动新会话。之后按 relay 使用 agent start 取得新的唯一入口。重复原请求只读取原交接结果，不影响已启动的后继入口。原发表结果未知时保留原操作并读取核实，不自动重发或另建身份。
 
-七个内置 Skill 不限制 Agent 自己的 Skill 数量。共享 skills/ 自动发现但不自动全装；安装完整目录到 .agents/skills/，独立来源由 .aw/skill-sources.json 管理，Definition 的 source.json 不变。agent.versions/update 管 Definition，agent.skills/skill-update 管独立 Skill；私人修改、同名来源、大小写冲突先报告，源删除保留副本。更新不自动重载模型或发布检查点。pending_update 时按原名称/版本恢复，不删暂存；恢复前不能启动、交出或发布快照。
+七个内置 Skill 不限制 Agent 自己的 Skill 数量。共享 skills/ 自动发现但不自动全装；安装完整目录到 .agents/skills/，独立来源由 .agentworkspace/skill-sources.json 管理，Definition 来源另存 .agentworkspace/source.json。agent.versions/update 管 Definition，agent.skills/skill-update 管独立 Skill；私人修改、同名来源、大小写冲突先报告，源删除保留副本。更新不自动重载模型或发布检查点。pending_update 时按原名称/版本恢复，不删暂存；恢复前不能启动、交出或发布快照。
 
 ## 普通会话与桌面组织
 
-Agent 的桌面项目准备先用 `agent.desktop-project`（当前身份可省略 workspace/agent_id）读取本机名称、主目录和随包手动步骤。桌面项目按 Agent 复用，Codex 分区按 Workspace 组织。用户可用 agent.desktop-discover 发现主目录匹配的真实项目，再用 agent.desktop-prepare 保存可靠 ID；分区仅在实际接口 schema 相符时执行并读回验证，否则手动。原生项目创建/文件夹编辑仍手动，不把保存引用说成已创建。准备不创建会话或 Binding，重复请求读回原结果，未知结果不新建或重发。修改名称/产品目录由用户使用 `agent.desktop-project-save`，不改变身份或权限。不要把产品 AGENTS.md 复制为自己的职责。
+Agent 的桌面项目准备先用 `agent.desktop-project`（当前身份可省略 workspace/agent_id）读取本机引用、实际目录和随包步骤。独立项目与共用项目都按使用场景选择，复用用户已有布局，不为每次会话新建项目；共用项目路径是否已支持，以当前能力说明和实际返回为准。项目根 AGENTS.md 放共同规则，完整个人职责仍在自己的资料根。进入材料须指明身份、资料路径与工作位置，不把项目名或 cwd 当作身份。
+
+用户可用 agent.desktop-discover 发现真实项目，再用 agent.desktop-prepare 保存核验过的 ID；分区仅在实际接口 schema 相符时执行并读回，否则手动。原生项目创建/文件夹编辑仍手动，不把保存引用说成已创建。准备不创建会话或 Binding，重复请求读回原结果，未知结果不新建或重发。修改名称/产品目录由用户使用 `agent.desktop-project-save`，不改变身份或权限。不要把产品 AGENTS.md 复制为自己的职责。
 
 无 Workspace 的普通会话由用户通过保留的 `/sessions` 独立页面或 `aw session` 命令进入；主工作台不再提供创建表单。它没有持久身份、平台 Message/ACK 或 handoff/relay 保证，不能借普通会话绕过当前 Binding。用户的会话要求不写进共享项目规则。

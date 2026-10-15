@@ -99,10 +99,11 @@ def test_uncertain_effect_remains_uncertain_and_is_never_replayed(idle_instance,
 def test_doctor_isolates_unreadable_instance_state(app):
     app.create('sea', 'broken')
     app.create('sea', 'other')
-    damaged = app.root('sea', 'broken') / '.aw-local/status.json'
+    damaged = app.root('sea', 'broken') / '.agentworkspace/local/runtime/status.json'
+    damaged.parent.mkdir(parents=True, exist_ok=True)
     damaged.write_text('{not JSON', encoding='utf-8')
     from agent_workspace.util import write_json
-    write_json(app.root('sea', 'other') / '.aw-local/inputs/unresolved.json',
+    write_json(app.root('sea', 'other') / '.agentworkspace/local/operations/inputs/unresolved.json',
                {'id': 'unresolved', 'state': 'outcome_unknown'})
     report = maintenance.doctor(app, 'sea')
     assert report['state'] == 'degraded'

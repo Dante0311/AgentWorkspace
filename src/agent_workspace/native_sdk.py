@@ -16,7 +16,8 @@ import shutil
 import sys
 import threading
 
-from .util import Conflict, Error, Unavailable, locked, now, uid, write_json
+from . import layout
+from .util import Conflict, Error, Unavailable, now, uid, write_json
 
 
 SDK_TYPES = {
@@ -114,7 +115,7 @@ class NativeSDK:
         self.sdk, self.client_type, self.options_type, self.options = sdk_options(
             config, app, workspace, agent_id, binding, root, session)
         self.completed = queue.Queue()
-        self.record = root / "records" / binding / "runtime.jsonl"
+        self.record = layout.instance_path(root, "records") / binding / "runtime.jsonl"
         self.record.parent.mkdir(parents=True, exist_ok=True)
         self.ready, self.observed = threading.Event(), threading.Event()
         self.guard = threading.Lock()
@@ -198,7 +199,9 @@ class NativeSDK:
                         "local_submission_id": submission, "event": data}
                 if completion:
                     item["completion"] = completion
-                with locked(self.root / ".aw-local/records.lock"):
+                with layout.lock(self.root, "records.lock"):
+                    self.record = layout.instance_path(self.root, "records") / self.binding / "runtime.jsonl"
+                    self.record.parent.mkdir(parents=True, exist_ok=True)
                     with self.record.open("a", encoding="utf-8") as stream:
                         stream.write(json.dumps(item, ensure_ascii=False) + "\n")
                         stream.flush()
@@ -255,7 +258,7 @@ class NativeSDK:
         return {"turn": {"id": submission}, "id_source": "local_submission", "session": self.session}
 
     def bootstrap(self, prompt):
-        path = self.root / ".aw-local/inputs" / f"boot-{self.binding}.json"
+        path = layout.local_path(self.root, "inputs") / f"boot-{self.binding}.json"
         item = {"id": path.stem, "binding": self.binding, "text": prompt, "delivery": "normal",
                 "purpose": "initial", "state": "dispatching", "sequence": 0, "created_at": now()}
         write_json(path, item)

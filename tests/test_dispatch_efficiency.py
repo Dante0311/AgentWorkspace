@@ -274,8 +274,9 @@ def test_bridge_work_still_checks_binding(local_app, pending):
 @pytest.mark.parametrize("transition", ["unchanged", "stopping", "replaced"])
 def test_runner_only_continues_for_observed_ownership_transition(local_app, monkeypatch, transition):
     entry = {"id": ACTOR[2], "kind": "codex", "phase": "active", "session": "existing"}
+    # This fixture uses the legacy workspace: an absent layout marker returns None.
     snap = SimpleNamespace(entries={"agents/alice.json": "agent-sha", "bindings/b-current.json": "binding-sha"},
-                           json=lambda path: dict(entry))
+                           json=lambda path, default=None: dict(entry) if path == "bindings/b-current.json" else default)
     local_app.store.return_value.snapshot.return_value = snap
 
     def change(branch, changes, *args):

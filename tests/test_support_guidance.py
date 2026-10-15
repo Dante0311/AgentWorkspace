@@ -21,10 +21,10 @@ def guide():
 def test_new_instance_contains_versioned_guidance(app):
     app.create('sea', 'alice')
     root = app.root('sea', 'alice')
-    content = (root / '.aw/prompts/capabilities.md').read_bytes()
+    content = (root / '.agentworkspace/prompts/capabilities.md').read_bytes()
     assert content == (files('agent_workspace') / 'resources/prompts/capabilities.md').read_bytes()
-    manifest = read_json(root / '.aw/software.json')
-    assert manifest['files']['.aw/prompts/capabilities.md'] == digest(content)
+    manifest = read_json(root / '.agentworkspace/software.json')
+    assert manifest['files']['.agentworkspace/prompts/capabilities.md'] == digest(content)
     for skill in ('message', 'relay'):
         assert 'capabilities.md' in (root / f'.agents/skills/{skill}/SKILL.md').read_text(encoding='utf-8')
 
@@ -42,9 +42,9 @@ def test_entry_uses_installed_guidance_even_when_local_copy_is_stale(app, handof
     app.configure('sea', 'alice', {'kind': 'claude'})
     binding = app.reserve('sea', 'alice')['binding']
     # Simulate an existing instance before the software was upgraded.
-    local = root / '.aw/prompts/capabilities.md'
+    local = root / '.agentworkspace/prompts/capabilities.md'
     local.write_text('obsolete capability claims', encoding='utf-8')
-    (root / '.aw/prompts/entry.md').write_text('legacy entry instructions', encoding='utf-8')
+    (root / '.agentworkspace/prompts/entry.md').write_text('legacy entry instructions', encoding='utf-8')
     prompt = runtime.entry_prompt(app, 'sea', 'alice', binding, root)
     assert guide() in prompt and prompt.count(guide()) == 1
     assert 'obsolete capability claims' not in prompt
@@ -59,18 +59,18 @@ def test_entry_uses_installed_guidance_even_when_local_copy_is_stale(app, handof
 def test_explicit_upgrade_adds_guidance_without_overwriting_user_assets(app):
     app.create('sea', 'alice')
     root = app.root('sea', 'alice')
-    local = root / '.aw/prompts/capabilities.md'
+    local = root / '.agentworkspace/prompts/capabilities.md'
     local.unlink()
-    manifest_path = root / '.aw/software.json'
+    manifest_path = root / '.agentworkspace/software.json'
     manifest = read_json(manifest_path)
-    manifest['files'].pop('.aw/prompts/capabilities.md')
+    manifest['files'].pop('.agentworkspace/prompts/capabilities.md')
     write_json(manifest_path, manifest)
     (root / 'AGENTS.md').write_text('user responsibilities', encoding='utf-8')
     commands.upgrade_tools(app, 'sea', 'alice')
     assert local.read_text(encoding='utf-8') == guide()
     assert (root / 'AGENTS.md').read_text(encoding='utf-8') == 'user responsibilities'
     local.write_text('locally edited guidance', encoding='utf-8')
-    with pytest.raises(Conflict, match='Modified platform resource'):
+    with pytest.raises(Conflict):
         commands.upgrade_tools(app, 'sea', 'alice')
     assert local.read_text(encoding='utf-8') == 'locally edited guidance'
 

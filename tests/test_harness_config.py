@@ -1,4 +1,5 @@
 """Native configuration and metadata contracts; no installed model service required."""
+from agent_workspace import layout
 import json
 import os
 from pathlib import Path
@@ -119,9 +120,9 @@ def test_model_context_suffix_is_preserved_for_profiles_and_ordinary_sessions(ap
         args['kind'] = kind
     result = commands.execute(app, command, args)
     assert result['sessions_started'] is False and result['model_access'] == 'unchecked'
-    profile = read_json(app.root('sea', 'model-test') / '.aw-local/runtime.json')
+    profile = read_json(layout.local_path(app.root('sea', 'model-test'), 'runtime.json'))
     if kind == 'codex':
-        assert read_json(app.root('sea', 'model-test') / 'runtime.json')['codex']['model'] == model
+        assert read_json(layout.instance_path(app.root('sea', 'model-test'), 'config.json'))['codex']['model'] == model
         assert 'model' not in profile and 'model' not in overrides(profile)
     else:
         assert profile['model'] == model
@@ -150,7 +151,7 @@ def test_model_context_suffix_reaches_transfer_profile_unchanged(app, executable
     model = 'claude-deepseek-v4.1-flash[1m]'
     result = transfer.request_profile(app, 'sea', 'alice', kind, model=model, effort='low',
                                       executable=executable, request_id='model-transfer')
-    saved = read_json(app.root('sea', 'alice') / '.aw-local/transfer.json')
+    saved = read_json(layout.local_path(app.root('sea', 'alice'), 'transfer.json'))
     assert saved['target_config']['model'] == model
     assert preflight.call_args.args[3]['model'] == model
     assert result['old_binding'] == binding and app.agent('sea', 'alice')['current'] == binding

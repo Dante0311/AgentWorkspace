@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import fs from 'node:fs';
+const TARGET='https://chatgpt.com/c/11111111-1111-4111-8111-111111111111';
+const source=fs.readFileSync(new URL('../extension/page.js',import.meta.url),'utf8');
+const body='请按 Message 协议读取原通知。\n{\n  "id": "original-message",\n  "content": "第一行\\n第二行",\n  "unknown": {"kept": true}\n}\n';
+function fixture(opts={}){
+ let clicks=0, focused=false;
+ const el=(t='',attrs={})=>({innerText:t,textContent:t,tagName:'DIV',disabled:false,children:[],getClientRects:()=>[{}],getAttribute:k=>attrs[k]??null,compareDocumentPosition:()=>opts.noAnswer?0:4});
+ const attachments=el();attachments.children=opts.attachments?[el()]:[];
+ const composer={querySelectorAll:()=>[attachments]};
+ const editor=el(opts.draft||'',{'aria-label':'询问 ChatGPT'});editor.focus=()=>{focused=true};editor.closest=()=>opts.noComposer?null:composer;
+ const user=el('old'),answer=el('answer');const bubbles=[user];
+ if(opts.existing)bubbles.push(el(body));
+ const send=el('发送',{'aria-label':'发送'});send.click=()=>{clicks++;if(!opts.lostReceipt)bubbles.push(el(body));editor.innerText='';};
+ const stop=el('停止',{'aria-label':'停止'}),voice=el('开始语音',{'aria-label':'开始语音'});
+ const doc={querySelectorAll:s=>{
+  if(s.startsWith('[data-composer-markdown]'))return opts.noEditor?[]:opts.multiple?[editor,el('',{'aria-label':'询问 ChatGPT'})]:[editor];
+  if(s==='button')return opts.busy?[stop]:[voice,...(editor.innerText?[send]:[])];
+  if(s==='[role="status"], [aria-live]')return opts.thinking?[el('ChatGPT 正在回应')]:[];
+  if(s==='[role="dialog"], [aria-modal="true"]')return opts.modal?[el()]:[];
+  if(s==='[data-user-message-bubble="true"]')return bubbles;
+  if(s==='[data-markdown-text-style="assistant-message"]')return [answer];
+  throw new Error('unmocked selector '+s);
+ },execCommand:(cmd,ui,value)=>{assert.equal(cmd,'insertText');assert.ok(focused);editor.innerText=value;return true;}};
+ const url=new URL(opts.url||TARGET);
+ const ctx=vm.createContext({document:doc,location:url,performance:{timeOrigin:100},Node:{DOCUMENT_POSITION_FOLLOWING:4},getComputedStyle:()=>({visibility:'visible',display:'block'}),setTimeout:r=>{r();},Event:class{},Date});
+ vm.runInContext(source,ctx);
+ return {run:args=>ctx.__awCourierProbeV2.run({body,targetUrl:TARGET,...args}),get clicks(){return clicks},editor};
+}
+test('read-only inspection changes nothing',async()=>{const f=fixture();const p=await f.run({command:'inspect'});assert.equal(p.state,'idle_candidate');assert.equal(f.clicks,0);assert.equal(f.editor.innerText,'');});
+for(const [name,opts] of Object.entries({busy:{busy:true},thinking:{thinking:true},modal:{modal:true},attachments:{attachments:true},unknownComposer:{noComposer:true},noEditor:{noEditor:true},ambiguousEditor:{multiple:true},unansweredTurn:{noAnswer:true},wrongTarget:{url:'https://chatgpt.com/c/other'}}))test('prepare blocked: '+name,async()=>{const f=fixture(opts);await assert.rejects(f.run({command:'prepare'}));assert.equal(f.clicks,0);assert.equal(f.editor.innerText,'');});
+test('existing draft preserved byte for byte',async()=>{const f=fixture({draft:'my private draft'});await assert.rejects(f.run({command:'prepare'}));assert.equal(f.editor.innerText,'my private draft');});
+test('prepare fills but never sends',async()=>{const f=fixture();assert.equal((await f.run({command:'prepare'})).action,'prepared');assert.equal(f.editor.innerText,body);assert.equal(f.clicks,0);});
+test('existing user receipt does not refill or send',async()=>{const f=fixture({existing:true});assert.equal((await f.run({command:'prepare'})).action,'already_present');assert.equal(f.clicks,0);});
+test('send requires exact body',async()=>{const f=fixture({draft:'different'});await assert.rejects(f.run({command:'send'}));assert.equal(f.clicks,0);});
+test('single click then receipt; repeated call no second click',async()=>{const f=fixture({draft:body});assert.equal((await f.run({command:'send'})).action,'observed');assert.equal(f.clicks,1);assert.equal((await f.run({command:'send'})).action,'already_present');assert.equal(f.clicks,1);});
+test('full multiline notification is inserted unchanged',async()=>{const f=fixture();await f.run({command:'prepare'});assert.equal(f.editor.innerText,body);assert.ok(f.editor.innerText.includes('"unknown"'));});
+test('empty notification rejected',async()=>{const f=fixture();await assert.rejects(f.run({command:'prepare',body:'  '}));});
+test('missing configured target rejected',async()=>{const f=fixture();await assert.rejects(f.run({command:'prepare',targetUrl:undefined}));assert.equal(f.editor.innerText,'');});

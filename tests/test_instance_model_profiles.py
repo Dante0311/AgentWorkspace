@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_workspace import model_profiles as profiles, runtime, transfer
+from agent_workspace import layout, model_profiles as profiles, runtime, transfer
 from agent_workspace.util import Conflict, Error, Unavailable, read_json, write_json
 
 
@@ -35,7 +35,7 @@ def desktop(root, monkeypatch):
         if name == "list_projects":
             return {"projects": [{"projectId": "p", "projectKind": "local", "hostId": "local", "path": str(root)}]}
         if name == "read_thread":
-            return {"thread": {"id": adapter.session, "cwd": str(root), "status": {"type": "idle"}}}
+            return {"thread": {"id": adapter.session, "hostId": "local", "cwd": str(root), "status": {"type": "idle"}}}
         writes.append((name, arguments))
         return {"threadId": "native", "hostId": "local"}
 
@@ -51,7 +51,7 @@ def test_missing_or_malformed_choice_never_creates_or_sends(root, desktop, choic
     write_json(root / "runtime.json", {"codex": choice})
     write_json(root / ".aw-local/entry.json", {"binding": "one", "config": {"kind": "desktop"}})
     with pytest.raises(Error):
-        adapter.create("one")
+        adapter.create("one", 'Explicit connection-only protocol fixture.')
     adapter.session = "existing"
     with pytest.raises(Error):
         adapter.notify("explicit test", "normal")
@@ -61,7 +61,7 @@ def test_missing_or_malformed_choice_never_creates_or_sends(root, desktop, choic
 
 def test_target_choice_reaches_creation_later_input_and_reconnect(root, desktop):
     adapter, writes, rpc = desktop
-    adapter.create("one")
+    adapter.create("one", 'Explicit connection-only protocol fixture.')
     write_json(root / "runtime.json", {"codex": {"model": "next-model", "effort": "low"}})
     adapter.notify("later input", "normal")
     reconnected = runtime.Desktop(root, adapter.config, adapter.session)
@@ -78,7 +78,7 @@ def test_known_unsupported_desktop_parameter_rejects_without_fallback(root, desk
     adapter, writes, _ = desktop
     adapter.tool_schemas["create_thread"]["properties"]["thinking"]["enum"] = ["low"]
     with pytest.raises(Error):
-        adapter.create("one")
+        adapter.create("one", 'Explicit connection-only protocol fixture.')
     assert writes == []
     adapter.tool_schemas["send_message_to_thread"] = {"properties": {"model": {"type": "string"}}}
     with pytest.raises(Unavailable):
@@ -98,12 +98,12 @@ def test_native_mismatch_preserves_creation_receipt_and_prevents_repeat(root, de
 
     adapter.call = call
     with pytest.raises(Error):
-        adapter.create("one")
+        adapter.create("one", 'Explicit connection-only protocol fixture.')
     launch = read_json(root / ".aw-local/launch.json")
     assert launch["result"]["threadId"] == "native"
     assert launch["model_profile"]["effective"] == "mismatch"
     with pytest.raises(Conflict):
-        adapter.create("one")
+        adapter.create("one", 'Explicit connection-only protocol fixture.')
     assert len(writes) == 1
 
 
@@ -227,6 +227,7 @@ def test_custom_provider_does_not_use_builtin_account_catalog(root, monkeypatch)
 def test_automatic_start_and_transfer_reject_missing_profile_before_side_effects(root, monkeypatch):
     app = Mock()
     app.root.return_value = root
+    app.prepare_agent_directory.return_value = {"directory": str(root)}
     app.agent.return_value = {"current": None}
     (root / "AGENTS.md").write_text("Test instance responsibilities.\n", encoding="utf-8")
     write_json(root / ".aw-local/runtime.json", {"kind": "desktop"})
@@ -267,11 +268,11 @@ def test_template_copy_checkpoint_and_next_binding_are_independent(app):
                  {path: store.snapshot().entries[path]}, "Update role template")
     assert profiles.adopted(root, binding)["model"] == "template"
     assert profiles.selected(root)["model"] == "template"
-    write_json(root / "runtime.json", {"codex": {"model": "instance-edit", "effort": "low"}})
+    write_json(layout.instance_path(root, 'config.json'), {"codex": {"model": "instance-edit", "effort": "low"}})
     point = app.checkpoint("sea", "alice", "profile edit for successor", binding=binding)
     snapshot = store.snapshot("instance/alice", revision=point["revision"])
-    assert snapshot.json("runtime.json")["codex"]["model"] == "instance-edit"
-    assert not any(path.startswith(".aw-local/") for path in snapshot.entries)
+    assert snapshot.json(layout.instance_relpath(snapshot, 'config.json'))["codex"]["model"] == "instance-edit"
+    assert not any(path.startswith((".aw-local/", '.agentworkspace/local/')) for path in snapshot.entries)
     assert profiles.adopted(root, binding)["model"] == "template"
     app.stop("sea", "alice", binding, point["id"])
     app.finish_stop("sea", "alice", binding, observed_idle=True)

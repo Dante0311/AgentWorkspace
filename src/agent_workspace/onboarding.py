@@ -15,6 +15,7 @@ import tempfile
 import urllib.parse
 
 from .gitstore import GitStore, git_env
+from . import layout
 from .util import Conflict, Error, encode, locked, now, read_json, slug, uid, write_json
 
 
@@ -224,12 +225,12 @@ def create_workspace(app, name: str, address: str, mode: str = "local", director
                 metadata = {"schema": 1, "name": name, "locator": "workspace:" + receipt["id"],
                             "friends": {}, "projects": {}, "setup_id": receipt["id"],
                             "caretakers": {role: role for role in ROLES}}
-                seed = {"workspace.json": encode(metadata)}
+                seed = {layout.MARKER: layout.marker('workspace'), '.agentworkspace/workspace.json': encode(metadata)}
                 seed.update({f"definitions/caretaker/{role}/definition.md": text.encode()
                              for role, text in receipt["definitions"].items()})
                 store.branch("main", seed)
                 snap = store.snapshot()
-            metadata = snap.json("workspace.json", {})
+            metadata = snap.json(layout.shared_path(snap, "workspace.json"), {})
             if metadata.get("setup_id") != receipt["id"]:
                 raise Conflict("远端不是本次创建的 Workspace；请使用接入，不能覆盖或接管。")
             if not receipt.get("definition_revision"):

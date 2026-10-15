@@ -19,9 +19,9 @@ def team(app):
         app.create("sea", aid)
     store = app.store("sea")
     snap = store.snapshot()
-    meta = snap.json("workspace.json")
+    meta = snap.json(".agentworkspace/workspace.json")
     meta["caretakers"] = {"steward": "steward", "sentinel": "sentinel"}
-    store.change("main", {"workspace.json": encode(meta)}, {"workspace.json": snap.entries["workspace.json"]}, "Register test team")
+    store.change("main", {".agentworkspace/workspace.json": encode(meta)}, {".agentworkspace/workspace.json": snap.entries[".agentworkspace/workspace.json"]}, "Register test team")
     binding = app.reserve("sea", "steward")["binding"]
     app.bind("sea", "steward", binding, "steward-test-session")
     return app, ("sea", "steward", binding)
@@ -127,7 +127,7 @@ def test_schedule_owned_by_one_installation_and_alias(team, tmp_path):
 def test_schedule_rejects_unbounded_or_too_frequent_intervals(app, interval):
     with pytest.raises(Error):
         maintenance.schedule(app, "sea", True, interval=interval)
-    assert app.store("sea").snapshot().json("maintenance/schedule.json") is None
+    assert app.store("sea").snapshot().json(".agentworkspace/maintenance/schedule.json") is None
 
 
 def test_notify_is_opt_in_and_same_incident_is_not_queued_repeatedly(team, monkeypatch):
@@ -139,7 +139,7 @@ def test_notify_is_opt_in_and_same_incident_is_not_queued_repeatedly(team, monke
     monkeypatch.setattr(maintenance, "doctor", lambda *args: {"state": "degraded", "issues": [{"code": "test-fault"}]})
     maintenance.schedule(app, "sea", True, interval=30, notify=False)
     maintenance.tick(app, "sea")
-    inputs = app.root("sea", "sentinel") / ".aw-local/inputs"
+    inputs = app.root("sea", "sentinel") / ".agentworkspace/local/operations/inputs"
     assert not list(inputs.glob("*.json"))
     maintenance.schedule(app, "sea", True, interval=30, notify=True)
     first = maintenance.tick(app, "sea")
@@ -160,7 +160,7 @@ def test_disable_during_check_cannot_queue_notification(team, monkeypatch):
         return {"state": "degraded", "issues": [{"code": "test-fault"}]}
     monkeypatch.setattr(maintenance, "doctor", changed)
     assert maintenance.tick(app, "sea")["state"] == "schedule_changed"
-    assert not list((app.root("sea", "sentinel") / ".aw-local/inputs").glob("*.json"))
+    assert not list((app.root("sea", "sentinel") / ".agentworkspace/local/operations/inputs").glob("*.json"))
 
 
 def test_maintenance_notification_does_not_follow_a_changed_binding(team):
@@ -169,14 +169,60 @@ def test_maintenance_notification_does_not_follow_a_changed_binding(team):
     app.bind("sea", "sentinel", binding, "sentinel-session")
     with pytest.raises(Conflict):
         runtime.queue_input(app, "sea", "sentinel", "old notification", expected_binding="old")
-    assert not list((app.root("sea", "sentinel") / ".aw-local/inputs").glob("*.json"))
+    assert not list((app.root("sea", "sentinel") / ".agentworkspace/local/operations/inputs").glob("*.json"))
+
+
+@pytest.mark.parametrize("entry_state", ["not_started", "stopping", "released"])
+def test_background_check_survives_an_unavailable_sentinel(team, monkeypatch, entry_state):
+    app, _ = team
+    if entry_state != "not_started":
+        binding = app.reserve("sea", "sentinel")["binding"]
+        app.bind("sea", "sentinel", binding, "sentinel-session")
+        point = app.checkpoint("sea", "sentinel", "isolated stop", binding=binding)
+        app.stop("sea", "sentinel", binding, point["id"])
+        if entry_state == "released":
+            app.finish_stop("sea", "sentinel", binding, observed_idle=True)
+    clock = [1000.0]
+    monkeypatch.setattr(maintenance.time, "time", lambda: clock[0])
+    check = Mock(return_value={"state": "degraded", "issues": [{"code": "test-fault"}]})
+    monkeypatch.setattr(maintenance, "doctor", check)
+    maintenance.schedule(app, "sea", True, interval=30, notify=True)
+    first = maintenance.tick(app, "sea")
+    assert first["state"] == "checked" and first["report"]["issues"]
+    assert first["notice"]["state"] == "pending" and first["notice"]["unavailable_reason"]
+    clock[0] += 31
+    second = maintenance.tick(app, "sea")
+    assert second["state"] == "checked" and check.call_count == 2
+    assert second["notice"]["id"] == first["notice"]["id"]
+    assert not list((app.root("sea", "sentinel") / ".agentworkspace/local/operations/inputs").glob("*.json"))
+    assert maintenance.status(app, "sea")["local_run"]["report"] == second["report"]
+
+
+def test_background_check_preserves_notice_when_binding_changes_before_queue(team, monkeypatch):
+    app, _ = team
+    binding = app.reserve("sea", "sentinel")["binding"]
+    app.bind("sea", "sentinel", binding, "sentinel-session")
+    point = app.checkpoint("sea", "sentinel", "isolated stop", binding=binding)
+    monkeypatch.setattr(maintenance, "doctor", lambda *args: {
+        "state": "degraded", "issues": [{"code": "test-fault"}]})
+    queue = runtime.queue_input
+    def revoke_before_queue(*args, **kwargs):
+        app.stop("sea", "sentinel", binding, point["id"])
+        return queue(*args, **kwargs)
+    monkeypatch.setattr(runtime, "queue_input", revoke_before_queue)
+    maintenance.schedule(app, "sea", True, notify=True)
+    result = maintenance.tick(app, "sea")
+    assert result["state"] == "checked"
+    assert result["notice"]["state"] == "pending"
+    assert result["notice"]["unavailable_reason"]
+    assert not list((app.root("sea", "sentinel") / ".agentworkspace/local/operations/inputs").glob("*.json"))
 
 
 def test_doctor_reports_unresolved_effects_and_pending_checkpoint(team):
     app, actor = team
     root = app.root("sea", "steward")
-    write_json(root / ".aw-local/inputs/unknown.json", {"id": "unknown", "state": "outcome_unknown"})
-    write_json(root / ".aw-local/inputs/initial.json", {"id": "initial", "state": "completed", "binding": actor[2], "purpose": "initial"})
+    write_json(root / ".agentworkspace/local/operations/inputs/unknown.json", {"id": "unknown", "state": "outcome_unknown"})
+    write_json(root / ".agentworkspace/local/operations/inputs/initial.json", {"id": "initial", "state": "completed", "binding": actor[2], "purpose": "initial"})
     report = maintenance.doctor(app, "sea")
     assert {i["code"] for i in report["issues"]} == {"input_outcome_unknown", "initial_checkpoint_pending"}
     assert "steward" in report["coverage"]["local"]

@@ -40,10 +40,11 @@ def test_asset_grant_is_scoped_and_revocable(pair):
     app, bindings = pair
     store = app.store('sea')
     snap = store.snapshot()
-    meta = snap.json('workspace.json')
+    path = '.agentworkspace/workspace.json'
+    meta = snap.json(path)
     meta['caretakers'] = {'steward': 'alice'}
-    store.change('main', {'workspace.json': encode(meta)},
-                 {'workspace.json': snap.entries['workspace.json']}, 'Register test caretaker')
+    store.change('main', {path: encode(meta)},
+                 {path: snap.entries[path]}, 'Register test caretaker')
     actor = ('sea', 'alice', bindings['alice'])
     arguments = {'agent_id': 'bob', 'path': 'notes.md', 'content': 'authorized note'}
     maintenance.grant(app, 'sea', 'alice', ['asset.write'], targets=['bob'])

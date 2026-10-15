@@ -2,25 +2,29 @@
 from __future__ import annotations
 
 from functools import partial
+from pathlib import Path
 import inspect
 
-from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills
+from . import backend, bridges, runtime, onboarding, harness_config, maintenance, transfer, sessions, desktop_projects, shared, skills, software, layout, web_courier
 from .messages import Messages
 from .direct_messages import DirectMessages
-from .util import Conflict, Error, digest, inside, locked, read_json, relpath, write_bytes, write_json
+from .util import Conflict, Error, digest, inside, read_json, relpath, user_asset_path, write_bytes, write_json
 
 
 READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "agent.skills", "workspace.list", "workspace.show", "agent.list", "agent.show", "agent.history", "agent.versions",
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
              "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log"}
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status", "layout.plan", "web-courier.status"}
+
+SOFTWARE_OPERATIONS = {"backend.start", "backend.stop", "backend.restart", "backend.status", "backend.log", "backend.run",
+                       "software.status", "software.update"}
 
 USER_MANAGEMENT = {"agent.desktop-prepare", "session.prepare", "session.open", "session.show", "agent.desktop-project-save", "agent.bind", "agent.start", "runtime.start", "runtime.stop", "bridge.configure", "agent.configure",
                    "workspace.init", "setup.scan", "setup.check-git", "setup.create",
                    "setup.inspect-codex", "setup.inspect-sdk", "setup.prepare-instance", "agent.configure-codex",
                    "agent.configure-sdk", "agent.configure-desktop", "agent.capture-desktop", "agent.transfer", "agent.transfer-profile", "agent.transfer-continue",
-                   "maintenance.grant", "maintenance.schedule", "maintenance.repair", "backend.start", "backend.stop", "backend.restart", "backend.attach", "backend.cancel", "runtime.reconcile-create"}
+                   "maintenance.grant", "maintenance.schedule", "maintenance.repair", "backend.attach", "backend.cancel", "runtime.reconcile-create"}
 CALLER_BOUND = {"message.send", "message.receive", "message.poll", "checkpoint.create", "agent.stop", "bridge.send", "runtime.receive-input", "message.reconcile", "direct-message.record"}
 
 
@@ -33,16 +37,12 @@ def assets(app, operation, workspace, agent_id, path=None, content=None, revisio
     path = relpath(path)
     if any(":" in part or part.endswith((".", " ")) for part in path.split("/")):
         raise Error("Use portable asset paths without drive/stream syntax or trailing dots/spaces.")
-    target = inside(root, path)
     if operation == "read":
+        target = inside(root, path)
         data = target.read_bytes()
         return {"path": path, "content": data.decode("utf-8"), "revision": digest(data)}
-    with locked(root / ".aw-local/files.lock"):
-        # Check both the normalized name and its destination, including directory symlinks.
-        resolved = relpath(target.resolve().relative_to(root.resolve()).as_posix())
-        for candidate in (path, resolved):
-            if candidate.split("/", 1)[0].casefold() == ".aw" or candidate.casefold() == "source.json":
-                raise Error("Use platform operations to change managed metadata; asset.write edits user assets.")
+    with layout.lock(root, "files.lock"):
+        target = user_asset_path(root, path, write=True)
         existing = target.read_bytes() if target.exists() else None
         if (digest(existing) if existing is not None else None) != revision:
             raise Conflict("Asset changed; read it before replacing it.")
@@ -51,25 +51,30 @@ def assets(app, operation, workspace, agent_id, path=None, content=None, revisio
 
 
 def bind_entry(app, workspace, agent_id, binding, session, directory=None):
-    root = app.root(workspace, agent_id, directory)
-    entry = app.store(workspace).snapshot().json(f"bindings/{binding}.json")
+    snap = app.store(workspace).snapshot()
+    entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
     if entry is None:
         raise Error("Binding not found.")
+    root = Path(app.prepare_agent_directory(workspace, agent_id, directory)["directory"])
     if entry["kind"] == "desktop":
-        config = read_json(root / ".aw-local/runtime.json", {})
+        config = read_json(layout.local_path(root, "runtime.json"), {})
         adapter = runtime.Desktop(root, config, session)
         try:
-            if adapter.status() == "unknown":
+            native = adapter.read()
+            thread = native["thread"]
+            if runtime.desktop_native_state(native) == "unknown" or thread.get("hostId") != "local" or not thread.get("cwd"):
                 raise Error("Desktop cannot verify this new session; entry was not activated.")
         finally:
             adapter.close()
+        return app.bind(workspace, agent_id, binding, session, directory, cwd=thread["cwd"])
     return app.bind(workspace, agent_id, binding, session, directory)
 
 
 def stop_entry(app, workspace, agent_id, binding, checkpoint, directory=None, confirm_stopped=False):
     result = app.stop(workspace, agent_id, binding, checkpoint, directory)
     if confirm_stopped:
-        entry = app.store(workspace).snapshot().json(f"bindings/{binding}.json")
+        snap = app.store(workspace).snapshot()
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         if entry["kind"] != "manual":
             raise Error("Desktop/CLI stop must be observed by its adapter, not overridden by a flag.")
         result = app.finish_stop(workspace, agent_id, binding, observed_idle=True)
@@ -82,29 +87,32 @@ def stop_entry(app, workspace, agent_id, binding, checkpoint, directory=None, co
 
 def runtime_stop(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
-    binding = app.agent(workspace, agent_id)["current"]
-    with locked(root / ".aw-local/stop-launch.lock"):
-        write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": binding})
+    with layout.lock(root, "stop-launch.lock"):
+        binding = app.agent(workspace, agent_id)["current"]
+        control = layout.local_path(root, "control.json")
+        write_json(control, {**read_json(control, {}), "stop": binding})
         signal = backend.cancel(app, workspace, agent_id, str(root), expected_binding=binding)
     return {"monitor_stop_requested": True, "binding": binding, "execution_right_released": False, **signal}
 
 
 def runtime_launch(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
-    snap = app.store(workspace).snapshot()
-    binding = app.agent(workspace, agent_id, snap)["current"]
-    if binding and snap.json(f"bindings/{binding}.json")["phase"] == "stopping":
-        return runtime.continue_stop(app, workspace, agent_id, binding, directory,
-                                     expected_checkpoint=snap.json(f"bindings/{binding}.json")["checkpoint"])
-    write_json(root / ".aw-local/control.json", {**read_json(root / ".aw-local/control.json", {}), "stop": None})
-    return runtime.spawn_runner(app, workspace, agent_id, directory)
+    with layout.lock(root, "stop-launch.lock"):
+        snap = app.store(workspace).snapshot()
+        binding = app.agent(workspace, agent_id, snap)["current"]
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json")) if binding else None
+        control = layout.local_path(root, "control.json")
+        write_json(control, {**read_json(control, {}), "stop": None})
+    if entry and entry["phase"] == "starting":
+        return backend.attach(app, workspace, agent_id, str(root), expected_binding=binding)
+    return backend.recover(app, workspace, agent_id, str(root), expected_binding=binding)
 
 
 def message_poll(app, workspace, agent_id, binding, directory=None):
     root = app.root(workspace, agent_id, directory)
     item, entry = app.require_binding(workspace, agent_id, binding)
     if entry["kind"] == "desktop":
-        adapter = runtime.Desktop(root, read_json(root / ".aw-local/runtime.json"), entry["session"])
+        adapter = runtime.Desktop(root, read_json(layout.local_path(root, "runtime.json")), entry["session"])
         try:
             return Messages(app).poll(workspace, agent_id, binding, adapter=adapter, directory=directory)
         finally:
@@ -117,24 +125,12 @@ def message_poll(app, workspace, agent_id, binding, directory=None):
 
 
 def upgrade_tools(app, workspace, agent_id, directory=None):
-    root = app.root(workspace, agent_id, directory)
-    with locked(root / ".aw-local/files.lock"):
-        manifest = read_json(root / ".aw/software.json", {"files": {}})
-        fresh = app._resources()
-        for path, data in fresh.items():
-            if path == ".aw/software.json":
-                continue
-            local = inside(root, path)
-            if local.exists() and digest(local.read_bytes()) != manifest["files"].get(path):
-                raise Conflict(f"Modified platform resource: {path}. Preserve or reconcile it before upgrading.")
-        for path, data in fresh.items():
-            write_bytes(inside(root, path), data)
-    return {"resources_updated": list(fresh), "user_assets_changed": False, "snapshot_saved": False}
+    return software.update_instance(app, workspace, agent_id, directory)
 
 
 def bridge_switch(app, workspace, agent_id, name, enabled, directory=None):
     root = app.root(workspace, agent_id, directory)
-    path = root / ".aw-local/bridges" / f"{name}.json"
+    path = layout.local_path(root, f"bridges/{name}.json")
     value = read_json(path)
     if value is None:
         raise Error("Bridge is not configured.")
@@ -143,7 +139,7 @@ def bridge_switch(app, workspace, agent_id, name, enabled, directory=None):
 
 def bridge_status(app, workspace, agent_id, directory=None):
     root = app.root(workspace, agent_id, directory)
-    return {p.stem: read_json(p) for p in (root / ".aw-local/bridges/status").glob("*.json")}
+    return {p.stem: read_json(p) for p in layout.local_path(root, "bridges/status").glob("*.json")}
 
 
 def command_map(app):
@@ -154,6 +150,11 @@ def command_map(app):
         "backend.stop": partial(backend.stop, app), "backend.restart": partial(backend.restart, app),
         "backend.log": partial(backend.log, app), "backend.attach": partial(backend.attach, app),
         "backend.cancel": partial(backend.cancel, app),
+        "software.status": partial(software.status, app), "software.update": partial(software.update, app),
+        "web-courier.connect": partial(web_courier.connect, app),
+        "web-courier.status": partial(web_courier.status, app),
+        "web-courier.revoke": partial(web_courier.revoke, app),
+        "layout.plan": app.layout_plan, "layout.migrate": app.layout_migrate,
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
         "agent.desktop-project": partial(desktop_projects.plan, app),
@@ -233,10 +234,14 @@ def execute(app, command, arguments, *, actor=None):
         raise Error(f"Invalid arguments for {command}: unsupported snapshot argument.")
     if command == "agent.start" and "expected_handoff" in args:
         raise Error("expected_handoff is an internal automatic-continuation condition, not command input.")
-    if actor:
+    if actor and command not in SOFTWARE_OPERATIONS:
         workspace, aid, binding = actor
         if command == "agent.takeover":
             raise Error("Force takeover is an explicit user operation, not an Agent or caretaker operation.")
+        if command == "layout.migrate":
+            raise Error("Layout migration is an explicit user operation; run it from the user management terminal.")
+        if command in ("web-courier.connect", "web-courier.status", "web-courier.revoke"):
+            raise Error("Web Courier connections are explicit user operations; use the user management terminal.")
         # Signatures supply defaults, never authorization. A new agent's ID is a target.
         if "workspace" in signature.parameters:
             args.setdefault("workspace", workspace)
@@ -261,6 +266,6 @@ def execute(app, command, arguments, *, actor=None):
         signature.bind(**args)
     except TypeError as exc:
         raise Error(f"Invalid arguments for {command}: {exc}") from exc
-    if actor and command not in READ_ONLY:
+    if actor and command not in READ_ONLY and command not in SOFTWARE_OPERATIONS:
         app.require_binding(workspace, aid, binding, allow_stopping=command in ("checkpoint.create", "agent.stop"))
     return handler(**args)

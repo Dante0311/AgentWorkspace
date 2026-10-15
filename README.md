@@ -4,9 +4,13 @@
 
 AgentWorkspace 在用户已有的 Agent 客户端之上提供协作：保存 Agent 的身份、职责、Skill、资料和历史，管理当前执行资格，并通过 Git Workspace 交换消息。它操作已有客户端的真实会话，不重写模型推理或工具循环，也不要求用户改用新的聊天客户端。Work / Delivery 按需使用。
 
-> **开发预览，近期方向于 2026-10-11 调整。** npm 包版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`。优先满足 Codex Desktop 与 ChatGPT Web；Web 当前手动收件，浏览器插件另行开发，取得真实接口后再接入。tclaude 待实际验证，其他 Harness、模型供应商与企业微信暂缓扩展。本轮 npm、统一后台、三视图工作台、同机直发路径、显式强制接手及原操作继续已实现；已通过的开发检查与真实环境待验范围见[当前实现](docs/implementation.md)，不表示完整 V1 已完成。未发布 npm Registry 或正式 Release。
+2026-10-13 的开发候选已接入[新目录设计](docs/design.md#31-用户工作根与-aw-内部目录)：实例和共享仓的平台内部数据统一放入 `.agentworkspace/`，提供显式迁移、同一 `AW_HOME` 的后台恢复和统一材料更新。基础检查及已授权恢复不依赖管家模型持续在线。软件升级与数据迁移分别执行，安装新版不会自动搬迁已有 Workspace；开发检查与实机验收分别以[当前实现](docs/implementation.md)及对应候选证据为准。
+
+> **开发预览。** npm 包版本为 `0.1.0-alpha.1`，Python 后端沿用 `0.1.0a1`。优先满足 Codex Desktop 与 ChatGPT Web；Web 保留手动收件，并提供 [Web Courier](extensions/web-courier/README.md) 的单条人工确认投递候选，真实浏览器仍须独立验收。tclaude 待实际验证，其他 Harness、模型供应商与企业微信暂缓扩展。已有 npm、后台、三视图工作台、同机直发路径、显式强制接手及原操作继续的验证边界见[当前实现](docs/implementation.md)，不表示完整 V1 已完成。未发布 npm Registry 或正式 Release。
 
 Codex Desktop 已有在本地项目中的自动创建、真实会话绑定、持续投递和同 Agent 交接；需要先准备项目并从真实桌面聊天取得控制连接。历史限定实测见 [实现进展](docs/implementation.md#codex-desktop-自动接入2026-10-08)，操作和限制见 [Codex Desktop](docs/usage.md#42-codex-desktop)。这些结果不代替本轮新增功能的验收。
+
+2026-10-14 开发候选已接入可选独立或共用 Codex 项目、实例分支与个人资料 worktree，以及进入和交接时的自动准备、身份与工作背景材料。本机隔离 Desktop 已通过共用项目和正常 handoff/relay 的实际流程验证；具体受测版本、范围与未测项见[实现范围](docs/implementation.md#共用项目与-worktree2026-10-14-开发候选)。工作台后续完善，现有 Agent 和资料不在本轮迁移或清理范围。
 
 ## 已有共同职责与共享 Skill
 
@@ -49,7 +53,7 @@ aw backend start --open
 
 上例安装时换成实际采用的新构建文件。`aw backend status`、`aw backend restart`、`aw backend log` 用于查看和控制，`aw backend run` 可前台运行；已有 `aw serve` 保留兼容。隔离测试数据不自动并入日常后台，停止 AW 后台不等于原生聊天已关闭或 Agent 已交出执行权。
 
-本轮已完成隔离 npm 离线安装、使用包内 Python 运行 CLI/HTTP、七个 Skills 完整性、后台重复启动/重启/停止及卸载重装同包后原数据保留检查。工作台也已用真实浏览器和隔离后台检查启停与重连；这些结果不代替真实 Desktop、跨机器或跨数据格式升级验收。首次配置和底层 CLI 操作见[新机器配置](docs/first-use.md)与[运行与维护说明](docs/runtime-and-maintenance.md)。参与开发才需要 clone 源码，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+既有 npm 候选曾完成隔离离线安装、使用包内 Python 运行 CLI/HTTP、七个 Skills 完整性、后台启停及重装后原数据保留检查，工作台也曾验证启停与重连。这些历史结果不代替新目录、Web Courier 或当前安装包的验收。首次配置和底层 CLI 操作见[新机器配置](docs/first-use.md)与[运行与维护说明](docs/runtime-and-maintenance.md)。参与开发才需要 clone 源码，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 当前能力
 

@@ -49,7 +49,7 @@ def test_add_update_only_selected_skill_and_preserve_unrelated_private_assets(ap
     assert skills.apply(app, 'update', 'sea', 'a', 'review')['state'] == 'updated'
     assert (root / '.agents/skills/review/SKILL.md').read_bytes().endswith(b'updated')
     assert (root / 'AGENTS.md').read_bytes() == responsibility and (root / 'notes.md').read_bytes() == b'private'
-    assert not (root / 'source.json').exists()
+    assert not (root / '.agentworkspace/source.json').exists()
 
 
 @pytest.mark.parametrize('change', ['modified', 'extra', 'deleted'])
@@ -96,10 +96,10 @@ def test_interrupted_swap_finishes_only_original_receipt(app, monkeypatch):
         return original(path, value)
     monkeypatch.setattr(skills, 'write_json', fail_manifest)
     with pytest.raises(OSError): skills.apply(app, 'update', 'sea', 'a', 'review')
-    assert (root / '.aw-local/skill-install/old/SKILL.md').exists()
+    assert (root / '.agentworkspace/local/operations/skill-install/old/SKILL.md').exists()
     monkeypatch.setattr(skills, 'write_json', original)
     assert skills.apply(app, 'update', 'sea', 'a', 'review')['state'] == 'unchanged'
-    assert not (root / '.aw-local/skill-install').exists()
+    assert not (root / '.agentworkspace/local/operations/skill-install').exists()
     assert (root / '.agents/skills/review/SKILL.md').read_bytes().endswith(b'new')
 
 
@@ -115,7 +115,7 @@ def test_interrupted_update_never_overwrites_a_later_private_edit(app, monkeypat
     target = root / '.agents/skills/review/SKILL.md'; target.write_bytes(b'private after failure')
     with pytest.raises(Conflict): skills.apply(app, 'update', 'sea', 'a', 'review')
     assert target.read_bytes() == b'private after failure'
-    assert (root / '.aw-local/skill-install/old/SKILL.md').exists()
+    assert (root / '.agentworkspace/local/operations/skill-install/old/SKILL.md').exists()
 
 
 def test_resumable_create_preserves_selection_and_bytes(app):
@@ -160,7 +160,7 @@ def test_prepared_swap_before_new_directory_rename_recovers_old_files(app, monke
     root = app.root('sea', 'a'); target = root / '.agents/skills/review'
     original = Path.rename
     def fail_new(path, dest):
-        if path == root / '.aw-local/skill-install/new': raise OSError('rename interrupted')
+        if path == root / '.agentworkspace/local/operations/skill-install/new': raise OSError('rename interrupted')
         return original(path, dest)
     monkeypatch.setattr(Path, 'rename', fail_new)
     with pytest.raises(OSError): skills.apply(app, 'update', 'sea', 'a', 'review')
@@ -185,9 +185,9 @@ def test_caretaker_skill_grant_is_explicit_scoped_and_revocable(app):
     publish(app)
     for name in ('steward', 'a', 'b'):
         app.create('sea', name)
-    store = app.store('sea'); snap = store.snapshot(); meta = snap.json('workspace.json')
+    store = app.store('sea'); snap = store.snapshot(); meta = snap.json('.agentworkspace/workspace.json')
     meta['caretakers'] = {'steward': 'steward'}
-    store.change('main', {'workspace.json': encode(meta)}, {'workspace.json': snap.entries['workspace.json']}, 'test role')
+    store.change('main', {'.agentworkspace/workspace.json': encode(meta)}, {'.agentworkspace/workspace.json': snap.entries['.agentworkspace/workspace.json']}, 'test role')
     binding = app.reserve('sea', 'steward')['binding']; app.bind('sea', 'steward', binding, 'test-steward')
     actor = ('sea', 'steward', binding)
     maintenance.grant(app, 'sea', 'steward', ['agent.skill-install', 'agent.skill-update'], ['a'])

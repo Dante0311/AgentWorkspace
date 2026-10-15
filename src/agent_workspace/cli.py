@@ -8,7 +8,7 @@ import sys
 
 from . import __version__
 from .app import App
-from .commands import execute
+from .commands import SOFTWARE_OPERATIONS, execute
 from .util import Error
 
 
@@ -28,7 +28,8 @@ def parser():
     setup = domains.add_parser("setup", help="Open first-use setup; detect dependencies, never install them.")
     setup.add_argument("--port", type=int, default=8765)
     setup.add_argument("--open", action="store_true")
-    domains.add_parser("mcp", help="MCP stdio tools; use AW_* environment to bind model identity.")
+    mcp = domains.add_parser("mcp", help="MCP stdio tools; use AW_* environment to bind model identity.")
+    mcp.add_argument("--completion-config", help="Local configuration for identity-bound completion tools only.")
 
     def actions(domain, names):
         sub = domains.add_parser(domain).add_subparsers(dest="action", required=True)
@@ -41,6 +42,28 @@ def parser():
     service["log"].add_argument("--agent-id")
     service["log"].add_argument("--directory")
     service["log"].add_argument("--lines", type=int, default=100)
+
+    actions("software", ["status", "update"])
+
+    courier = actions("web-courier", ["connect", "status", "revoke"])
+    courier["connect"].add_argument("agent_id")
+    courier["connect"].add_argument("--binding", dest="expected_binding", required=True)
+    courier["connect"].add_argument("--target-url", required=True)
+    courier["connect"].add_argument("--extension-id", required=True)
+    courier["connect"].add_argument("--request-id", required=True)
+    courier["connect"].add_argument("--port", type=int, default=8765)
+    for key in ("status", "revoke"):
+        courier[key].add_argument("connection_id")
+    courier["revoke"].add_argument("--request-id", required=True)
+
+    migration = actions("layout", ["plan", "migrate"])
+    for sub in migration.values():
+        sub.add_argument("--agent", dest="agent_ids", action="append",
+                         help="Limit instance migration to these Agents; repeat to select more than one.")
+    migration["migrate"].add_argument("--request-id", required=True)
+    migration["migrate"].add_argument("--migrate-shared", action="store_true")
+    migration["migrate"].add_argument("--compatible-writers",
+                                     help="Explicit writer confirmation for the planned shared revision: JSON or @file.json.")
 
     session = actions("session", ["prepare", "open", "show", "run"])
     for key in ("open", "show", "run"):
@@ -89,6 +112,7 @@ def parser():
     ag["promote"].add_argument("--path", dest="paths", action="append", required=True)
     ag["promote"].add_argument("--destination", required=True)
     ag["start"].add_argument("--open", dest="open_app", action="store_true")
+    ag["start"].add_argument("--here", action="store_true", help="Relay into this real Codex Desktop chat without creating another chat.")
     ag["bind"].add_argument("--binding", required=True)
     ag["bind"].add_argument("--session", required=True)
     ag["stop"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
@@ -129,6 +153,7 @@ def parser():
     ag["desktop-project-save"].add_argument("--project-name", required=True)
     ag["desktop-project-save"].add_argument("--section-name", default="")
     ag["desktop-project-save"].add_argument("--product-path", dest="product_paths", action="append")
+    ag["desktop-project-save"].add_argument("--project-directory", help="Existing native project root; omit to keep the chosen project.")
     ag["desktop-project-save"].add_argument("--revision")
 
     ag["desktop-prepare"].add_argument("--request-id", required=True)
@@ -145,7 +170,7 @@ def parser():
     mt["grant"].add_argument("--command", dest="commands", action="append", default=[])
     mt["grant"].add_argument("--target", dest="targets", action="append", default=[])
     mt["repair"].add_argument("agent_id")
-    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle", "continue-stop"], required=True)
+    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover"], required=True)
     mt["repair"].add_argument("--request-id", required=True)
     for field in ("operation-id", "bridge", "expected-binding", "expected-generation", "expected-checkpoint"):
         mt["repair"].add_argument("--" + field)
@@ -246,13 +271,18 @@ def main(argv=None):
     app = App(home)
     try:
         actor = None
-        if os.environ.get("AW_BINDING") and os.environ.get("AW_AGENT"):
+        operation = options.get("command") if domain == "call" else domain + "." + str(action)
+        if (operation == "agent.start" and options.get("here")
+                or domain == "call" and operation == "agent.start" and parse_json(options["arguments"]).get("here")):
+            operation = "agent.start-here"
+        software_operation = operation in SOFTWARE_OPERATIONS or domain == "serve"
+        # Local software control uses the host's tool permissions, not an Agent's execution entry.
+        if not software_operation and os.environ.get("AW_BINDING") and os.environ.get("AW_AGENT"):
             if not os.environ.get("AW_WORKSPACE"):
                 raise Error("An inherited model identity requires AW_WORKSPACE.")
             actor = (os.environ["AW_WORKSPACE"], os.environ["AW_AGENT"], os.environ["AW_BINDING"])
-        if actor is None:
+        if actor is None and not software_operation:
             from .runtime import desktop_directory_actor
-            operation = options.get("command") if domain == "call" else domain + "." + str(action)
             actor = desktop_directory_actor(app, operation)
         if actor and not workspace:
             workspace = actor[0]
@@ -277,7 +307,7 @@ def main(argv=None):
             return 0
         if domain == "mcp":
             from .server import mcp
-            mcp(app, actor=actor)
+            mcp(app, actor=actor, completion_config=options["completion_config"], workspace=workspace)
             return 0
         if domain == "runtime" and action == "run":
             from .runtime import Runner
@@ -285,7 +315,7 @@ def main(argv=None):
             return 0
         if domain == "call":
             command, args = options["command"], parse_json(options["arguments"])
-            if options.get("desktop_agent"):
+            if options.get("desktop_agent") and not software_operation:
                 from .runtime import desktop_actor
                 desktop_identity = desktop_actor(app, workspace, options["desktop_agent"])
                 if actor and actor != desktop_identity:
@@ -301,6 +331,8 @@ def main(argv=None):
             for key in ("value", "target_config"):
                 if key in args:
                     args[key] = parse_json(args[key])
+            if args.get("compatible_writers") is not None:
+                args["compatible_writers"] = parse_json(args["compatible_writers"])
             if command == "maintenance.repair":
                 args["action"] = args.pop("repair_action")
             if command == "agent.capture-desktop" and args.get("command"):
@@ -320,11 +352,11 @@ def main(argv=None):
             if not workspace:
                 raise Error("Select the Runner's --workspace.")
             args["workspace"] = workspace
-        if not command.startswith(("setup.", "session.", "backend.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile"):
+        if not command.startswith(("setup.", "session.", "backend.", "software.")) and command not in ("workspace.init", "workspace.connect", "workspace.bootstrap-remote", "workspace.list", "message.reconcile", "web-courier.status", "web-courier.revoke"):
             if not workspace and not args.get("workspace"):
                 raise Error("Select --workspace or set AW_WORKSPACE.")
             args.setdefault("workspace", workspace)
-        # A model's inherited identity never silently becomes an administrator.
+        # Agent business operations retain their inherited identity and target permissions.
         result = execute(app, command, args, actor=actor)
         print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
         if isinstance(result, dict) and result.get("state") in ("pending", "outcome_unknown"):

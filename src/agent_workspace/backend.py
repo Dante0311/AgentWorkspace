@@ -15,7 +15,8 @@ import urllib.request
 import webbrowser
 
 from .maintenance import installation_id
-from .util import Conflict, Error, LockBusy, Unavailable, Uncertain, locked, now, read_json, write_json
+from . import layout, software
+from .util import Conflict, Error, LockBusy, RetryableRead, Unavailable, Uncertain, locked, now, read_json, write_json
 
 
 def _lock_held(app):
@@ -26,8 +27,15 @@ def _lock_held(app):
         return True
 
 
+def _read_connection(app):
+    # Windows readers can deny replacement of this file. Keep the snapshot
+    # closed before releasing the same lock used by the publishing process.
+    with locked(app.home / "backend/connection.lock"):
+        return read_json(app.home / "backend/connection.json", {})
+
+
 def _request(app, command, arguments=None):
-    connection = read_json(app.home / "backend/connection.json")
+    connection = _read_connection(app)
     if not connection:
         raise Unavailable("The local backend is not ready; use backend start.")
     url = f"http://127.0.0.1:{connection['port']}/api/execute"
@@ -54,87 +62,197 @@ class Backend:
         self.runners = {}
         self.threads = []
         self.resume_notes = []
+        self.watches = {}
+        self.watch_failure = None
+        self.software = None
         self.restart_requested = False
         self.open_after_restart = False
         self.maintenance = threading.Thread(target=self._maintenance, name="aw-maintenance")
         self.restore = threading.Thread(target=self._restore, name="aw-restore")
+        self.watch = threading.Thread(target=self._watch, name="aw-watch")
 
     def _maintenance(self):
         from .maintenance import run
         run(self.app, self.stop_event)
 
     def start(self):
+        self.software = software.update(self.app)
         self.maintenance.start()
         self.restore.start()
+        self.watch.start()
+
+    def _watch(self):
+        failures = 0
+        while not self.stop_event.is_set():
+            try:
+                self._check_watches()
+            except (Error, OSError, ValueError) as exc:
+                failures += 1
+                retry = isinstance(exc, RetryableRead) and failures < 5
+                self.watch_failure = {"state": "check_backoff" if retry else "check_paused",
+                                      "attempts": failures, "reason": str(exc), "error_code": getattr(exc, "code", None),
+                                      "observed_at": now()}
+                if not retry or self.stop_event.wait(min(2 ** failures, 30)):
+                    return
+                continue
+            failures = 0
+            self.watch_failure = None
+            self.stop_event.wait(.5)
+
+    def _check_watches(self):
+        from .messages import Messages
+        seen = set()
+        for access in self.app.workspace_list():
+            workspace = access["alias"]
+            copies = self.app.local()["workspaces"][workspace].get("instances", {})
+            for agent_id, locations in copies.items():
+                if self.stop_event.is_set():
+                    return
+                for location in locations:
+                    root = Path(location).resolve()
+                    key = (workspace, agent_id, root)
+                    seen.add(key)
+                    with self.lock:
+                        previous = self.watches.get(key, {})
+                        task = self.runners.get(root)
+                    record = {"workspace": workspace, "agent_id": agent_id, "directory": str(root)}
+                    try:
+                        setting = read_json(layout.local_path(root, "watch.json"), {"enabled": False})
+                        if previous.get("changed_at") != setting.get("changed_at"):
+                            previous = {}
+                        binding = setting.get("binding")
+                        record.update(binding=binding, changed_at=setting.get("changed_at"))
+                        if not setting.get("enabled"):
+                            record["state"] = "disabled"
+                        elif previous.get("changed_at") == setting.get("changed_at") and previous.get("state") == "check_paused":
+                            continue
+                        elif previous.get("changed_at") == setting.get("changed_at") and time.monotonic() < previous.get("next_check", 0):
+                            continue
+                        else:
+                            snap = self.app.store(workspace).snapshot()
+                            owner = self.app.agent(workspace, agent_id, snap)
+                            entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
+                            control = read_json(layout.local_path(root, "control.json"), {})
+                            if owner["current"] != binding or not entry or entry["phase"] != "active":
+                                record["state"] = "entry_inactive"
+                            elif control.get("stop") == binding:
+                                record["state"] = "user_paused"
+                            elif control.get("handoff") == binding:
+                                record["state"] = "handoff_paused"
+                            elif task and task["binding"] == binding and task["thread"].is_alive():
+                                record["state"] = "runner_managed"
+                            else:
+                                # Checking the formal queue needs no model or native writer.
+                                # Actual notification remains the qualified Runner's job.
+                                record.update(state="checked", checked_at=now(),
+                                    poll=Messages(self.app).poll(workspace, agent_id, binding, directory=str(root)))
+                            record["next_check"] = time.monotonic() + setting.get("interval", 5)
+                    except (Error, OSError, ValueError, TypeError) as exc:
+                        attempts = previous.get("attempts", 0) + 1
+                        retry = isinstance(exc, RetryableRead) and attempts < 5
+                        record.update(state="check_backoff" if retry else "check_paused", attempts=attempts,
+                            reason=str(exc), error_code=getattr(exc, "code", None),
+                            next_check=time.monotonic() + min(2 ** attempts, 30))
+                    with self.lock:
+                        self.watches[key] = record
+        with self.lock:
+            self.watches = {key: record for key, record in self.watches.items() if key in seen}
 
     def _restore(self):
         for access in self.app.workspace_list():
             if self.stop_event.is_set():
                 return
             workspace = access["alias"]
-            try:
-                snap = self.app.store(workspace).snapshot()
-            except (Error, OSError, ValueError) as exc:
-                self.resume_notes.append({"workspace": workspace, "reason": str(exc), "observed_at": now()})
-                continue
             copies = self.app.local()["workspaces"][workspace].get("instances", {})
             for agent_id in copies:
                 if self.stop_event.is_set():
                     return
                 try:
-                    agent = self.app.agent(workspace, agent_id, snap)
-                    binding = agent.get("current")
-                    if not binding:
-                        continue
-                    entry = snap.json(f"bindings/{binding}.json")
-                    execution = entry.get("execution")
-                    if not execution:
-                        self.resume_notes.append({"workspace": workspace, "agent_id": agent_id, "binding": binding,
-                            "reason": "Execution source is missing; a local directory does not establish ownership.", "observed_at": now()})
-                        continue
-                    if execution["installation_id"] != installation_id(self.app):
-                        continue
-                    root = self.app.root(workspace, agent["id"], execution["directory"])
-                    local = read_json(root / ".aw-local/entry.json", {})
-                    control = read_json(root / ".aw-local/control.json", {})
-                    if not isinstance(local, dict) or not isinstance(control, dict):
-                        raise Error("Local entry or control record is invalid; inspect this original copy.")
-                    if local.get("binding") != binding or control.get("stop") == binding:
-                        continue
-                    if entry["kind"] == "manual" or not entry.get("session"):
-                        self.resume_notes.append({"workspace": workspace, "agent_id": agent["id"], "binding": binding,
-                            "reason": "No confirmed native session; no creation or model input was repeated.", "observed_at": now()})
-                        continue
-                    if entry["phase"] != "stopping" and entry.get("controller"):
-                        self.resume_notes.append({"workspace": workspace, "agent_id": agent["id"], "binding": binding,
-                            "reason": "Original controller remains; explicit takeover is required.", "observed_at": now()})
-                        continue
-                    self.attach(workspace, agent["id"], str(root), stop_binding=binding if entry["phase"] == "stopping" else None)
+                    result = self.recover(workspace, agent_id)
+                    if result.get("reason"):
+                        self.resume_notes.append({"workspace": workspace, "agent_id": agent_id, **result, "observed_at": now()})
                 except (Error, OSError, ValueError, KeyError) as exc:
                     self.resume_notes.append({"workspace": workspace, "agent_id": agent_id, "reason": str(exc), "observed_at": now()})
 
-    def attach(self, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None):
+    def recover(self, workspace, agent_id, directory=None, expected_binding=None):
+        """Reconnect one confirmed session; preserve attempted inputs and user pauses."""
+        snap = self.app.store(workspace).snapshot()
+        owner = self.app.agent(workspace, agent_id, snap)
+        binding = owner.get("current")
+        if expected_binding is not None and binding != expected_binding:
+            raise Conflict("The original Binding changed before recovery.")
+        result = {"binding": binding, "state": "recovery_blocked"}
+        if not binding or owner["archived"]:
+            return {**result, "reason_code": "no_current_entry", "reason": "No current execution entry to observe."}
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
+        result.update(session=entry.get("session"), checkpoint=entry.get("checkpoint"))
+        execution = entry.get("execution")
+        if not execution:
+            return {**result, "reason_code": "execution_source_missing",
+                    "reason": "Execution source is missing; a local directory does not establish ownership."}
+        if execution["installation_id"] != installation_id(self.app):
+            return {**result, "reason_code": "different_execution_environment", "reason": "The original entry belongs to another installation."}
+        if directory is not None and Path(directory).resolve() != Path(execution["directory"]).resolve():
+            raise Conflict("Recovery must use the original execution directory.")
+        root = self.app.root(workspace, agent_id, execution["directory"])
+        local = read_json(layout.local_path(root, "entry.json"), {})
+        control = read_json(layout.local_path(root, "control.json"), {})
+        if not isinstance(local, dict) or not isinstance(control, dict):
+            raise Error("Local entry or control record is invalid; inspect this original copy.")
+        if local.get("binding") != binding:
+            return {**result, "reason_code": "local_entry_mismatch", "reason": "This copy is not attached to the original entry."}
+        if control.get("stop") == binding or (entry["phase"] != "stopping" and control.get("handoff") == binding):
+            return {**result, "state": "recovery_paused", "reason_code": "user_paused",
+                    "reason": "The original observation was paused or handed off; it was not restarted."}
+        if entry["phase"] not in ("active", "stopping") or not entry.get("session"):
+            return {**result, "reason_code": "native_session_unconfirmed",
+                    "reason": "No confirmed native session; no creation or model input was repeated."}
+        with self.lock:
+            task = self.runners.get(root)
+            if task and task["binding"] == binding and task["thread"].is_alive():
+                return {**result, "state": "runner_present", "pid": os.getpid()}
+        if entry["phase"] != "stopping" and entry.get("controller"):
+            return {**result, "reason_code": "original_controller_remains",
+                    "reason": "Original controller remains; recovery cannot claim or replace it."}
+        if entry["kind"] == "manual":
+            return {**result, "reason_code": "independent_observation_unavailable",
+                    "reason": "Manual entry has no automatic observer; use its actual session to receive."}
+        if entry["phase"] == "stopping":
+            from .runtime import continue_stop
+            return continue_stop(self.app, workspace, agent_id, binding, str(root), expected_checkpoint=entry["checkpoint"])
+        if entry["kind"] == "desktop":
+            config = read_json(layout.local_path(root, "runtime.json"), {})
+            if config.get("kind") != "desktop" or not all(config.get(key) for key in ("command", "pipe_path", "caller_thread")):
+                return {**result, "reason_code": "desktop_connection_missing", "reason": "The original Desktop control connection is not captured."}
+        return {**result, **self.attach(workspace, agent_id, str(root), expected_binding=binding)}
+
+    def attach(self, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None, recovery=False):
         from .runtime import Runner, _released_stop
+        if recovery:
+            if stop_binding is not None:
+                raise Error("Recover one original entry; do not replace its stop request.")
+            return self.recover(workspace, agent_id, directory, expected_binding)
         root = self.app.root(workspace, agent_id, directory)
+        software.require_ready(root)
         snap = self.app.store(workspace).snapshot()
         if stop_binding:
-            original = snap.json(f"bindings/{stop_binding}.json")
+            original = snap.json(layout.shared_path(snap, f"bindings/{stop_binding}.json"))
             if original and original["phase"] == "released":
                 return _released_stop(snap, agent_id, stop_binding, original)
-        local = read_json(root / ".aw-local/entry.json", {})
+        local = read_json(layout.local_path(root, "entry.json"), {})
         binding = local.get("binding")
         if not binding:
             raise Error("No local entry; use agent start before starting its Runner.")
         if expected_binding and binding != expected_binding:
             raise Conflict("The original Binding changed before its backend request arrived.")
         owner = self.app.agent(workspace, agent_id, snap)
-        entry = snap.json(f"bindings/{binding}.json")
+        entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         if owner["current"] != binding or owner["archived"] or entry["phase"] not in ("starting", "active", "stopping"):
             raise Conflict("Only the current starting, active or stopping Binding can have a Runner.")
         if stop_binding and (stop_binding != binding or entry["phase"] != "stopping"):
             raise Conflict("Only the original stopping request can be observed.")
         if entry["phase"] == "starting" and not entry.get("session"):
-            launch = read_json(root / ".aw-local/launch.json", {})
+            launch = read_json(layout.local_path(root, "launch.json"), {})
             if launch.get("binding") == binding and launch.get("attempted"):
                 raise Conflict("The original native creation is unresolved; inspect and reconcile its launch receipt.")
         execution = entry.get("execution")
@@ -165,12 +283,15 @@ class Backend:
             runner.run()
         except Exception:
             # A task failure belongs to this Runner; it must not terminate other Agents.
-            log_path = runner.root / ".aw-local/runner.log"
-            with log_path.open("a", encoding="utf-8") as log:
-                log.write(now() + "\n" + traceback.format_exc() + "\n")
+            with layout.lock(runner.root, "files.lock"):
+                log_path = layout.local_path(runner.root, "runner.log")
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as log:
+                    log.write(now() + "\n" + traceback.format_exc() + "\n")
         else:
             if runner.stop_event.is_set():
-                runner.status(state="monitor_stopped", entry_automatically_released=False)
+                with layout.lock(runner.root, "files.lock"):
+                    runner.status(state="monitor_stopped", entry_automatically_released=False)
 
     def cancel(self, root, binding):
         with self.lock:
@@ -183,10 +304,12 @@ class Backend:
     def status(self):
         with self.lock:
             tasks = list(self.runners.items())
+            watches = [{key: value for key, value in record.items() if key != "next_check"}
+                       for record in self.watches.values()]
         runners = []
         for root, task in tasks:
             try:
-                observation = read_json(root / ".aw-local/status.json", {})
+                observation = read_json(layout.local_path(root, "status.json"), {})
                 if not isinstance(observation, dict):
                     raise ValueError("Runtime observation is not an object.")
             except (OSError, ValueError) as exc:
@@ -200,6 +323,9 @@ class Backend:
                 "ready": not self.stop_event.is_set(), "pid": os.getpid(), "home": str(self.app.home),
                 "url": f"http://127.0.0.1:{self.http.server_port}/", "observed_at": now(),
                 "maintenance_alive": self.maintenance.is_alive(), "restoring": self.restore.is_alive(),
+                "watch_alive": self.watch.is_alive(), "watches": watches,
+                "watch_failure": self.watch_failure,
+                "software": self.software,
                 "runners": runners, "resume_notes": list(self.resume_notes)}
 
     def request_stop(self, restart=False, open_app=False):
@@ -224,6 +350,8 @@ class Backend:
             self.maintenance.join()
         if self.restore.ident is not None:
             self.restore.join()
+        if self.watch.ident is not None:
+            self.watch.join()
         for task in self.threads:
             task["thread"].join()
 
@@ -236,7 +364,7 @@ def status(app):
         return {"state": "stopped", "running": False, "ready": False, "home": str(app.home), "observed_at": now()}
     try:
         return _request(app, "backend.status")
-    except (Unavailable, Error, ValueError):
+    except (Unavailable, Error, OSError, ValueError):
         return {"state": "unknown", "running": True, "ready": False, "home": str(app.home),
                 "unknown_reason": "Backend lock is held but its control endpoint could not be read.", "observed_at": now()}
 
@@ -249,10 +377,10 @@ def start(app, port=None, open_app=False):
         if _lock_held(app):
             result = status(app)
             if open_app and result["ready"]:
-                connection = read_json(app.home / "backend/connection.json")
+                connection = _read_connection(app)
                 webbrowser.open(result["url"] + "#token=" + connection["token"])
             return {**result, "start_requested": False}
-        connection = read_json(app.home / "backend/connection.json", {})
+        connection = _read_connection(app)
         port = port if port is not None else connection.get("port", 8765)
         args = [sys.executable, "-m", "agent_workspace", "--home", str(app.home), "backend", "run", "--port", str(port)]
         if open_app:
@@ -294,15 +422,28 @@ def restart(app, port=None, open_app=False):
     return _request(app, "backend.restart", {"port": port, "open_app": open_app})
 
 
-def attach(app, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None):
+def attach(app, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None, recovery=False):
+    if recovery:
+        if stop_binding is not None:
+            raise Error("Recover one original entry; do not replace its stop request.")
+        return recover(app, workspace, agent_id, directory, expected_binding)
     root = app.root(workspace, agent_id, directory)
-    expected_binding = expected_binding or stop_binding or read_json(root / ".aw-local/entry.json", {}).get("binding")
+    expected_binding = expected_binding or stop_binding or read_json(layout.local_path(root, "entry.json"), {}).get("binding")
     manager = getattr(app, "backend", None)
     if manager:
         return manager.attach(workspace, agent_id, str(root), stop_binding, expected_binding)
     start(app)
     return _request(app, "backend.attach", {"workspace": workspace, "agent_id": agent_id,
         "directory": str(root), "stop_binding": stop_binding, "expected_binding": expected_binding})
+
+
+def recover(app, workspace, agent_id, directory=None, expected_binding=None):
+    manager = getattr(app, "backend", None)
+    if manager:
+        return manager.recover(workspace, agent_id, directory, expected_binding)
+    start(app)
+    return _request(app, "backend.attach", {"workspace": workspace, "agent_id": agent_id,
+        "directory": directory, "expected_binding": expected_binding, "recovery": True})
 
 
 def cancel(app, workspace, agent_id, directory=None, expected_binding=None):
@@ -323,7 +464,7 @@ def log(app, workspace=None, agent_id=None, directory=None, lines=100):
         if not workspace:
             raise Error("Choose the Runner's workspace.")
         root = app.root(workspace, agent_id, directory)
-        path = root / ".aw-local/runner.log"
+        path = layout.local_path(root, "runner.log")
         source = {"kind": "runner", "workspace": workspace, "agent_id": agent_id, "directory": str(root)}
     else:
         if directory:
@@ -342,7 +483,7 @@ def log(app, workspace=None, agent_id=None, directory=None, lines=100):
         content_lines = content.splitlines()
         truncated = bool(offset) or len(content_lines) > lines
         content = "\n".join(content_lines[-lines:])
-    connection = read_json(app.home / "backend/connection.json", {})
+    connection = _read_connection(app)
     if connection.get("token"):
         content = content.replace(connection["token"], "[redacted]")
     content = re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", content)
@@ -353,13 +494,14 @@ def log(app, workspace=None, agent_id=None, directory=None, lines=100):
 def run(app, port=None, open_app=False, setup=False):
     from .server import make_server
     with locked(app.home / "backend/service.lock", wait=0):
-        connection = read_json(app.home / "backend/connection.json", {})
+        connection = _read_connection(app)
         port = port if port is not None else connection.get("port", 8765)
         http = make_server(app, port, connection.get("token"))
         manager = Backend(app, http)
         app.backend = manager
-        write_json(app.home / "backend/connection.json", {"port": http.server_port, "pid": os.getpid(),
-                   "token": http.control_token, "started_at": now()})
+        with locked(app.home / "backend/connection.lock"):
+            write_json(app.home / "backend/connection.json", {"port": http.server_port, "pid": os.getpid(),
+                       "token": http.control_token, "started_at": now()})
         url = f"http://127.0.0.1:{http.server_port}/" + ("setup" if setup else "") + "#token=" + http.control_token
         print("本机工作台（地址包含控制凭据，请勿分享）：\n" + url, flush=True)
         try:

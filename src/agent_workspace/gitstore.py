@@ -17,8 +17,31 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import layout
 from .util import (Conflict, Error, LockBusy, RetryableRead, Uncertain, command_detail,
                    digest, encode, locked, relpath, run)
+
+
+def _validate_commit(store, parent, changes):
+    previous = store.snapshot(revision=parent) if parent else None
+    original_marker = previous.bytes(layout.MARKER) if previous else None
+    shared = bool(previous and 'workspace.json' in previous.entries and '.aw/identity.json' not in previous.entries)
+    if original_marker is not None:
+        document = json.loads(original_marker)
+        layout.version({layout.MARKER: original_marker}, document.get('kind') if isinstance(document, dict) else None)
+        shared = document['kind'] == 'workspace'
+    current_marker = changes.get(layout.MARKER, original_marker)
+    if current_marker is not None:
+        document = json.loads(current_marker)
+        layout.version({layout.MARKER: current_marker}, document.get('kind') if isinstance(document, dict) else None)
+        shared = shared and document['kind'] == 'workspace'
+    platform_roots = layout.SHARED_ROOTS | {'.aw', '.aw-local', '.agentworkspace'}
+    paths = set(previous.entries if previous else ()) | set(changes)
+    for path in paths:
+        if path not in changes or changes[path] is not None:
+            # Shared repositories may retain historical user archives outside AW's data roots.
+            inherited_archive = shared and path not in changes and path.split('/', 1)[0].casefold() not in platform_roots
+            relpath(path, allow_local=inherited_archive)
 
 
 def git_env(env=None):
@@ -59,23 +82,29 @@ def temporary_transport_failure(detail: str) -> bool:
 class Snapshot:
     def __init__(self, store, revision: str, entries: dict[str, str]):
         self.store, self.revision, self.entries = store, revision, entries
+        self._blobs = {}
 
     def bytes(self, path: str) -> bytes | None:
         sha = self.entries.get(path)
-        return None if sha is None else self.store.blob(sha)
+        if sha is None:
+            return None
+        # A blob ID fixes immutable bytes; keep reuse within this pinned snapshot.
+        if sha not in self._blobs:
+            self._blobs[sha] = self.store.blob(sha)
+        return self._blobs[sha]
 
     def json(self, path: str, default=None):
         value = self.bytes(path)
         return default if value is None else json.loads(value)
 
     def all(self, prefix: str = "") -> dict[str, bytes]:
-        return {p: self.store.blob(sha) for p, sha in self.entries.items() if p.startswith(prefix)}
+        return {p: self.bytes(p) for p in self.entries if p.startswith(prefix)}
 
 
 class GitStore:
-    def __init__(self, address: str, home: Path):
+    def __init__(self, address: str, home: Path, *, root: Path | None = None):
         self.address = address
-        self.root = home / "git" / digest(address.encode())[:24]
+        self.root = root if root is not None else home / "git" / digest(address.encode())[:24]
         with self._cache_lock():
             if not self.root.exists():
                 self.root.parent.mkdir(parents=True, exist_ok=True)
@@ -155,7 +184,14 @@ class GitStore:
     def blob(self, sha: str) -> bytes:
         return self.git("cat-file", "blob", sha).stdout
 
+    def contains_commit(self, commit, head):
+        result = self.git('merge-base', '--is-ancestor', commit, head, check=False)
+        if result.returncode not in (0, 1):
+            raise Error(command_detail(result.stderr) or 'Could not inspect migration commit ancestry.')
+        return result.returncode == 0
+
     def commit(self, parent: str, changes: dict[str, bytes | None], message: str) -> str:
+        _validate_commit(self, parent, changes)
         with tempfile.TemporaryDirectory(prefix="aw-index-") as directory:
             env = dict(os.environ, GIT_INDEX_FILE=str(Path(directory) / "index"),
                        GIT_AUTHOR_NAME="Agent Workspace", GIT_AUTHOR_EMAIL="aw@localhost",
@@ -163,7 +199,7 @@ class GitStore:
             self.git("read-tree", parent if parent else "--empty", env=env)
             lines = []
             for path, content in changes.items():
-                relpath(path)
+                relpath(path, allow_local=content is None)
                 if content is None:
                     lines.append(b"0 " + b"0" * 40 + b"\t" + path.encode() + b"\0")
                 else:
@@ -300,6 +336,11 @@ class GitHubStore(GitStore):
         # endpoint creates the initial commit; omitting sha forbids replacing a file.
         self.request("PUT", "/contents/workspace.json", {"message": "Initialize Agent Workspace",
             "content": base64.b64encode(encode(metadata)).decode(), "branch": "main"})
+        snap = self.snapshot()
+        self.change('main', {'workspace.json': None, layout.MARKER: layout.marker('workspace'),
+            '.agentworkspace/workspace.json': snap.bytes('workspace.json')},
+            {'workspace.json': snap.entries['workspace.json'], layout.MARKER: None,
+             '.agentworkspace/workspace.json': None}, 'Initialize AW data layout', base=snap.revision)
 
     def head(self, branch):
         ref = self.request("GET", "/git/ref/heads/" + urllib.parse.quote(branch, safe="/"))
@@ -329,10 +370,17 @@ class GitHubStore(GitStore):
             self._blobs[sha] = base64.b64decode(item["content"])
         return self._blobs[sha]
 
+    def contains_commit(self, commit, head):
+        comparison = self.request('GET', f'/compare/{commit}...{head}')
+        if not isinstance(comparison, dict) or comparison.get('status') not in ('ahead', 'behind', 'identical', 'diverged'):
+            raise Error('Could not inspect migration commit ancestry.')
+        return comparison['status'] in ('ahead', 'identical')
+
     def commit(self, parent, changes, message):
+        _validate_commit(self, parent, changes)
         items = []
         for path, data in changes.items():
-            relpath(path)
+            relpath(path, allow_local=data is None)
             blob = None
             if data is not None:
                 blob = self.request("POST", "/git/blobs", {

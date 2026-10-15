@@ -218,10 +218,10 @@ def test_same_setup_alias_cannot_change_target(fresh, tmp_path):
     assert not target.exists()
 
 
-def test_failed_directory_copy_leaves_no_partial_target(fresh, monkeypatch, tmp_path):
+def test_failed_legacy_directory_copy_leaves_no_partial_target(monkeypatch, tmp_path):
     from agent_workspace import app as app_module
-    app, _ = fresh
-    create(fresh)
+    from test_layout_core import legacy_app
+    app = legacy_app(tmp_path)
     target = tmp_path / "copy"
     write = app_module.write_bytes
 
@@ -232,11 +232,11 @@ def test_failed_directory_copy_leaves_no_partial_target(fresh, monkeypatch, tmp_
 
     monkeypatch.setattr(app_module, "write_bytes", fail)
     with pytest.raises(OSError):
-        app.connect_agent("demo", "steward", target)
+        app.connect_agent("sea", "alice", target)
     assert not target.exists()
     monkeypatch.setattr(app_module, "write_bytes", write)
-    app.connect_agent("demo", "steward", target)
-    assert read_json(target / ".agentworkspace/local/operations/context.json")["agent"] == "steward"
+    app.connect_agent("sea", "alice", target)
+    assert read_json(target / ".aw-local/context.json")["agent"] == "alice"
 
 
 def test_import_keeps_requested_destination_after_resumable_create_refactor(fresh, tmp_path):

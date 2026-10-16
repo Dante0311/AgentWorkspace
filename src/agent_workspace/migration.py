@@ -54,8 +54,17 @@ def workers_migrate(app, workspace, agent_id, worker_id, request_id, *, director
             raise Error('Connect the original instance copy before explicitly mapping its Worker.')
         with ExitStack() as stack:
             for root in sorted(roots):
-                stack.enter_context(layout.lock(root, 'files.lock'))
-                stack.enter_context(layout.lock(root, 'runner.lock', wait=0))
+                names = {'runner.lock', 'files.lock', 'profile.lock', 'inputs.lock',
+                         'records.lock', 'transfer.lock', 'stop-launch.lock'}
+                local = root / '.agentworkspace/local'
+                paths = {layout.local_path(root, name) for name in names}
+                paths.update(local.rglob('*.lock'))
+                # Freeze old writers and the target Worker until its local material
+                # is ready and the shared mapping has been published.
+                paths.update(local / 'workers' / worker_id / path.relative_to(local)
+                             for path in list(paths) if not path.relative_to(local).as_posix().startswith('workers/'))
+                for path in sorted(paths):
+                    stack.enter_context(locked(_safe_file(root, path.relative_to(root).as_posix()), wait=0))
             if receipt is None:
                 if workers.enabled(snap, agent):
                     raise Conflict('This Agent already uses Workers; it is not a legacy migration target.')
@@ -134,8 +143,34 @@ def workers_migrate(app, workspace, agent_id, worker_id, request_id, *, director
                         raise
                 receipt['phase'] = 'instance_published'
                 write_json(operation_path, receipt)
+            if receipt['phase'] == 'instance_published':
+                saved = store.snapshot(revision=receipt['instance_commit'])
+                for root_text, original_context in receipt['roots'].items():
+                    root = Path(root_text)
+                    marker_path = root / layout.MARKER
+                    if layout.version(root, 'instance') == layout.VERSION:
+                        write_bytes(marker_path, saved.bytes(layout.MARKER))
+                    repository = instance_worktrees.repository(root, app.local()['workspaces'][workspace]['address'], app.home,
+                                                              receipt['agent_record']['branch'])
+                    if repository and instance_worktrees.head(root) == receipt['instance_base']:
+                        repository.snapshot(revision=receipt['instance_commit'])
+                        instance_worktrees.record_scoped_saved(root, receipt['agent_record']['branch'],
+                                                              receipt['instance_base'], receipt['instance_commit'])
+                    for path, encoded in receipt['local_files'][root_text].items():
+                        target = root / '.agentworkspace/local/workers' / worker_id / path
+                        raw = base64.b64decode(encoded)
+                        if target.exists() and target.read_bytes() != raw and path != 'operations/context.json':
+                            raise Conflict('Worker-local material differs from the original migration; it was preserved.')
+                        if path != 'operations/context.json':
+                            write_bytes(target, raw)
+                    context = {**original_context, 'revision': saved.revision,
+                               'saved': {p: digest(saved.bytes(p)) for p in saved.entries}}
+                    write_json(layout.local_path(root, 'context.json'), context)
+                    write_json(layout.local_path(root, 'context.json', worker_id), {**context, 'worker': worker_id})
+                receipt['phase'] = 'local_prepared'
+                write_json(operation_path, receipt)
             snap = store.snapshot()
-            if receipt['phase'] in ('instance_published', 'shared_publishing'):
+            if receipt['phase'] in ('local_prepared', 'shared_publishing'):
                 adopted = snap.json(mp)
                 if adopted != receipt['mapping']:
                     if receipt['phase'] == 'shared_publishing':
@@ -152,34 +187,11 @@ def workers_migrate(app, workspace, agent_id, worker_id, request_id, *, director
                         store.change('main', changes, layout.expected(snap, {ap: snap.entries[ap], wp: None, mp: None}),
                                      'Map legacy Agent execution to its explicit Worker')
                     except Conflict:
-                        receipt['phase'] = 'instance_published'
+                        receipt['phase'] = 'local_prepared'
                         write_json(operation_path, receipt)
                         raise
                 receipt['phase'] = 'shared_published'
                 write_json(operation_path, receipt)
-            saved = store.snapshot(revision=receipt['instance_commit'])
-            for root_text, original_context in receipt['roots'].items():
-                root = Path(root_text)
-                marker_path = root / layout.MARKER
-                if layout.version(root, 'instance') == layout.VERSION:
-                    write_bytes(marker_path, saved.bytes(layout.MARKER))
-                repository = instance_worktrees.repository(root, app.local()['workspaces'][workspace]['address'], app.home,
-                                                          receipt['agent_record']['branch'])
-                if repository and instance_worktrees.head(root) == receipt['instance_base']:
-                    repository.snapshot(revision=receipt['instance_commit'])
-                    instance_worktrees.record_scoped_saved(root, receipt['agent_record']['branch'],
-                                                          receipt['instance_base'], receipt['instance_commit'])
-                for path, encoded in receipt['local_files'][root_text].items():
-                    target = root / '.agentworkspace/local/workers' / worker_id / path
-                    raw = base64.b64decode(encoded)
-                    if target.exists() and target.read_bytes() != raw and path != 'operations/context.json':
-                        raise Conflict('Worker-local material differs from the original migration; it was preserved.')
-                    if path != 'operations/context.json':
-                        write_bytes(target, raw)
-                context = {**original_context, 'revision': saved.revision,
-                           'saved': {p: digest(saved.bytes(p)) for p in saved.entries}}
-                write_json(layout.local_path(root, 'context.json'), context)
-                write_json(layout.local_path(root, 'context.json', worker_id), {**context, 'worker': worker_id})
             receipt['phase'] = 'complete'
             write_json(operation_path, receipt)
             return {'state': 'mapped', 'agent': agent_id, 'worker': worker_id, 'request_id': request_id,

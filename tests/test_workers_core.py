@@ -9,7 +9,7 @@ import pytest
 from agent_workspace import instance_worktrees, layout
 from agent_workspace.app import App
 from agent_workspace.gitstore import GitStore
-from agent_workspace.util import Conflict, Error, Uncertain, encode, read_json, write_bytes, write_json
+from agent_workspace.util import Conflict, Error, LockBusy, Uncertain, encode, read_json, write_bytes, write_json
 
 
 @pytest.fixture
@@ -250,6 +250,27 @@ def test_new_workspace_defaults_to_workers_and_fork_selects_nondefault_source(te
         app.fork('team', 'owner', 'topic-point', 'Wrong source', new_id='wrong-source', worker_id='default')
 
 
+def test_reserve_adopts_inherited_connection_and_independent_worker_profile(tmp_path):
+    app = App(tmp_path / 'home')
+    app.workspace_init('team', str(tmp_path / 'remote.git'))
+    app.create('team', 'owner')
+    app.worker_create('team', 'owner', 'Topic', 'An independent approved investigation', worker_id='topic')
+    app.configure('team', 'owner', {'kind': 'desktop', 'pipe_path': 'fixture',
+                                 'caller_thread': 'fixture', 'model': 'base-model', 'effort': 'low'})
+    app.configure('team', 'owner', {'kind': 'desktop', 'model': 'topic-model', 'effort': 'high'}, worker_id='topic')
+    root = app.root('team', 'owner')
+    for worker, model in (('default', 'base-model'), ('topic', 'topic-model')):
+        binding = app.reserve('team', 'owner', worker_id=worker)
+        adopted = read_json(layout.local_path(root, 'entry.json', worker))
+        assert binding['kind'] == adopted['config']['kind'] == 'desktop'
+        assert adopted['config']['pipe_path'] == 'fixture'
+        assert adopted['config']['caller_thread'] == 'fixture'
+        assert adopted['model_profile']['model'] == model
+    app.configure('team', 'owner', {'kind': 'manual'})
+    assert all(read_json(layout.local_path(root, 'entry.json', worker))['config']['kind'] == 'desktop'
+               for worker in ('default', 'topic'))
+
+
 def test_worker_creation_can_resume_same_request_and_configuration_stays_scoped(team):
     app, root, bindings = team
     created = app.worker_create('team', 'owner', '中文工作', 'A user-approved independent task',
@@ -320,13 +341,35 @@ def test_partial_worker_migration_reconciles_original_registration_without_repla
         with pytest.raises(Uncertain):
             app.workers_migrate('sea', 'legacy', 'daily', 'partial', compatible_writers=['worker-v2'])
     if accepted:
+        # A published mapping must already have usable local materials. An unknown
+        # response followed by readback must not restore the old context over use.
+        root = app.root('sea', 'legacy')
+        context_path = layout.local_path(root, 'context.json', 'daily')
+        context = read_json(context_path)
+        context['subsequent_use'] = 'preserve after original publication'
+        write_json(context_path, context)
+        write_json(layout.local_path(root, 'inputs/newer.json', 'daily'), {'state': 'submitted'})
         point = app.workers_migrate('sea', 'legacy', 'daily', 'partial', compatible_writers=['worker-v2'])
         assert point['worker'] == 'daily' and not point['starts_session']
+        assert read_json(context_path) == context
+        assert read_json(layout.local_path(root, 'inputs/newer.json', 'daily')) == {'state': 'submitted'}
         assert app.require_binding('sea', 'legacy', binding, worker_id='daily')[1]['session'] == 'original-legacy-session'
     else:
         with pytest.raises(Uncertain):
             app.workers_migrate('sea', 'legacy', 'daily', 'partial', compatible_writers=['worker-v2'])
     assert len(attempts) == 1
+
+
+def test_worker_migration_refuses_busy_local_input_writer(app):
+    app.create('sea', 'legacy')
+    root = app.root('sea', 'legacy')
+    store = app.store('sea')
+    before = store.snapshot().revision
+    with layout.lock(root, 'inputs.lock'):
+        with pytest.raises(LockBusy):
+            app.workers_migrate('sea', 'legacy', 'daily', 'busy', compatible_writers=['worker-v2'])
+    assert store.snapshot().revision == before
+    assert layout.version(root, 'instance') == layout.VERSION
 
 
 @pytest.mark.parametrize('registered', [False, True])

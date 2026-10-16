@@ -778,9 +778,12 @@ class App:
         if worker_id is not None:
             self.worker(workspace, agent_id, worker_id)
             workers.prepare_context(self, workspace, agent_id, root, worker_id)
-            local, choice, _ = model_profiles.split_config(value)
-            if choice:
-                choice = model_profiles.validate(choice)
+            if value.get('kind') in model_profiles.CODEX_KINDS:
+                local, choice, _ = model_profiles.split_config(value)
+                if choice:
+                    choice = model_profiles.validate(choice)
+            else:
+                local, choice = dict(value), None
             with layout.lock(root, 'files.lock'):
                 portable_path = layout.instance_path(root, 'config.json', worker_id)
                 portable = read_json(portable_path, {})

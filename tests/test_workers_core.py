@@ -271,6 +271,22 @@ def test_reserve_adopts_inherited_connection_and_independent_worker_profile(tmp_
                for worker in ('default', 'topic'))
 
 
+@pytest.mark.parametrize('kind', ['claude', 'codebuddy'])
+def test_non_codex_worker_keeps_its_native_model_and_effort(tmp_path, kind):
+    app = App(tmp_path / 'home')
+    app.workspace_init('team', str(tmp_path / 'remote.git'))
+    app.create('team', 'owner')
+    app.configure('team', 'owner', {'kind': kind, 'executable': 'protocol-fixture',
+                                 'model': 'explicit-sdk-model', 'effort': 'high'}, worker_id='default')
+    result = app.reserve('team', 'owner', worker_id='default')
+    root = app.root('team', 'owner')
+    adopted = read_json(layout.local_path(root, 'entry.json', 'default'))
+    assert result['kind'] == kind
+    assert adopted['config']['model'] == 'explicit-sdk-model'
+    assert adopted['config']['effort'] == 'high'
+    assert not read_json(layout.instance_path(root, 'config.json', 'default')).get('codex')
+
+
 def test_worker_creation_can_resume_same_request_and_configuration_stays_scoped(team):
     app, root, bindings = team
     created = app.worker_create('team', 'owner', '中文工作', 'A user-approved independent task',

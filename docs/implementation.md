@@ -51,7 +51,9 @@ Runtime、Backend、Message 与公共接口已采用同一 Worker 归属：
 | 跨 Harness | 稳定 Worker 地址在换原生聊天后保持；按实际可用的 Harness 接口验证正式通信与接续，手动路径、协议夹具与真实模型分别说明，未取得的效果不计为通过。 |
 | 旧实例与可选 Skill | 隔离旧数据保留身份、配置、原聊天和历史；只有用户同意才创建 Worker，不把分工建议当作创建或新增任务授权，拒绝拆分后仍可正常工作。 |
 
-开发测试覆盖本机 Git、公共 HTTP、原生协议夹具及真实浏览器页面。独立 E2E 已接单，真实双 Worker 会话和跨 Harness 验收尚待确定构建；原单入口、历史 Fork、临时子代理或已有双 Agent 测试不能替代本次验收。
+开发测试覆盖本机 Git、公共 HTTP、原生协议夹具及真实浏览器页面。独立 E2E 在 `f905e79` 固定包上完成同一 Agent 两个真实 Codex Desktop Worker 的定向消息、回复、队列、保存隔离、共同文件冲突、正常接续、暂停和归档。原包发现的运行类型显示错误，已在 `273ec48` 固定包上使用保留的真实资料定向复验通过；原失败和两个版本的边界见[独立验收报告](https://github.com/Dante0311/AW-Workspace/blob/0e36e933ef380b63a96bf1a5e10c4b684b8c71ae/development/evidence/2026-10-16-workers/results-f905e79-273ec48/README.md)。
+
+旧数据保留已通过公开接口的协议样本验证；真实旧会话连续迁移、第二种真实 Harness、模型实际采用元信息、Worker 自动压缩钩子及长期运行仍未验证，不计为本批实机通过。后续修复和最终提交的 CI 结果在 [PR #30](https://github.com/Dante0311/AgentWorkspace/pull/30) 中按具体版本记录，不能把前一固定包的结果称为新包全部重跑通过。
 
 ## 模块
 

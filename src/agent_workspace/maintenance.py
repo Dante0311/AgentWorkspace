@@ -103,6 +103,7 @@ def doctor(app, workspace):
         return {"state": "unavailable", "observed_at": observed, "issues": [{"code": "store_unavailable"}],
                 "coverage": "shared state unavailable; no execution eligibility inferred", "error_type": type(exc).__name__}
     locations = app.local()["workspaces"][workspace].get("instances", {})
+    local_installation = read_json(app.home / "installation.json", {}).get("id")
     def issue(code, agent=None, **fields):
         issues.append({"code": code, **({"agent": agent} if agent else {}), **fields})
     instances = []
@@ -127,7 +128,7 @@ def doctor(app, workspace):
                 remote_agents.append(aid)
             continue
         execution = entry.get("execution") if entry else None
-        if execution and execution.get("installation_id") != installation_id(app):
+        if execution and execution.get("installation_id") != local_installation:
             if aid not in remote_agents:
                 remote_agents.append(aid)
             continue
@@ -193,7 +194,8 @@ def doctor(app, workspace):
             if transfer:
                 if entry and binding == transfer["target_binding"]:
                     from .transfer import observed_target
-                    transfer = observed_target(transfer, entry, root)
+                    kwargs = {"worker_id": worker_id} if worker_id is not None else {}
+                    transfer = observed_target(transfer, entry, root, **kwargs)
                 if transfer["state"] != "completed":
                     issue("transfer_pending", aid, **scope, operation=transfer["id"], state=transfer["state"])
         except (OSError, ValueError, KeyError) as exc:

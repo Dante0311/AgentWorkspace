@@ -212,3 +212,19 @@ def test_explicit_old_mapping_keeps_protocol_bytes_and_original_manual_attempt(a
     assert [row["id"] for row in history.list("sea", "team", worker_id="daily")] == ["old-native"]
     after = app.store("sea").snapshot()
     assert all(after.bytes(path) == raw for path, raw in originals.items())
+
+
+def test_transfer_health_does_not_accept_another_workers_boot_record(team):
+    app, ids = team
+    root = app.root("sea", "team")
+    name = f"inputs/boot-{ids['topic']}.json"
+    write_json(layout.local_path(root, name, worker_id="default"),
+               {"binding": ids["topic"], "state": "completed", "checkpoint_revision": "wrong-worker-record"})
+    write_json(layout.local_path(root, name, worker_id="topic"),
+               {"binding": ids["topic"], "state": "submitted"})
+    write_json(layout.local_path(root, "transfer.json", worker_id="topic"),
+               {"id": "topic-transfer", "state": "starting", "target_binding": ids["topic"]})
+    report = maintenance.doctor(app, "sea")
+    pending = [row for row in report["issues"] if row["code"] == "transfer_pending"]
+    assert len(pending) == 1
+    assert pending[0]["worker"] == "topic" and pending[0]["state"] == "session_bound"

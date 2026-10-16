@@ -142,6 +142,31 @@ def test_script_prepared_legacy_ack_uses_explicit_worker_mapping(app, tmp_path):
     assert Messages(app).show("sea", "worker-original")["ack"] == {"message_id": "worker-original"}
 
 
+def test_script_unmapped_legacy_reply_is_preserved_without_guessing_default(app, tmp_path):
+    app.create("sea", "team")
+    bid = app.reserve("sea", "team")["binding"]
+    app.bind("sea", "team", bid, "original-session")
+    Messages(app).send("sea", "team", bid, "team", "legacy notification", request_id="worker-original")
+    repo = clone(tmp_path, app, "sea", "unmapped-legacy-cache")
+    content = tmp_path / "legacy-reply.md"
+    content.write_text("prepared before migration", encoding="utf-8")
+    journal = tmp_path / "unmapped-reply.json"
+    command(tmp_path, *worker_command(repo, bid, "reply", "--record", journal,
+            "--content-file", content, "--request-id", "unpublished-old-reply"))
+    original_journal = journal.read_bytes()
+    app.checkpoint("sea", "team", "before explicit Worker mapping", binding=bid)
+    app.workers_migrate("sea", "team", "daily", "unmapped-helper-map", compatible_writers=["worker-v2"])
+    app.worker_create("sea", "team", "Other", "New work", worker_id="other")
+    app.worker_default("sea", "team", "other", app.show("sea", "team")["revision"])
+    original_head = app.store("sea").snapshot().revision
+    result = command(tmp_path, "continue", "--agent", "team", "--binding", bid, "--record", journal, success=False)
+    assert result["error_type"] == "ProtocolError"
+    assert journal.read_bytes() == original_journal
+    assert app.store("sea").snapshot().revision == original_head
+    with pytest.raises(Error):
+        Messages(app).show("sea", "unpublished-old-reply")
+
+
 def fixture_shared_layout(store, current):
     """Arrange isolated protocol fixtures; this is not a production migration test."""
     snap = store.snapshot()

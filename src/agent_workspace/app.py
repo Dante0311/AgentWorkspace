@@ -919,7 +919,7 @@ class App:
         else:
             workers.prepare_context(self, workspace, agent_id, root, worker_id)
         with layout.lock(root, "files.lock"):
-            config = read_json(layout.local_path(root, "runtime.json", worker_id), {"kind": "manual"})
+            config = model_profiles.runtime_config(root, worker_id)
             if worker_id is not None:
                 portable = read_json(layout.instance_path(root, 'config.json', worker_id), {})
                 if 'kind' in portable and config['kind'] != portable['kind']:

@@ -428,7 +428,98 @@ def desktop_observe(app, workspace, agent_id, directory=None, worker_id=None):
     return {**result, "local_session_confirmed": True, "snapshot_revision": latest.revision}
 
 
+<<<<<<< HEAD
 def launch_show(app, workspace, agent_id, directory=None, worker_id=None):
+=======
+def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_controller,
+                       expected_session, expected_revision, cleanup_commit, directory=None, worker_id=None):
+    """Finish one exited runner's cleanup, never resume its work or old push."""
+    from .maintenance import installation_id
+    if not all((expected_binding, expected_controller, expected_session, expected_revision, cleanup_commit)):
+        raise Error("Controller cleanup requires the original Binding, controller, session, snapshot revision and cleanup commit.")
+    store = app.store(workspace)
+    expected = store.snapshot(revision=expected_revision)
+    expected_path = layout.shared_path(expected, f"bindings/{expected_binding}.json")
+    expected_blob = expected.entries.get(expected_path)
+    if expected_blob is None:
+        raise Conflict("The supplied snapshot does not contain the original Binding.")
+    snap = store.snapshot()
+    snap, owner, worker_id = _entry_owner(app, workspace, agent_id, worker_id, binding=expected_binding, snapshot=snap)
+    owner_path, _, _ = workers.execution_record(app, workspace, agent_id, snap, worker_id)
+    path = layout.shared_path(snap, f"bindings/{expected_binding}.json")
+    entry = snap.json(path)
+    if (owner["current"] != expected_binding or owner["archived"] or not entry
+            or entry["agent"] != agent_id or entry["phase"] != "active"
+            or entry.get("session") != expected_session):
+        raise Conflict("The original active Binding or session changed before controller cleanup.")
+    result = {"binding": expected_binding, "session": expected_session, "worker_id": worker_id,
+              "controller": expected_controller, "cleanup_commit": cleanup_commit,
+              "state": "cleanup_blocked", "runner_started": False, "binding_released": False}
+    execution = entry.get("execution")
+    if not execution or execution["installation_id"] != installation_id(app):
+        return {**result, "reason_code": "execution_source_unconfirmed"}
+    if directory is not None and Path(directory).resolve() != Path(execution["directory"]).resolve():
+        raise Conflict("Cleanup must use the original execution directory.")
+    root = app.root(workspace, agent_id, execution["directory"])
+    # The OS lock covers runners outside the current backend as well as threads
+    # known to it. Keep it held through the conditional shared-file update.
+    with layout.lock(root, "runner.lock", wait=0, worker_id=worker_id):
+        status = backend.status(app)
+        if status["state"] not in ("running", "stopped") or (status["state"] == "running" and not status.get("ready")):
+            return {**result, "reason_code": "runner_observation_unknown"}
+        tasks = [row for row in status.get("runners", []) if Path(row["directory"]).resolve() == root
+                 and (row.get("worker_id") == worker_id or row.get("binding") == expected_binding)]
+        if any(row["runner_alive"] for row in tasks):
+            return {**result, "reason_code": "runner_present"}
+        with layout.lock(root, "files.lock", worker_id=worker_id):
+            local = read_json(layout.local_path(root, "entry.json", worker_id), {})
+            control = read_json(layout.local_path(root, "control.json", worker_id), {})
+            observation = read_json(layout.local_path(root, "status.json", worker_id), {})
+            if local.get("binding") != expected_binding:
+                raise Conflict("This copy is not attached to the original Binding.")
+            if control.get("stop") == expected_binding or control.get("handoff") == expected_binding:
+                return {**result, "state": "cleanup_paused", "reason_code": "user_paused"}
+            if (observation.get("binding") != expected_binding
+                    or observation.get("state") not in ("failed", "monitor_stopped")):
+                return {**result, "reason_code": "runner_exit_unconfirmed"}
+            if entry["kind"] != "desktop":
+                return {**result, "reason_code": "native_observation_unavailable"}
+            native = desktop_observe(app, workspace, agent_id, str(root), worker_id=worker_id)
+            if not native["local_session_confirmed"]:
+                return {**result, "reason_code": native.get("unknown_reason", "native_session_unconfirmed")}
+            if native["binding"] != expected_binding or native["session"] != expected_session:
+                raise Conflict("The original session changed during cleanup observation.")
+            latest = store.snapshot()
+            agent_path = layout.shared_path(snap, f"agents/{agent_id}.json")
+            if any(latest.entries.get(p) != snap.entries[p] for p in (path, agent_path, owner_path)):
+                raise Conflict("The Binding or owner changed during cleanup observation; read it again.")
+            snap = latest
+            original = store.snapshot(revision=cleanup_commit)
+            cleaned = original.json(layout.shared_path(original, f"bindings/{expected_binding}.json"))
+            without_controller = {key: value for key, value in entry.items() if key != "controller"}
+            if cleaned != without_controller:
+                raise Conflict("The original cleanup commit does not describe this Binding's controller removal.")
+            published = store.contains_commit(cleanup_commit, snap.revision)
+            if not entry.get("controller"):
+                return {**result, "state": "controller_already_cleared", "original_published": published,
+                        "revision": snap.revision}
+            if entry["controller"] != expected_controller or snap.entries[path] != expected_blob:
+                raise Conflict("The original controller or Binding file version changed; read it again.")
+            if published:
+                raise Conflict("The original cleanup was published but the controller is present again; inspect its ownership.")
+            if store.contains_commit(snap.revision, cleanup_commit):
+                raise Uncertain("The original cleanup push can still fast-forward; its outcome is not confirmed.")
+            # Diverged history cannot accept the old fast-forward push. Publish
+            # only the removal, against freshly checked owner and Binding blobs.
+            revision = store.change("main", {path: encode(without_controller)},
+                layout.expected(snap, {path: expected_blob, agent_path: snap.entries[agent_path],
+                                      owner_path: snap.entries[owner_path]}), "Continue original runner cleanup")
+            return {**result, "state": "controller_cleared", "original_published": False,
+                    "original_outcome": "diverged", "revision": revision}
+
+
+def launch_show(app, workspace, agent_id, directory=None):
+>>>>>>> 75da7cf (Continue exited runner cleanup with original publication and session checks)
     """Expose the original receipt's identifiers, without native probing or credentials."""
     from .maintenance import installation_id
     snap = app.store(workspace).snapshot()

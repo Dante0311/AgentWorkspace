@@ -38,13 +38,25 @@ def original_entry(app, monkeypatch, request):
     peer = {"reads": threading.Event(), "sent": threading.Event(), "attached": [], "closed": [], "inputs": [], "state": "idle"}
 
     class Native:
+<<<<<<< HEAD
         def __init__(self, directory, config, session, *, read_only=False, worker_id=None, title=None):
             assert not read_only and directory == root and session == "original-chat"
+=======
+        def __init__(self, directory, config, session, *, read_only=False):
+            assert directory == root and session == "original-chat"
+>>>>>>> 75da7cf (Continue exited runner cleanup with original publication and session checks)
             assert config["pipe_path"] == "original-pipe"
             self.session = session
-            peer["attached"].append(session)
-            if peer.get("on_attach"):
+            self.read_only = read_only
+            self.tools = {"send_message_to_thread": {}}
+            if not read_only:
+                peer["attached"].append(session)
+            if not read_only and peer.get("on_attach"):
                 peer["on_attach"]()
+
+        def read(self):
+            return {"thread": {"id": self.session, "hostId": "local", "cwd": str(peer.get("cwd", root)),
+                               "status": {"type": "idle"}}}
 
         def status(self):
             peer["reads"].set()
@@ -54,7 +66,8 @@ def original_entry(app, monkeypatch, request):
             return {}
 
         def close(self):
-            peer["closed"].append(self.session)
+            if not self.read_only:
+                peer["closed"].append(self.session)
 
         def create(self, *args):
             pytest.fail("Observation cannot create a session")
@@ -119,6 +132,32 @@ def test_recover_requires_original_execution_and_rejects_stale_request(original_
     store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Explicit legacy fixture")
     assert manager.recover("sea", "alice", expected_binding=binding)["reason_code"] == "execution_source_missing"
     assert not peer["attached"] and not manager.runners
+
+
+def test_recovery_refuses_changed_native_cwd_without_moving_chat_or_claiming_controller(original_entry):
+    app, root, binding, peer = original_entry
+    peer["cwd"] = root.parent / "different-project"
+    store = app.store("sea")
+    before = store.snapshot()
+    manager = backend.Backend(app, SimpleNamespace(server_port=0))
+    result = manager.recover("sea", "alice", expected_binding=binding)
+    assert result["state"] == "recovery_blocked" and result["reason_code"] == "native_local_copy_unconfirmed"
+    assert not manager.runners and not peer["attached"] and not peer["inputs"]
+    assert store.snapshot().entries == before.entries
+
+
+def test_pause_arriving_during_native_observation_prevents_recovery(original_entry, monkeypatch):
+    app, root, binding, peer = original_entry
+    observe = runtime.desktop_observe
+    def paused(*args, **kwargs):
+        result = observe(*args, **kwargs)
+        write_json(layout.local_path(root, "control.json"), {"stop": binding})
+        return result
+    monkeypatch.setattr(runtime, "desktop_observe", paused)
+    manager = backend.Backend(app, SimpleNamespace(server_port=0))
+    result = manager.recover("sea", "alice", expected_binding=binding)
+    assert result["state"] == "recovery_paused" and result["reason_code"] == "user_paused"
+    assert not manager.runners and not peer["attached"] and not peer["inputs"]
 
 
 @pytest.mark.parametrize("original_entry", [1], indirect=True)

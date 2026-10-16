@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import stat
 
-from . import layout, runtime
+from . import layout, runtime, workers
 from .commands import execute
 from .util import Conflict, Error, digest, read_json, write_bytes, write_json
 
@@ -90,9 +90,9 @@ def _transcript_bytes(payload, session_id):
     return content
 
 
-def _latest_business_checkpoint(app, workspace, agent_id):
-    for point in reversed(app.checkpoints(workspace, agent_id)):
-        saved = app.checkpoint_show(workspace, agent_id, point["id"])["record"]
+def _latest_business_checkpoint(app, workspace, agent_id, worker_id=None):
+    for point in reversed(app.checkpoints(workspace, agent_id, worker_id=worker_id)):
+        saved = app.checkpoint_show(workspace, agent_id, point["id"], worker_id=worker_id)["record"]
         references = saved.get("record_refs", [])
         automatic = saved["id"].startswith("initial-") or any(
             isinstance(reference, dict) and reference.get("source") == "codex-precompact"
@@ -103,10 +103,10 @@ def _latest_business_checkpoint(app, workspace, agent_id):
     return None
 
 
-def _destination(root, binding):
+def _destination(root, binding, worker_id=None):
     logical_path = TRANSCRIPT_RELATIVE_PATH.format(binding=binding)
-    relative_path = layout.instance_relpath(root, logical_path)
-    destination = layout.instance_path(root, logical_path)
+    relative_path = layout.instance_relpath(root, logical_path, worker_id)
+    destination = layout.instance_path(root, logical_path, worker_id)
     resolved_root = root.resolve()
     current = root
     for part in relative_path.split("/"):
@@ -120,8 +120,8 @@ def _destination(root, binding):
     return relative_path, destination
 
 
-def _verify_checkpoint(app, workspace, agent_id, checkpoint_id, revision, reference, transcript):
-    point = app.checkpoint_show(workspace, agent_id, checkpoint_id)
+def _verify_checkpoint(app, workspace, agent_id, checkpoint_id, revision, reference, transcript, worker_id=None):
+    point = app.checkpoint_show(workspace, agent_id, checkpoint_id, worker_id=worker_id)
     if point["revision"] != revision:
         raise Conflict("Saved checkpoint revision differs from the PreCompact receipt.")
     if reference not in point["record"].get("record_refs", []):
@@ -155,7 +155,8 @@ def run(app, payload, actor=None):
             raise Error("AW caller identity is invalid; no checkpoint was saved.")
 
         workspace, agent_id, binding = current_actor
-        _, entry = app.require_binding(workspace, agent_id, binding)
+        owner, entry = app.require_binding(workspace, agent_id, binding)
+        worker_id = owner.get("worker_id")
         if entry.get("kind") not in ("codex", "desktop"):
             raise Conflict("PreCompact is only supported for a current Codex or Desktop Binding.")
         if entry.get("session") != session_id:
@@ -164,13 +165,15 @@ def run(app, payload, actor=None):
         transcript = _transcript_bytes(payload, session_id)
         transcript_hash = digest(transcript)
         root = Path(app.prepare_agent_directory(workspace, agent_id)["directory"])
-        relative_path, destination = _destination(root, binding)
+        if worker_id is not None:
+            workers.prepare_context(app, workspace, agent_id, root, worker_id)
+        relative_path, destination = _destination(root, binding, worker_id)
         request_key = digest(
             json.dumps([session_id, turn_id, trigger, transcript_hash], ensure_ascii=False,
                        separators=(",", ":")).encode("utf-8")
         )
         checkpoint_id = "pc-" + request_key[:61]
-        receipt_path = layout.local_path(root, f"precompact/{checkpoint_id}.json")
+        receipt_path = layout.local_path(root, f"precompact/{checkpoint_id}.json", worker_id)
 
         checkpoint_ref = {
             "source": "codex-precompact",
@@ -181,7 +184,7 @@ def run(app, payload, actor=None):
             "transcript_cutoff_bytes": len(transcript),
             "transcript_path": relative_path,
         }
-        with layout.lock(root, "precompact.lock"):
+        with layout.lock(root, "precompact.lock", worker_id=worker_id):
             receipt = read_json(receipt_path)
             if receipt:
                 if (receipt.get("request_key") != request_key
@@ -195,14 +198,14 @@ def run(app, payload, actor=None):
                     if not isinstance(receipt.get("checkpoint_revision"), str):
                         raise Conflict("Saved PreCompact receipt has no checkpoint revision.")
                     _verify_checkpoint(app, workspace, agent_id, checkpoint_id,
-                                       receipt["checkpoint_revision"], checkpoint_ref, transcript)
+                                       receipt["checkpoint_revision"], checkpoint_ref, transcript, worker_id)
                     return _reply(f"压缩前检查点已保存：{checkpoint_id}。")
                 if receipt.get("state") != "pending":
                     raise Conflict("PreCompact retry receipt has an unknown state; no checkpoint was saved.")
                 summary, content = receipt["summary"], receipt["content"]
                 references = receipt["record_refs"]
             else:
-                previous = _latest_business_checkpoint(app, workspace, agent_id)
+                previous = _latest_business_checkpoint(app, workspace, agent_id, worker_id)
                 if previous is None:
                     summary = "无此前保存的业务总结。"
                     content = "没有可沿用的非自动 checkpoint。此点只保存 Codex 压缩前的转录快照，不包含新生成的业务总结。"
@@ -226,16 +229,16 @@ def run(app, payload, actor=None):
                 }
                 write_json(receipt_path, receipt)
 
-            operation_receipt = layout.local_path(root, "checkpoint-operations") / f"{checkpoint_id}.json"
-            registered = any(point["id"] == checkpoint_id for point in app.checkpoints(workspace, agent_id))
+            operation_receipt = layout.local_path(root, "checkpoint-operations", worker_id) / f"{checkpoint_id}.json"
+            registered = any(point["id"] == checkpoint_id for point in app.checkpoints(workspace, agent_id, worker_id=worker_id))
             revision_saved = operation_receipt.exists() or registered or layout.instance_path(
-                root, f"checkpoints/{checkpoint_id}.json").exists()
+                root, f"checkpoints/{checkpoint_id}.json", worker_id).exists()
             if not revision_saved:
                 if destination.exists() and destination.read_bytes() != transcript:
                     write_bytes(destination, transcript)
                 elif not destination.exists():
                     write_bytes(destination, transcript)
-                captured, _ = app.collect(root)
+                captured, _ = app.collect(root, worker_id=worker_id)
                 if captured.get(relative_path) != transcript:
                     raise Conflict("AW snapshot rules exclude or alter the Codex transcript; no checkpoint was saved.")
 
@@ -247,10 +250,11 @@ def run(app, payload, actor=None):
                 "content": content,
                 "checkpoint_id": checkpoint_id,
                 "references": references,
+                "worker_id": worker_id,
             }, actor=current_actor)
 
             _verify_checkpoint(app, workspace, agent_id, checkpoint_id,
-                               pointer["revision"], checkpoint_ref, transcript)
+                               pointer["revision"], checkpoint_ref, transcript, worker_id)
             receipt.update(state="saved", checkpoint_revision=pointer["revision"])
             write_json(receipt_path, receipt)
             return _reply(f"压缩前检查点已保存：{checkpoint_id}。")

@@ -110,9 +110,10 @@ class NativeSDK:
     # Streaming input is not evidence of native expected-turn steering semantics.
     supports_insert = False
 
-    def __init__(self, app, workspace, agent_id, binding, root, config, session=None, *, title=None):
+    def __init__(self, app, workspace, agent_id, binding, root, config, session=None, *, title=None, worker_id=None):
         self.app, self.workspace, self.agent_id = app, workspace, agent_id
         self.binding, self.root, self.session = binding, root, session
+        self.worker_id = worker_id
         self.sdk, self.client_type, self.options_type, self.options = sdk_options(
             config, app, workspace, agent_id, binding, root, session)
         self.title_receipt = None
@@ -123,7 +124,7 @@ class NativeSDK:
             self.title_receipt = session_titles.receipt(title,
                 "sdk.session_name" if supported else "unsupported_by_installed_sdk_options")
         self.completed = queue.Queue()
-        self.record = layout.instance_path(root, "records") / binding / "runtime.jsonl"
+        self.record = layout.instance_path(root, "records", worker_id) / binding / "runtime.jsonl"
         self.record.parent.mkdir(parents=True, exist_ok=True)
         self.ready, self.observed = threading.Event(), threading.Event()
         self.guard = threading.Lock()
@@ -212,8 +213,8 @@ class NativeSDK:
                         "local_submission_id": submission, "event": data}
                 if completion:
                     item["completion"] = completion
-                with layout.lock(self.root, "records.lock"):
-                    self.record = layout.instance_path(self.root, "records") / self.binding / "runtime.jsonl"
+                with layout.lock(self.root, "records.lock", worker_id=self.worker_id):
+                    self.record = layout.instance_path(self.root, "records", self.worker_id) / self.binding / "runtime.jsonl"
                     self.record.parent.mkdir(parents=True, exist_ok=True)
                     with self.record.open("a", encoding="utf-8") as stream:
                         stream.write(json.dumps(item, ensure_ascii=False) + "\n")
@@ -228,7 +229,7 @@ class NativeSDK:
                     if not self.session:
                         # A requested ID is not a binding. Only the native event confirms it.
                         await asyncio.to_thread(self.app.bind, self.workspace, self.agent_id,
-                                                self.binding, actual, str(self.root))
+                                                self.binding, actual, str(self.root), worker_id=self.worker_id)
                         self.session = actual
                     self.observed.set()
                 if completion:
@@ -271,7 +272,7 @@ class NativeSDK:
         return {"turn": {"id": submission}, "id_source": "local_submission", "session": self.session}
 
     def bootstrap(self, prompt):
-        path = layout.local_path(self.root, "inputs") / f"boot-{self.binding}.json"
+        path = layout.local_path(self.root, "inputs", self.worker_id) / f"boot-{self.binding}.json"
         item = {"id": path.stem, "binding": self.binding, "text": prompt, "delivery": "normal",
                 "purpose": "initial", "state": "dispatching", "sequence": 0, "created_at": now()}
         write_json(path, item)

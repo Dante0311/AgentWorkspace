@@ -289,6 +289,8 @@ def execute(app, command, arguments, *, actor=None):
             args.setdefault("workspace", workspace)
         if "agent_id" in signature.parameters and command != "agent.create":
             args.setdefault("agent_id", aid)
+        if command in USER_MANAGEMENT and not maintenance.allowed(app, actor, command, args):
+            raise Error("This is a user-management operation; a scoped caretaker grant is required.")
         own_target = args.get("workspace", workspace) == workspace and args.get("agent_id", aid) == aid
         actor_item = None
         if command not in READ_ONLY:
@@ -310,8 +312,6 @@ def execute(app, command, arguments, *, actor=None):
             args["binding"] = binding
         if command in ("workspace.read", "workspace.skills") and args["workspace"] != workspace:
             raise Conflict("Shared materials must belong to the calling Workspace.")
-        if command in USER_MANAGEMENT and not maintenance.allowed(app, actor, command, args):
-            raise Error("This is a user-management operation; a scoped caretaker grant is required.")
         # Ordinary agents may act on their own assets; another instance is a management target.
         if (command not in READ_ONLY and command not in CALLER_BOUND
                 and (args.get("workspace", workspace) != workspace

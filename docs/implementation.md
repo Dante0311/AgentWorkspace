@@ -24,6 +24,33 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 
 真实远端 Git transport、跨机器及默认独立项目模式未覆盖。初始两条聊天由 `51771ce` 创建，新包实际验证了正常通知恢复和已有新聊天的接力，未另行实测新包自动创建初始聊天。旧普通副本、冲突保留与排除项引用 `51771ce` 的本机 Git/公共工具验收，未在纯 Runtime 提示修复后重复运行。现有 Test A/B 的资料未改，daily 数据与安装未改变；本批通过不表示已迁移旧实例、发布软件或完成其他环境验收。
 
+<a id="worker-plan"></a>
+
+## Worker 并行工作（2026-10-16 设计确认，尚未实现）
+
+产品合同集中在 [设计第 3.5 节](design.md#workers)，包括 Agent / Worker / 原生 Session 的关系、名称格式、路由、资料、交接及保留规则；可选 worker Skill 的判断和用户决定见设计第 12 节。此处只记录实施顺序与验证要求，不复制另一份合同。
+
+当前 Core 仍使用 Agent 的单个 current / handoff；Runtime 与本机后台按实例目录维护入口；正式 Message 的地址只有 Workspace / Agent；检查点保存会收集整份实例目录。Worker 寻址、独立运行、范围保存和第八个内置 Skill 均未接入，也没有 Worker 的真实多会话验收。本次仅更新设计与开发说明，没有创建 Worker、改动日常 Binding、重命名聊天或迁移资料。
+
+按以下顺序完成一条可验证流程；前置阶段通过不等于可提前在旧实例启用并行：
+
+1. Core 明确 Worker 登记与当前 Binding 归属，保留 Agent 身份；实现按 Worker 保存、引用共同资料版本及并发版本检查。旧工具与旧布局必须能拒绝误操作，不能将 current 直接改成列表作为完成。
+2. Runtime / Adapter 与 Communication / Maintenance 接入同一套 Worker 归属：真实调用身份、配置采用、运行状态、输入与消息队列、默认目标、明确回复、接续和恢复。一个 Worker 的操作不影响其他 Worker；正式 Message 和直发继续区分。
+3. 公共 CLI/MCP、原生标题、展示与内置材料共同更新。worker Skill 正常可发现并可主动建议，用户决定创建；现有 agent、message、handoff、relay 与 fork 材料同步说明对象差异。先不发布调用未实现接口的教程。
+4. 在隔离数据验证旧单入口 Agent 对应默认 Worker 的迁移与原记录保留；迁移和新版程序安装分别处理。日常实例采用需有明确范围，不凭设计自动迁移、重启或批量创建会话。
+
+独立 E2E 针对确定提交和构建验证以下流程，保留实际执行者、原消息/操作 ID、检查点及原生会话关联：
+
+| 场景 | 必须观察的结果 |
+| --- | --- |
+| 同一 Agent 的两个 Worker | 真实会话分别绑定，Agent 身份相同、Worker 不同；指定消息及明确回复各到正确会话，默认目标变化不重新分配原消息，其他 Worker 不能代收 ACK。 |
+| 保存与检查点 | 两个 Worker 同时有工作文件；保存其中一个不提交或删除另一个的未完成修改，共同资料冲突明确保留。原始记录及可用压缩钩子的保存定位实际 Worker。 |
+| 独立接续与归档 | 一个 Worker 正常 handoff/relay、完成或归档，另一个的入口、消息与资料继续有效；旧入口不能借相同 Agent ID 继续操作。 |
+| 跨 Harness | 稳定 Worker 地址在换原生聊天后保持；按实际可用的 Harness 接口验证正式通信与接续，手动路径、协议夹具与真实模型分别说明，未取得的效果不计为通过。 |
+| 旧实例与可选 Skill | 隔离旧数据保留身份、配置、原聊天和历史；只有用户同意才创建 Worker，不把分工建议当作创建或新增任务授权，拒绝拆分后仍可正常工作。 |
+
+以上均为待执行的验收场景。原单入口、历史 Fork、临时子代理或已有双 Agent 测试，不能替代同一 Agent 的双 Worker 验收。
+
 ## 模块
 
 | 文件 | 当前职责 |
@@ -101,7 +128,7 @@ message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确�
 | 当前接入未实现的能力 | Claude/CodeBuddy SDK 的已验证 insert/steer；CodeBuddy 模型目录探测目前不提供，字段手工配置并注明 unchecked。不能用中断并重开轮次冒充 insert。 |
 | 单独授权事项 | 合并 PR/main、正式版本发布、许可证、生产环境变更。 |
 
-当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制说明，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。这不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。后续如获授权并取得可靠接口，再按同一执行权规则增加支持。不静默改用后台 CLI，不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份和通用迁移仍留待后续。
+当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制说明，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。这不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。后续如获授权并取得可靠接口，再按同一执行权规则增加支持。不静默改用后台 CLI，不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、V2 独立身份和通用迁移仍留待后续；Worker 并行已确认设计，实施缺项见[上述计划](#worker-plan)。
 
 ## 共同职责、共享 Skill 与桌面准备
 

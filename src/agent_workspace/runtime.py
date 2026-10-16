@@ -165,7 +165,7 @@ def configure_desktop(app, workspace, agent_id, command=None, directory=None, wo
     if not pipe or not thread:
         raise Error("Run capture-desktop inside the real Desktop session; both CODEX environment values are required.")
     root = Path(app.prepare_agent_directory(workspace, agent_id, directory)["directory"])
-    _, _, worker_id = _entry_owner(app, workspace, agent_id, worker_id)
+    app.agent(workspace, agent_id, worker_id=worker_id)
     model_profiles.migrate(root, worker_id)
     with layout.lock(root, "files.lock", worker_id=worker_id):
         value = model_profiles.runtime_config(root, worker_id)
@@ -180,8 +180,10 @@ def configure_desktop(app, workspace, agent_id, command=None, directory=None, wo
 
 def desktop_profile(app, workspace, agent_id, model="", effort="", project_id="", directory=None, worker_id=None):
     root = Path(app.prepare_agent_directory(workspace, agent_id, directory)["directory"])
-    _, owner, worker_id = _entry_owner(app, workspace, agent_id, worker_id)
-    if owner["current"]:
+    owner = app.agent(workspace, agent_id, worker_id=worker_id)
+    # Worker entries keep adopted snapshots; Agent defaults only affect future entries.
+    # Legacy entries still read the common connection and retain the original guard.
+    if owner["current"] and (worker_id is not None or owner.get("worker_id") is None):
         raise Conflict("Handoff before changing the Desktop profile of an active instance.")
     config = model_profiles.runtime_config(root, worker_id)
     if config.get("kind") != "desktop":

@@ -29,8 +29,7 @@ def project_directory(root, harness="codex", worker_id=None):
 
 
 def plan(app, workspace, agent_id, harness="codex", worker_id=None):
-    owner = app.agent(workspace, agent_id, worker_id=worker_id)
-    worker_id = owner.get("worker_id")
+    app.agent(workspace, agent_id, worker_id=worker_id)
     root, path = _path(app, workspace, agent_id, harness, worker_id)
     try:
         data = path.read_bytes()
@@ -59,8 +58,7 @@ def plan(app, workspace, agent_id, harness="codex", worker_id=None):
 
 def save(app, workspace, agent_id, harness, project_name, section_name="", product_paths=None, revision=None,
          project_directory=None, worker_id=None):
-    owner = app.agent(workspace, agent_id, worker_id=worker_id)
-    worker_id = owner.get("worker_id")
+    app.agent(workspace, agent_id, worker_id=worker_id)
     root, path = _path(app, workspace, agent_id, harness, worker_id)
     for key, value in (("project_name", project_name), ("section_name", section_name)):
         if not isinstance(value, str) or len(value) > 160 or any(ord(c) < 32 for c in value):
@@ -164,7 +162,8 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
     """Adopt one verified project; optional sidebar work never creates a chat."""
     from .runtime import Desktop
     owner = app.agent(workspace, agent_id, worker_id=worker_id)
-    worker_id = owner.get("worker_id")
+    # Updating Agent defaults must not require stopping a Worker with its own adopted configuration.
+    protect_entry = worker_id is not None or owner.get("worker_id") is None
     slug(request_id)
     if not isinstance(create_section, bool) or (create_section and section_id):
         raise Error('Choose an existing section or explicitly request a new one, not both.')
@@ -187,7 +186,7 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
             current = plan(app, workspace, agent_id, worker_id=worker_id)
             if current['revision'] != revision:
                 raise Conflict('Desktop preferences changed; reread before adopting a project.')
-            if app.agent(workspace, agent_id, worker_id=worker_id)['current']:
+            if protect_entry and app.agent(workspace, agent_id, worker_id=worker_id)['current']:
                 raise Conflict('Handoff before changing the project of an active instance.')
             config_path = layout.local_path(root, 'runtime.json', worker_id)
             original = config_path.read_bytes() if config_path.exists() else b'{}'
@@ -247,7 +246,7 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
                 adapter.close()
             if ((config_path.read_bytes() if config_path.exists() else b'{}') != original
                     or plan(app, workspace, agent_id, worker_id=worker_id)['revision'] != revision
-                    or app.agent(workspace, agent_id, worker_id=worker_id)['current']):
+                    or (protect_entry and app.agent(workspace, agent_id, worker_id=worker_id)['current'])):
                 raise Conflict('Local configuration or execution entry changed; preserve the preparation receipt.')
             value = {**current['project'], 'native_project_id': selected['projectId'], 'updated_at': now()}
             if section_state == 'verified':

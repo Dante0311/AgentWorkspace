@@ -107,7 +107,7 @@ def test_create_three_real_identities_without_model_or_work(fresh):
     for role in onboarding.ROLES:
         root = app.root("demo", role)
         assert read_json(root / ".agentworkspace/source.json")["definition"] == "definitions/caretaker/" + role
-        assert len(list((root / ".agents/skills").glob("*/SKILL.md"))) == 7
+        assert len(list((root / ".agents/skills").glob("*/SKILL.md"))) == 8
         assert not (root / ".agentworkspace/local/runtime/runtime.json").exists()
         assert not (root / ".agentworkspace/local/runtime/watch.json").exists()
 

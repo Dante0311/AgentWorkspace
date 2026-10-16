@@ -42,7 +42,7 @@ aw call setup.create --arguments '{"name":"demo","address":"https://host/owner/w
 
 命令示例采用 POSIX shell 引号；其他 shell 可以将 JSON 写入文件并使用 `--arguments @file.json`。
 
-新建通过普通实例创建流程建立 Steward、Sentinel、Maintainer 及各自的来源记录、目录、七个 Skill。页面为三者预填 `AW_HOME/instances/<workspace>/<role>`，用户可改为其他本机绝对路径或另一磁盘；三者不能共用同一路径。没有创建默认 Work，没有启动模型或巡检。首次配置过程中部分成功会返回 `state=pending`，保留原位置和创建记录，修复访问问题后用完全相同的地址、方式和三条目录继续。创建记录保存在本机 `AW_HOME/setup`，不是跨机恢复协议；不要删除该目录后期待按名称猜测原操作。
+新建通过普通实例创建流程建立 Steward、Sentinel、Maintainer 及各自的来源记录、目录、默认 Worker 和八个 Skill。页面为三者预填 `AW_HOME/instances/<workspace>/<role>`，用户可改为其他本机绝对路径或另一磁盘；三者不能共用同一路径。没有创建默认 Work，没有启动模型或巡检。首次配置过程中部分成功会返回 `state=pending`，保留原位置和创建记录，修复访问问题后用完全相同的地址、方式和三条目录继续。创建记录保存在本机 `AW_HOME/setup`，不是跨机恢复协议；不要删除该目录后期待按名称猜测原操作。
 
 重复请求只复用对应请求已经创建的实例，不覆盖用户资料或配置。普通 `agent create` 仍拒绝同名实例；需要明确重试时可使用固定 `--id` 与 `--request-id`。可恢复创建暂不用于外部文件导入。实例目录先完整写入临时同级位置，再发布到目标目录，避免失败后留下半份目录。
 

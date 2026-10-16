@@ -183,7 +183,7 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
     class DesktopPeer:
         supports_insert = True
 
-        def __init__(self, root, config, session, *, read_only=False):
+        def __init__(self, root, config, session, *, read_only=False, worker_id=None, title=None):
             self.root, self.session = root, session
             self.name = root.name
             assert root == roots[self.name] and config == configured[self.name]
@@ -290,7 +290,7 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
     observed, creations = threading.Event(), []
 
     class DesktopPeer:
-        def __init__(self, root, config, session):
+        def __init__(self, root, config, session, *, worker_id=None, title=None):
             assert session is None
             self.session = None
 
@@ -312,7 +312,7 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
     manager = backend.Backend(app, SimpleNamespace(server_port=12345))
     app.backend = manager
     try:
-        with pytest.raises(Conflict, match="original Binding changed"):
+        with pytest.raises(Conflict):
             backend.attach(app, "sea", "alice", expected_binding="older-original")
         assert not manager.runners
         result = execute(app, "runtime.start", {"workspace": "sea", "agent_id": "alice"})

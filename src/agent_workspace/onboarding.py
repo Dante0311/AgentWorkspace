@@ -225,7 +225,8 @@ def create_workspace(app, name: str, address: str, mode: str = "local", director
                 metadata = {"schema": 1, "name": name, "locator": "workspace:" + receipt["id"],
                             "friends": {}, "projects": {}, "setup_id": receipt["id"],
                             "caretakers": {role: role for role in ROLES}}
-                seed = {layout.MARKER: layout.marker('workspace'), '.agentworkspace/workspace.json': encode(metadata)}
+                seed = {layout.MARKER: layout.marker('workspace', version=layout.WORKER_VERSION),
+                        '.agentworkspace/workspace.json': encode(metadata)}
                 seed.update({f"definitions/caretaker/{role}/definition.md": text.encode()
                              for role, text in receipt["definitions"].items()})
                 store.branch("main", seed)

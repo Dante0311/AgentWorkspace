@@ -10,7 +10,7 @@ def test_creation_without_definition_or_work(app):
     result = app.create('sea', '构建助手')
     root = Path(result['directory'])
     assert root.joinpath('AGENTS.md').is_file()
-    assert len(list(root.glob('.agents/skills/*/SKILL.md'))) == 7
+    assert len(list(root.glob('.agents/skills/*/SKILL.md'))) == 8
     assert not root.joinpath('.agentworkspace/source.json').exists()
     assert app.agent('sea', result['id'])['current'] is None
     assert app.work_list('sea') == []

@@ -24,17 +24,49 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 
 真实远端 Git transport、跨机器及默认独立项目模式未覆盖。初始两条聊天由 `51771ce` 创建，新包实际验证了正常通知恢复和已有新聊天的接力，未另行实测新包自动创建初始聊天。旧普通副本、冲突保留与排除项引用 `51771ce` 的本机 Git/公共工具验收，未在纯 Runtime 提示修复后重复运行。现有 Test A/B 的资料未改，daily 数据与安装未改变；本批通过不表示已迁移旧实例、发布软件或完成其他环境验收。
 
+<a id="worker-plan"></a>
+
+## Worker 并行工作（2026-10-16 开发候选）
+
+产品合同集中在 [设计第 3.5 节](design.md#workers)，可选 worker Skill 的判断和用户决定见设计第 12 节。公共命令见 [Worker 用法](usage.md#workers)，此处记录已接入范围与验证状态。
+
+新建 Workspace 使用 Worker 数据版本 2，Agent 默认带一个 `default` Worker；旧版本 0/1 保持原入口规则，软件更新不自动迁移。Core 已接入 Worker 登记、独立 current / handoff、Binding 归属、固定创建请求与旧数据显式映射。实际调用者按 Session / Binding 确定 Worker，切换默认收件人不能改变调用身份。
+
+Runtime、Backend、Message 与公共接口已采用同一 Worker 归属：
+
+1. 保存只收集本 Worker 的 `workers/<id>/` 与 `.agentworkspace/workers/<id>/`，共同资料通过明确的文件路径加入；记录所读共同资料版本并检查冲突。Git 文件操作使用 Agent 级文件锁，保留其他 Worker 尚未保存的内容。
+2. Runtime 分开保存 Worker 的采用配置、原生记录、输入队列、运行状态、控制与恢复记录；Backend 以 Agent、Worker、目录定位任务。Agent 配置作为默认值，Worker 可明确覆盖；当前入口继续使用启动时的采用值。原生标题请求使用“Workspace 简称 · Agent 名称 · Worker 名称”，请求与原生读回分开记录。
+3. 正式 Message 在首次发布前固定 `to.worker`，按 Worker 排队与 ACK；`reply_to` 指向原消息的发送 Worker。旧原文与 ID 保留，历史归属来自显式映射。直发记录、Git 手动脚本、Web Courier 与 maintenance 同步携带实际 Worker。
+4. CLI/HTTP/MCP 提供 Worker 管理与按 Worker 的运行、保存和查询；工作台详情可切换 Worker。八个内置 Skills 包含可选 worker Skill，并同步更新 agent、message、handoff、relay、fork 和进入材料。建议创建时由用户决定；批准的创建与启动范围分别说明。
+
+日常实例采用仍需明确范围。本批只准备隔离开发与验收环境，没有迁移日常 Agent、修改其 Binding、升级日常安装或批量重命名原聊天。
+
+独立 E2E 针对确定提交和构建验证以下流程，保留实际执行者、原消息/操作 ID、检查点及原生会话关联：
+
+| 场景 | 必须观察的结果 |
+| --- | --- |
+| 同一 Agent 的两个 Worker | 真实会话分别绑定，Agent 身份相同、Worker 不同；指定消息及明确回复各到正确会话，默认目标变化不重新分配原消息，其他 Worker 不能代收 ACK。 |
+| 保存与检查点 | 两个 Worker 同时有工作文件；保存其中一个不提交或删除另一个的未完成修改，共同资料冲突明确保留。原始记录及可用压缩钩子的保存定位实际 Worker。 |
+| 独立接续与归档 | 一个 Worker 正常 handoff/relay、完成或归档，另一个的入口、消息与资料继续有效；旧入口不能借相同 Agent ID 继续操作。 |
+| 跨 Harness | 稳定 Worker 地址在换原生聊天后保持；按实际可用的 Harness 接口验证正式通信与接续，手动路径、协议夹具与真实模型分别说明，未取得的效果不计为通过。 |
+| 旧实例与可选 Skill | 隔离旧数据保留身份、配置、原聊天和历史；只有用户同意才创建 Worker，不把分工建议当作创建或新增任务授权，拒绝拆分后仍可正常工作。 |
+
+开发测试覆盖本机 Git、公共 HTTP、原生协议夹具及真实浏览器页面。独立 E2E 在 `f905e79` 固定包上完成同一 Agent 两个真实 Codex Desktop Worker 的定向消息、回复、队列、保存隔离、共同文件冲突、正常接续、暂停和归档。原包发现的运行类型显示错误，已在 `273ec48` 固定包上使用保留的真实资料定向复验通过；原失败和两个版本的边界见[独立验收报告](https://github.com/Dante0311/AW-Workspace/blob/0e36e933ef380b63a96bf1a5e10c4b684b8c71ae/development/evidence/2026-10-16-workers/results-f905e79-273ec48/README.md)。
+
+旧数据保留已通过公开接口的协议样本验证；真实旧会话连续迁移、第二种真实 Harness、模型实际采用元信息、Worker 自动压缩钩子及长期运行仍未验证，不计为本批实机通过。后续修复和最终提交的 CI 结果在 [PR #30](https://github.com/Dante0311/AgentWorkspace/pull/30) 中按具体版本记录，不能把前一固定包的结果称为新包全部重跑通过。
+
 ## 模块
 
 | 文件 | 当前职责 |
 | --- | --- |
-| `app.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding 历史、本地副本观察、Work 和 Git 访问。 |
+| `app.py`、`workers.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding 历史、本地副本观察、Work 和 Git 访问。 |
 | `layout.py`、`migration.py` | 按整体布局版本解析路径，显式迁移共享记录与副本，保留原请求和未知结果，并在复制期间持续互斥。 |
 | `software.py` | 统一检查和更新本机注册副本的内置材料；保护用户修改，继续原中断更新，不发布业务检查点。 |
 | `onboarding.py` | 只发现和引导的首次使用、只读 Git 检查、三份管家定义/实例和本机准备。 |
 | `harness_config.py` | Codex/Claude 原生模型选项查询、三种受管入口的实例独立模型配置；凭据只保存引用。 |
 | `model_profiles.py` | `.agentworkspace/config.json` 中的 Codex 模型选择、本机旧配置迁移、每入口采用快照、适用目录与请求事实。 |
 | `runtime.py`、`rpc.py`、`native_sdk.py` | 实际原生入口、持续事件、工具边界、初始接入、独占 Runner 与停工观测。 |
+| `compaction.py` | Codex 同步 PreCompact 入口、当前会话核对、原文快照与沿用业务总结的自动检查点；不生成新总结或交出入口。 |
 | `backend.py` | 每个 AW_HOME 的本机服务、Runner、消息检查与维护线程，原会话共同恢复，以及启停、重启和限定日志读取。 |
 | `transfer.py` | 原绑定和固定后继的持久 handoff/relay，结果未知不重新创建会话。 |
 | `shared.py`、`skills.py` | 同一共享提交的职责材料读取，以及共享 Skill 发现、安装、来源比较与受保护更新。 |
@@ -44,7 +76,7 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 | `web_courier.py`、`extensions/web-courier/` | 与当前 manual Binding 和网页会话对应的受限连接、原通知单次尝试、网页观察与 ACK 查询；不另建消息队列。 |
 | `maintenance.py` | 作用域授权、健康观测、安装位置归属明确的巡检、有限维修和结果复查。 |
 | `bridges.py`、`wecom.py` | 可选外部渠道、文本收发与组件看护。 |
-| `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和七个 Skill；内置 Skill 的 references/scripts 及固定通知模板随包分发。 |
+| `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和八个 Skill；内置 Skill 的 references/scripts 及固定通知模板随包分发。 |
 | `npm/`、`scripts/build_npm.py`、CI | 自带 Python 运行时的 Windows x64 npm 包、实际安装与替换检查、Web Courier 模拟测试和扩展 ZIP；wheel/sdist 和旧安装器保留为底层构建及开发工具。 |
 
 没有引入通用调度平台、模型网关、ACP 依赖或新的 Agent Loop。SDK 是按需安装的原生客户端，不是我们自研 Harness。元数据探测与实际会话共用凭据路由；Claude 握手返回模型选项，无需发送提示词，自有服务不使用内置目录。
@@ -81,6 +113,8 @@ message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确�
 
 ## 验证层次
 
+主动 checkpoint 指引与 Codex 压缩前保存分别实现。`aw codex-hook` 接收原生 `PreCompact` 输入，保存可核对的 transcript 原字节与实例资料，并标明旧业务总结的来源。无模型身份的原生 hook 按已有 session 索引找到当前入口；已有身份时不降级为用户调用。隔离 Git 已验证保存、重复调用、身份限制与原发布恢复；Codex 0.154.0 CLI 配合本机回环模型夹具，真实自动压缩触发了该命令并生成一个检查点。该结果不是付费模型或 Desktop 验收：独立 app-server 手动压缩实验中的 hook 仍为未信任，未执行 handler；日常聊天尚未配置/信任这个 hook。配置、原文共享范围和失败行为见 [Codex 压缩前保存](codex-compaction.md)。
+
 - 默认 CI：仅 Windows，配置 Python 3.11/3.13、Chromium 工作台、独立 npm 与 wheel 安装检查；npm 检查使用包内运行时并移除 PATH 中的系统 Python，覆盖资源、CLI/HTTP 和替换程序后保留原数据。当前不自动运行 Linux 兼容性回归；配置了检查不等于该提交已通过 CI。
 - `Native SDK contracts`：Linux 手动工作流，固定 SDK 版本、原生客户端回环 API、平台工具与自动交接；不随 PR 自动运行。实际测试范围以该提交的工作流和日志为准。
 - 本机定向回归：恢复、并发前提、未知结果、撤销授权、重复调度、HTTP/CLI 和原生工具副作用。
@@ -101,7 +135,7 @@ message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确�
 | 当前接入未实现的能力 | Claude/CodeBuddy SDK 的已验证 insert/steer；CodeBuddy 模型目录探测目前不提供，字段手工配置并注明 unchecked。不能用中断并重开轮次冒充 insert。 |
 | 单独授权事项 | 合并 PR/main、正式版本发布、许可证、生产环境变更。 |
 
-当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制说明，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。这不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。后续如获授权并取得可靠接口，再按同一执行权规则增加支持。不静默改用后台 CLI，不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、多事务、V2 独立身份和通用迁移仍留待后续。
+当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制说明，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。这不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。后续如获授权并取得可靠接口，再按同一执行权规则增加支持。不静默改用后台 CLI，不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、V2 独立身份和通用迁移仍留待后续；Worker 并行的候选范围与验收状态见[上述说明](#worker-plan)。
 
 ## 共同职责、共享 Skill 与桌面准备
 

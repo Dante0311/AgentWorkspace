@@ -1,22 +1,23 @@
 ---
 name: handoff
-description: 保存实际工作事实，交出当前 Agent 的执行权，不启动下一端。
+description: 保存实际工作事实，交出当前 Worker 的执行权，不影响同伴或启动下一端。
 ---
 
 # handoff
 
 本操作只能由当前入口执行。不要把停止 watch、窗口关闭或单次停止生成当作交出。
+支持 Worker 的版本按本次真实 Worker 和 Binding 交出。它仍属于同一 Agent；其他 Worker 的入口、消息和资料不随本次 handoff 停止或迁移。
 只有明确安排给当前入口的停工或交出任务才执行以下步骤。读取本 Skill、handoff 操作说明或旧检查点，不会产生新的停工安排；完成接手、保存检查点和结束当前轮次也不代表要交出入口。
 
 1. 如实整理身份、职责与工作背景，以及累计进展、决定、下一步和未决结果。平台已知的 Workspace、Agent、分支与资料路径由工具生成；业务内容由本入口补齐，不仅留下任务摘要，也不替使用者决定哪些业务必须继续或放弃。
-2. 核对并保存个人资料根中的实际文件。支持 worktree 的版本使用公共准备操作检查、准备目录，不要求用户手动拉取；新拉回的旧版本不算本轮成果，缺失的未保存文件要说明。外部工作位置、产品版本、未取得的原始记录和仅本机资料写明范围，不把当前 cwd 当成资产收集目录。
+2. 核对当前 Worker 的实际文件及本次明确选定的共同资料，不收集其他 Worker 的未完成修改。支持 worktree 的版本使用公共准备操作检查、准备目录，不要求用户手动拉取；新拉回的旧版本不算本轮成果，缺失的未保存文件要说明。外部工作位置、产品版本、未取得的原始记录和仅本机资料写明范围，不把当前 cwd 当成资产收集目录。
 3. 调用 checkpoint.create，保存确定版本。方法参见 `.agentworkspace/prompts/checkpoints.md`。
-4. 调用 agent.stop，提供本入口 binding 和检查点。
+4. 调用 worker.stop，提供本 Worker、本入口 binding 和检查点；旧单入口使用 agent.stop。
 5. 返回简短交出准备结果并结束当前 turn；不要在请求停工后继续执行业务。运行器观察原生入口 idle 后才发布交接点并释放资格。
 
 ```sh
-aw -w sea checkpoint create helper --binding BINDING --summary "累计摘要" --content "阶段事实及不确定性"
-aw -w sea agent stop helper --binding BINDING --checkpoint CHECKPOINT_ID
+aw -w sea checkpoint create helper --worker WORKER_ID --binding BINDING --summary "累计摘要" --content "阶段事实及不确定性"
+aw -w sea worker stop helper WORKER_ID --binding BINDING --checkpoint CHECKPOINT_ID
 ```
 
 manual 入口仅由当前使用者明确确认已停止后，加 --confirm-stopped；这不是平台观测到原生进程退出的证明，他人不能代替当前使用者作停工确认。

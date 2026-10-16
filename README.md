@@ -26,7 +26,7 @@ Agent 是属于一个 Workspace 的持久身份；执行会话是它当前使用
 
 **安装 npm 构建包 → 用户准备 Git 与原生客户端 → 创建/接入 Workspace 与 Agent → 在有效执行会话中协作 → 用工作台查看状态和历史。**
 
-正式用户安装入口为 npm，当前先提供 Windows x64 构建。需要 Node.js 22+，无需系统 Python；包内携带固定 Python 3.13 运行时、后端 wheel、网页和七个 Skills。在所选提交的 GitHub Actions 或本地构建中取得 `.tgz` 与校验信息后安装：
+正式用户安装入口为 npm，当前先提供 Windows x64 构建。需要 Node.js 22+，无需系统 Python；包内携带固定 Python 3.13 运行时、后端 wheel、网页和八个 Skills。在所选提交的 GitHub Actions 或本地构建中取得 `.tgz` 与校验信息后安装：
 
 ```sh
 npm install -g ./git-native-agent-workspace-0.1.0-alpha.1.tgz
@@ -59,7 +59,7 @@ aw backend start --open
 
 | 能力 | 实现范围 |
 | --- | --- |
-| 持久 Agent | 独立工作根、AGENTS.md、七个 Skills 和检查点；不强制 Definition 或 Work。 |
+| 持久 Agent | 独立工作根、AGENTS.md、八个 Skills 和各 Worker 的检查点；不强制 Definition 或 Work。 |
 | 首次配置 | Git/Harness 发现、只读 Git 检查、可补齐的初始化；新空间为 Steward、Sentinel、Maintainer 分别选择本机实例目录，不隐式启动。 |
 | 模型与会话 | 已有 Codex App Server、Claude/CodeBuddy SDK 和实例配置保留；近期优先 Codex Desktop，ChatGPT Web 手动接入，其余范围不继续扩展。 |
 | 正式通信与交接 | 不可变 Message/ACK、当前 Binding、FIFO、有限通知重试和固定后继交接；跨 Harness 的回环测试不等于本轮实机验收。 |
@@ -68,7 +68,9 @@ aw backend start --open
 | 资产与工作 | 明确文件导入、来源差异与更新、选定共享提升、Fork、可选 Work/Delivery。 |
 | 接口与安装 | CLI、HTTP、MCP 共用实现；npm 是用户入口，包内运行时、后台与保留数据的程序替换已做隔离检查，实际交付仍以提交和制品校验值为准。 |
 
-工作台近期主入口仅为 Agent 与环境、消息历史、本机后台状态与停止/重启/日志，Workspace 仍用来选择查看范围。模型配置、创建与交接等操作通过现有 CLI/Skills 使用，复杂界面暂缓。统一聊天界面和同一身份的多事务会话仍留到 V3。
+工作台近期主入口仅为 Agent 与环境、消息历史、本机后台状态与停止/重启/日志，Workspace 仍用来选择查看范围。模型配置、创建与交接等操作通过现有 CLI/Skills 使用，复杂界面暂缓。统一聊天界面仍留到 V3。
+
+2026-10-16 开发候选已接入 [Worker 并行工作](docs/design.md#workers)：同一 Agent 可按需拥有多个独立接续的 Worker，共用身份和长期资料，分别保存入口、消息、配置采用值和过程材料。可选 worker Skill 向用户建议，用户决定是否创建。原生聊天标题请求使用“Workspace 简称 · Agent 名称 · Worker 名称”。新建空间默认启用，旧数据需显式映射；日常安装和 Agent 未迁移。命令见 [Worker 用法](docs/usage.md#workers)，真实多会话及跨 Harness 的验收状态见[实现范围](docs/implementation.md#worker-plan)。
 
 每次发送和回复先由 message Skill 判断路径：确认双方当前有效入口均为同机 Codex 时才原生直发；其他机器、跨 Harness、云端或事实不足时用正式 AW Message。原生发送已尝试但结果未知时只核对原发送，不能换路重发。直发的可选记录与回执独立保存，并标明 `codex` 等来源；保存失败不影响交流，也不触发正式索引、ACK 扫描或后台重投。工作台可合并历史，但必须标清来源。
 

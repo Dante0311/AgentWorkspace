@@ -331,13 +331,13 @@ class GitHubStore(GitStore):
                 raise RetryableRead("GitHub read temporarily unavailable; no shared state was confirmed.") from exc
             raise Error("GitHub read failed; no shared state was confirmed.") from exc
 
-    def bootstrap(self, metadata):
+    def bootstrap(self, metadata, *, layout_version=layout.VERSION):
         # GitHub cannot create a ref in a repository with no branches. The Contents
         # endpoint creates the initial commit; omitting sha forbids replacing a file.
         self.request("PUT", "/contents/workspace.json", {"message": "Initialize Agent Workspace",
             "content": base64.b64encode(encode(metadata)).decode(), "branch": "main"})
         snap = self.snapshot()
-        self.change('main', {'workspace.json': None, layout.MARKER: layout.marker('workspace'),
+        self.change('main', {'workspace.json': None, layout.MARKER: layout.marker('workspace', version=layout_version),
             '.agentworkspace/workspace.json': snap.bytes('workspace.json')},
             {'workspace.json': snap.entries['workspace.json'], layout.MARKER: None,
              '.agentworkspace/workspace.json': None}, 'Initialize AW data layout', base=snap.revision)

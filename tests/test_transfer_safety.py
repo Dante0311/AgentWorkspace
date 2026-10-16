@@ -55,7 +55,7 @@ def test_unconfirmed_native_close_does_not_release_binding(app, monkeypatch):
     adapter = Mock(session="native-session")
     adapter.status.return_value = "idle"
     adapter.close.side_effect = Unavailable("native close unconfirmed")
-    def connect(*args):
+    def connect(*args, worker_id=None, title=None):
         app.stop("sea", "alice", binding, point["id"])
         return adapter
     monkeypatch.setattr(runtime, "Codex", connect)

@@ -61,7 +61,7 @@ def test_reconcile_original_chat_binds_once_preserves_unknown_boot_and_receipt(a
     assert result["state"] == "session_bound" and not result["observation_started"]
     assert result["association"] == "original_launch_thread_id"
     assert result["model_profile"]["effective"] == "native_reported"
-    assert constructor.call_args.kwargs == {"read_only": True}
+    assert constructor.call_args.kwargs == {"read_only": True, "worker_id": None}
     boot = layout.local_path(root, "inputs") / f"boot-{binding}.json"
     write_json(boot, {**read_json(boot), "state": "outcome_unknown", "result": {"turn": {"id": "original-turn"}}})
     original_bytes = boot.read_bytes()

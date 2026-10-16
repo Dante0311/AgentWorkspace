@@ -26,7 +26,7 @@ def test_discovery_create_combines_definition_shared_and_platform_skills(app):
     assert (root / 'AGENTS.md').read_bytes() == b'# Reviewer'
     assert (root / '.agents/skills/special/SKILL.md').read_bytes() == b'special duty'
     assert (root / '.agents/skills/review/references/checklist.md').read_bytes() == b'checklist'
-    assert len(list(root.glob('.agents/skills/*/SKILL.md'))) == 9
+    assert len(list(root.glob('.agents/skills/*/SKILL.md'))) == 10
     assert read_json(root / skills.MANIFEST)['review']['revision'] == revision
     assert skills.MANIFEST in app.store('sea').snapshot('instance/a').entries
     assert app.agent('sea', 'a')['current'] is None

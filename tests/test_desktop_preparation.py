@@ -19,7 +19,7 @@ def native(app, monkeypatch):
         tools = {'list_projects', 'list_sidebar_sections', 'create_sidebar_section', 'move_project_to_sidebar_section'}
         tool_schemas = {'list_sidebar_sections': schema([]), 'create_sidebar_section': schema(['name']),
                         'move_project_to_sidebar_section': schema(['projectId', 'sectionId'])}
-        def __init__(self, *args): pass
+        def __init__(self, *args, worker_id=None): pass
         def close(self): state['closed'] = True
         def call(self, name, args):
             state['calls'].append((name, args))

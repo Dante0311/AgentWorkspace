@@ -6,7 +6,7 @@
 
 无完整 AW、无 Python、未 clone 时，可以使用仓库工具。需要对明确目标仓库的读权限；发布另需允许写 `main`、创建 Git 对象和条件移动 ref 的权限。好友配置、公开仓库或能创建 blob 不等于有发布权限。
 
-1. 读 `refs/heads/main` 的 HEAD `H`，再读 **H 对应 commit 和 tree**。按 [协议的布局标记](protocol.md#地址与固定路径)在 H 确定平台前缀 `P`：新版为 `.agentworkspace/`，无标记的旧提交为空；未知格式或迁移未完成就停止，不逐文件回退。固定在 H 读取 `P + workspace.json`、自身 `P + agents/<id>.json`、明确获授的 `P + bindings/<binding>.json`；核对 locator、实例、current、archived=false、Binding 归属和 phase=active。不能用不同时间的默认分支文件拼资格，也不能接受截断 tree。
+1. 读 `refs/heads/main` 的 HEAD `H`，再读 **H 对应 commit 和 tree**。按 [协议的布局标记](protocol.md#地址与固定路径)在 H 确定平台前缀 `P`：新版为 `.agentworkspace/`，无标记的旧提交为空；未知格式或迁移未完成就停止，不逐文件回退。固定在 H 读取 `P + workspace.json`、自身 `P + agents/<id>.json`、明确获授的 `P + bindings/<binding>.json`；核对 locator、实例、archived=false、Binding 归属和 phase=active。采用 Worker 时同时读取 `P + workers/<agent>/<worker>.json`，核对该 Worker 未归档且 current 等于获授 Binding；旧单入口则核对 Agent.current。缺少 worker 的旧 Binding/消息按同一 H 的显式映射解释。不能用不同时间的默认分支文件拼资格，也不能接受截断 tree。
 2. 在同一 H 读 `P + message-index/<id>.json` 和 `P + acks/<id>.json`；核对 index.id/to。已有 ACK 不再开展业务，回看历史即可；原部分发布另核对原操作。没有 ACK 时尝试读 `P + messages/<id>.json` 的原 blob，记录成功或失败。正文失败也可 ACK 可定位的通知，但不猜正文。
 3. 在第一次可能发布前保存原 Message/索引或 ACK 的完整字节（可用 Base64）、稳定 ID、真实地址、首次真实时间、获授 Binding、双方 locator/仓库映射及已有提交/发布结果。材料是手动操作依据，不冒充 AW 的本机原操作 receipt；敏感内容留在获准位置。
 4. 每次写入前再读 HEAD 和同版本资格、索引、目标登记、已有原记录。前提或原字节变了就停止；不能覆盖他人修改。创建所缺 blob，以当前 commit 的 `tree.sha` 为 **base_tree** 创建新 tree，保留其余路径；创建新 commit，**parents=[当前 HEAD]**。只添加本次消息/索引或 ACK，不写 agent/binding/Work。
@@ -21,7 +21,7 @@
 
 没有原通知时也可以用仓库工具发起消息，不需要先制造 receive 或 ACK。沿用以上条件提交与读回步骤，区别如下：
 
-1. 使用本会话明确获授的发送实例和 Binding，在自己 Workspace 的同一 HEAD 核对资格。由用户明确指定的实例地址和当前朋友配置确定目标；同 Workspace 读该 HEAD 的目标 `P + agents/<id>.json`，跨 Workspace 另固定对方 HEAD、按对方布局确定其前缀，核对 locator 和目标未归档。目标暂时没有入口仍可保存消息，不能为此创建或接管 Binding。
+1. 使用本会话明确获授的发送实例和 Binding，在自己 Workspace 的同一 HEAD 核对资格。由用户明确指定的地址和当前朋友配置确定目标；同 Workspace 读该 HEAD 的目标 Agent 和 Worker，跨 Workspace 另固定对方 HEAD、按对方布局确定其前缀，核对 locator 和目标未归档。没有显式 Worker 的新消息在首次保存前选择当时的默认收件 Worker，之后不得重新解析；明确回复选择原来源 Worker。目标暂时没有入口仍可保存消息，不能为此创建或接管 Binding。
 2. 选择新稳定 ID，按各自布局核对双方 `P + messages/<id>.json`、`P + message-index/<id>.json` 和 `P + acks/<id>.json`。新 ID 应未使用；如已有原记录，只能按已保存的原操作核对，不能给已有 ID 新造时间或内容。异字节或无原操作材料的占用停止发布，不覆盖。准备一次完整 Message：真实 `from/to`、实际带时区时间、显式 normal/insert、非空 content 和可选 message_refs；没有原消息时不编造引用。
 3. 保存完整 Message、其五字段索引的原字节和目标映射。在自己的当前 HEAD 再核对发送资格与 ID 空缺，使用该 HEAD 的 base_tree 和直接 parent，把 Message 与索引放在**同一个条件提交**中。同 Workspace 到此只发布一份；跨 Workspace 在重新核对当前资格/朋友路由和对方目标后，把相同两份字节条件提交到对方，不创建 ACK。
 4. 各目标读回原字节才确认发布。冲突、部分成功或未知结果保留同一原操作，按上文核对；不重发模型动作，不修改原消息。回复复用这条发送协议，但使用新 ID 并把原消息 ID 加入 message_refs。

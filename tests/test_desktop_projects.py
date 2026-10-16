@@ -66,7 +66,9 @@ def test_other_desktops_do_not_claim_codex_sections_or_native_control(app):
 
 def test_bound_agent_can_read_guide_but_cannot_edit_desktop_preferences(app):
     app.create('sea', 'reviewer')
-    actor = ('sea', 'reviewer', 'binding-placeholder')
+    binding = app.reserve('sea', 'reviewer')['binding']
+    app.bind('sea', 'reviewer', binding, 'fixture-reviewer')
+    actor = ('sea', 'reviewer', binding)
     value = execute(app, 'agent.desktop-project', {}, actor=actor)
     assert value['agent_id'] == 'reviewer' and '手动准备' in value['instructions']
     with pytest.raises(Error, match='user-management'):

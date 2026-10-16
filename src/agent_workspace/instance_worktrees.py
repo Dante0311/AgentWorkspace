@@ -64,12 +64,14 @@ def head(root):
     return git(root, 'rev-parse', 'HEAD').stdout.decode().strip()
 
 
-def check_index(root):
+def check_index(root, paths=None):
     entries = git(root, 'ls-files', '--stage', '-z').stdout.split(b'\0')
     for entry in entries:
         if not entry:
             continue
         meta, path = entry.split(b'\t', 1)
+        if paths is not None and path.decode() not in paths:
+            continue
         mode, _, stage = meta.split()
         if stage != b'0':
             raise Conflict('Resolve the worktree index merge conflicts before saving or syncing.')
@@ -77,9 +79,23 @@ def check_index(root):
             raise Conflict('The index contains a nested repository or local runtime data; preserve and remove it from the index first.')
     staged = set(git(root, 'diff', '--cached', '--name-only', '-z', 'HEAD').stdout.split(b'\0')) - {b''}
     unstaged = set(git(root, 'diff', '--name-only', '-z').stdout.split(b'\0')) - {b''}
-    if staged & unstaged:
+    overlap = staged & unstaged
+    if paths is not None:
+        overlap = {p for p in overlap if p.decode() in paths}
+    if overlap:
         raise Conflict('A staged file also has different working files; preserve or resolve its staged version before saving.')
     return {path.decode() for path in staged}
+
+
+def record_scoped_saved(root, branch, before, revision):
+    if before == revision:
+        return
+    if head(root) != before:
+        raise Conflict('The Worker commit was published, but the local Git branch changed; preserve both results.')
+    # A two-tree merge preserves index changes outside the commit's changed paths.
+    # In particular, it must not stage a peer's absent or unfinished working files.
+    git(root, 'read-tree', '-i', '-m', before, revision)
+    git(root, 'update-ref', 'refs/heads/' + branch, revision, before)
 
 
 def record_saved(root, branch, before, revision):

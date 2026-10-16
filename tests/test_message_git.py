@@ -14,6 +14,7 @@ from agent_workspace.direct_messages import DirectMessages
 from agent_workspace.gitstore import GitStore
 from agent_workspace import commands, layout, maintenance
 from agent_workspace.util import Conflict, Error, Uncertain, encode
+from agent_workspace.app import App
 
 
 SCRIPT = Path(__file__).parents[1] / "src/agent_workspace/resources/skills/message/scripts/message_git.py"
@@ -49,6 +50,121 @@ def seeded(pair, tmp_path):
 
 def load_helper():
     return runpy.run_path(str(SCRIPT))
+
+
+@pytest.fixture
+def worker_protocol(tmp_path):
+    app = App(tmp_path / "worker-home")
+    app.workspace_init("sea", str(tmp_path / "worker-sea.git"), worker_support=True)
+    app.create("sea", "team")
+    app.worker_create("sea", "team", "Topic", "Independent work", worker_id="topic")
+    bindings = {}
+    for wid in ("default", "topic"):
+        bid = app.reserve("sea", "team", worker_id=wid)["binding"]
+        app.bind("sea", "team", bid, "native-" + wid, worker_id=wid)
+        bindings[wid] = bid
+    Messages(app).send("sea", "team", bindings["default"], "team", "原始 Worker 通知\n保留字节",
+                       to_worker="topic", request_id="worker-original")
+    return app, bindings, clone(tmp_path, app, "sea", "worker-cache")
+
+
+def worker_command(repo, bid, action, *extra):
+    return (action, "--repo", repo, "--agent", "team", "--binding", bid,
+            "--id", "worker-original", *extra)
+
+
+def test_script_worker_ack_reply_and_default_change_without_aw_import(worker_protocol, tmp_path):
+    app, bids, repo = worker_protocol
+    store = app.store("sea")
+    snap = store.snapshot()
+    path = layout.shared_path(snap, "messages/worker-original.json")
+    original = snap.bytes(path)
+    shown = command(tmp_path, *worker_command(repo, bids["topic"], "show"))
+    assert shown["message_json"].encode() == original
+    wrong = tmp_path / "wrong-worker.json"
+    command(tmp_path, *worker_command(repo, bids["default"], "receive", "--record", wrong, "--publish"), success=False)
+    assert not wrong.exists()
+    ack = command(tmp_path, *worker_command(repo, bids["topic"], "receive", "--record", tmp_path / "worker-ack.json", "--publish"))
+    assert ack["state"] == "published" and ack["actor"]["worker"] == "topic"
+    assert Messages(app).show("sea", "worker-original")["ack"] == {"message_id": "worker-original"}
+    content = tmp_path / "worker-reply.md"
+    content.write_text("明确回复原 Worker", encoding="utf-8")
+    journal = tmp_path / "worker-reply.json"
+    prepared = command(tmp_path, *worker_command(repo, bids["topic"], "reply", "--content-file", content,
+                       "--request-id", "worker-reply", "--record", journal))
+    assert prepared["format"] == "message-git-operation-v2"
+    app.worker_default("sea", "team", "topic", app.show("sea", "team")["revision"])
+    published = command(tmp_path, "continue", "--agent", "team", "--binding", bids["topic"], "--record", journal)
+    assert published["state"] == "published" and published["records"] == prepared["records"]
+    reply = Messages(app).show("sea", "worker-reply")["message"]
+    assert reply["from"]["worker"] == "topic" and reply["to"]["worker"] == "default"
+    assert reply["reply_to"] == "worker-original"
+    assert store.snapshot().bytes(path) == original
+
+
+def test_script_worker_unknown_write_is_only_observed(worker_protocol, tmp_path, monkeypatch):
+    app, bids, repo = worker_protocol
+    journal = tmp_path / "worker-unknown.json"
+    prepared = command(tmp_path, *worker_command(repo, bids["topic"], "receive", "--record", journal))
+    namespace = load_helper()
+    calls = []
+
+    def lost(repo, commit, parent):
+        calls.append(commit)
+        raise subprocess.TimeoutExpired("isolated original push", 1)
+
+    monkeypatch.setattr(namespace["Repository"], "push", lost)
+    first = namespace["publish"](journal, prepared)
+    assert first["state"] == "outcome_unknown" and len(calls) == 1
+    app.worker_default("sea", "team", "topic", app.show("sea", "team")["revision"])
+    second = namespace["publish"](journal, json.loads(journal.read_bytes()))
+    assert second["state"] == "outcome_unknown" and len(calls) == 1
+    assert second["records"] == first["records"]
+    assert Messages(app).show("sea", "worker-original")["ack"] is None
+
+
+def test_script_prepared_legacy_ack_uses_explicit_worker_mapping(app, tmp_path):
+    app.create("sea", "team")
+    bid = app.reserve("sea", "team")["binding"]
+    app.bind("sea", "team", bid, "original-session")
+    Messages(app).send("sea", "team", bid, "team", "legacy notification", request_id="worker-original")
+    repo = clone(tmp_path, app, "sea", "legacy-worker-cache")
+    journal = tmp_path / "legacy-worker-ack.json"
+    prepared = command(tmp_path, *worker_command(repo, bid, "receive", "--record", journal))
+    original = Messages(app).show("sea", "worker-original")["message"]
+    app.checkpoint("sea", "team", "before explicit Worker mapping", binding=bid)
+    app.workers_migrate("sea", "team", "daily", "legacy-helper-map", compatible_writers=["worker-v2"])
+    app.worker_create("sea", "team", "Other", "New work", worker_id="other")
+    app.worker_default("sea", "team", "other", app.show("sea", "team")["revision"])
+    result = command(tmp_path, "continue", "--agent", "team", "--binding", bid, "--record", journal)
+    assert result["state"] == "published" and result["records"] == prepared["records"]
+    assert Messages(app).show("sea", "worker-original")["message"] == original
+    assert Messages(app).show("sea", "worker-original")["ack"] == {"message_id": "worker-original"}
+
+
+def test_script_unmapped_legacy_reply_is_preserved_without_guessing_default(app, tmp_path):
+    app.create("sea", "team")
+    bid = app.reserve("sea", "team")["binding"]
+    app.bind("sea", "team", bid, "original-session")
+    Messages(app).send("sea", "team", bid, "team", "legacy notification", request_id="worker-original")
+    repo = clone(tmp_path, app, "sea", "unmapped-legacy-cache")
+    content = tmp_path / "legacy-reply.md"
+    content.write_text("prepared before migration", encoding="utf-8")
+    journal = tmp_path / "unmapped-reply.json"
+    command(tmp_path, *worker_command(repo, bid, "reply", "--record", journal,
+            "--content-file", content, "--request-id", "unpublished-old-reply"))
+    original_journal = journal.read_bytes()
+    app.checkpoint("sea", "team", "before explicit Worker mapping", binding=bid)
+    app.workers_migrate("sea", "team", "daily", "unmapped-helper-map", compatible_writers=["worker-v2"])
+    app.worker_create("sea", "team", "Other", "New work", worker_id="other")
+    app.worker_default("sea", "team", "other", app.show("sea", "team")["revision"])
+    original_head = app.store("sea").snapshot().revision
+    result = command(tmp_path, "continue", "--agent", "team", "--binding", bid, "--record", journal, success=False)
+    assert result["error_type"] == "ProtocolError"
+    assert journal.read_bytes() == original_journal
+    assert app.store("sea").snapshot().revision == original_head
+    with pytest.raises(Error):
+        Messages(app).show("sea", "unpublished-old-reply")
 
 
 def fixture_shared_layout(store, current):
@@ -134,7 +250,7 @@ def test_script_layout_continues_original_prepared_v1_operation_after_path_chang
 @pytest.mark.parametrize("own_current", [False, True])
 def test_script_layout_cross_workspace_targets_choose_their_own_layout(pair, tmp_path, own_current):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"))
+    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "peer-fixture-session")
@@ -306,7 +422,7 @@ def test_aw_layout_missing_current_record_does_not_read_a_legacy_file(pair):
 
 def test_aw_layout_guard_keeps_a_partial_ack_from_writing_the_old_peer_path(pair, tmp_path, monkeypatch):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"))
+    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "peer-fixture-session")
@@ -424,9 +540,10 @@ def test_script_confirms_notification_when_body_missing_or_damaged(pair, tmp_pat
     assert app.store("sea").snapshot().json(".agentworkspace/acks/original.json") == {"message_id": "original"}
 
 
-def test_cross_workspace_partial_reply_continues_original_bytes(pair, tmp_path, monkeypatch):
+@pytest.mark.parametrize("failure_stage", ["target-validation", "peer-publication"])
+def test_cross_workspace_partial_reply_continues_original_bytes(pair, tmp_path, monkeypatch, failure_stage):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"))
+    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "isolated-sender-session")
@@ -444,24 +561,60 @@ def test_cross_workspace_partial_reply_continues_original_bytes(pair, tmp_path, 
                         "--id", "original", "--content-file", reply, "--request-id", "reply-one", "--record", record)
     helper = load_helper()
     repository = helper["Repository"]
-    head = repository.head
+    head, commit, push = repository.head, repository.commit, repository.push
+    own_path, peer_path = str(own.resolve()), str(peer.resolve())
+    own_before, peer_before = app.store("sea").snapshot(), app.store("peer").snapshot()
+    saved_journal = record.read_bytes()
+    original_records = dict(operation["records"])
+    writes = []
 
     def unavailable(repo):
-        if repo.path == str(peer.resolve()):
+        # Let destination validation finish when testing the later partial publication.
+        if repo.path == peer_path and (failure_stage == "target-validation"
+                or operation["targets"][0].get("state") == "confirmed"):
             raise helper["ProtocolError"]("isolated peer read unavailable before any peer write")
         return head(repo)
 
+    def observed_commit(repo, parent, records):
+        writes.append(("commit", repo.path))
+        return commit(repo, parent, records)
+
+    def observed_push(repo, revision, parent):
+        writes.append(("push", repo.path))
+        return push(repo, revision, parent)
+
     with monkeypatch.context() as scoped:
         scoped.setattr(repository, "head", unavailable)
+        scoped.setattr(repository, "commit", observed_commit)
+        scoped.setattr(repository, "push", observed_push)
         with pytest.raises(helper["ProtocolError"]):
             helper["publish"](record, operation)
     before = app.store("sea").snapshot()
+    assert app.store("peer").snapshot().revision == peer_before.revision
+    paths = (".agentworkspace/messages/reply-one.json", ".agentworkspace/message-index/reply-one.json")
+    expected_records = {path: base64.b64decode(original_records[path.removeprefix(".agentworkspace/")]) for path in paths}
+    assert operation["records"] == original_records
     original_reply = before.bytes(".agentworkspace/messages/reply-one.json")
-    assert original_reply is not None and app.store("peer").snapshot().bytes(".agentworkspace/messages/reply-one.json") is None
-    assert command(tmp_path, *continue_args(bindings["bob"], record))["state"] == "published"
-    assert app.store("sea").snapshot().revision == before.revision
-    assert app.store("peer").snapshot().bytes(".agentworkspace/messages/reply-one.json") == original_reply
-    assert app.store("peer").snapshot().bytes(".agentworkspace/message-index/reply-one.json") == before.bytes(".agentworkspace/message-index/reply-one.json")
+    if failure_stage == "target-validation":
+        assert writes == []
+        assert before.revision == own_before.revision
+        assert record.read_bytes() == saved_journal
+        assert all(before.bytes(path) is None for path in paths)
+    else:
+        assert writes == [("commit", own_path), ("push", own_path)]
+        assert all(before.bytes(path) == raw for path, raw in expected_records.items())
+        assert json.loads(record.read_bytes())["targets"][0]["state"] == "confirmed"
+    assert all(app.store("peer").snapshot().bytes(path) is None for path in paths)
+
+    continued = command(tmp_path, *continue_args(bindings["bob"], record))
+    assert continued["state"] == "published" and continued["records"] == original_records
+    after = app.store("sea").snapshot()
+    peer_after = app.store("peer").snapshot()
+    assert all(after.bytes(path) == peer_after.bytes(path) == raw for path, raw in expected_records.items())
+    assert {path: blob for path, blob in after.entries.items() if path not in paths} == own_before.entries
+    assert {path: blob for path, blob in peer_after.entries.items() if path not in paths} == peer_before.entries
+    if failure_stage == "peer-publication":
+        assert original_reply is not None and after.revision == before.revision
 
 
 @pytest.mark.parametrize("landed", [True, False])

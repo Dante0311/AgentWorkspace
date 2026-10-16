@@ -6,6 +6,7 @@ import re
 import secrets
 from urllib.parse import urlsplit
 
+from . import workers
 from .layout import shared_path
 from .messages import Messages
 from .util import Conflict, Error, digest, locked, now, read_json, slug, write_json
@@ -44,6 +45,9 @@ def _entry(app, connection):
     workspace, agent, binding = connection["workspace"], connection["agent_id"], connection["binding"]
     snap = app.store(workspace).snapshot()
     _, entry = app.require_binding(workspace, agent, binding, snapshot=snap)
+    actual_worker = workers.binding_worker(app, workspace, agent, entry, snap)
+    if connection.get("worker", actual_worker) != actual_worker:
+        raise Conflict("Web Courier connection belongs to another Worker.")
     if entry["kind"] != "manual" or not entry.get("session"):
         raise Conflict("Web Courier requires this instance's current manual session.")
     session = entry["session"]
@@ -69,7 +73,7 @@ def _public(connection):
     return {key: value for key, value in connection.items() if key != "token"}
 
 
-def connect(app, workspace, agent_id, expected_binding, target_url, extension_id, request_id, *, port=8765):
+def connect(app, workspace, agent_id, expected_binding, target_url, extension_id, request_id, *, port=8765, worker_id=None):
     """User-management action. Return the scoped token only from this explicit call."""
     connection_id = slug(request_id)
     slug(workspace); slug(agent_id); slug(expected_binding)
@@ -81,11 +85,16 @@ def connect(app, workspace, agent_id, expected_binding, target_url, extension_id
     proposed = {"id": connection_id, "workspace": workspace, "agent_id": agent_id,
                 "binding": expected_binding, "target_url": target, "extension_id": extension_id,
                 "backend_url": f"http://127.0.0.1:{port}", "state": "active"}
+    snap = app.store(workspace).snapshot()
+    worker_id = Messages(app)._source(workspace, agent_id, expected_binding, snap, worker_id)
+    if worker_id is not None:
+        proposed["worker"] = worker_id
     path, _ = _paths(app, connection_id)
     with locked(path.with_suffix(".lock")):
         existing = read_json(path)
         if existing:
-            if any(existing.get(key) != value for key, value in proposed.items() if key != "state"):
+            if any(existing.get(key, worker_id if key == "worker" else None) != value
+                   for key, value in proposed.items() if key != "state"):
                 raise Conflict("Connection request ID belongs to different settings.")
             if existing["state"] != "active":
                 raise Conflict("This connection was revoked; its original request cannot reactivate it.")
@@ -102,7 +111,9 @@ def _attempt_status(app, connection, snap=None):
     if attempt is None:
         return None, None
     snap = snap or app.store(connection["workspace"]).snapshot()
-    dispatch = snap.json(shared_path(snap, f"dispatch/{connection['agent_id']}.json"), {})
+    entry = snap.json(shared_path(snap, f"bindings/{connection['binding']}.json"))
+    worker_id = workers.binding_worker(app, connection["workspace"], connection["agent_id"], entry, snap)
+    dispatch = Messages(app)._previous_dispatch(snap, connection["workspace"], connection["agent_id"], worker_id)
     claimed = (attempt.get("claim_state") == "confirmed"
                or (dispatch.get("message_id") == attempt["message_id"]
                    and dispatch.get("binding") == connection["binding"]

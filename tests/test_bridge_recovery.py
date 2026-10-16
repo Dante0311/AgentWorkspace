@@ -11,10 +11,14 @@ from agent_workspace.util import Conflict, Unavailable, digest, read_json, write
 
 @pytest.fixture
 def local_bridge(tmp_path):
+    snapshot = SimpleNamespace(json=lambda path: {'agent': 'alice', 'id': 'b-current'}
+                               if path == 'bindings/b-current.json' else None)
     app = SimpleNamespace(
         home=tmp_path / "home",
         root=Mock(return_value=tmp_path),
         agent=Mock(return_value={"current": "b-current"}),
+        store=Mock(return_value=SimpleNamespace(snapshot=lambda: snapshot)),
+        binding_worker=Mock(return_value=None),
         require_binding=Mock(return_value=({}, {})),
     )
     manager = bridges.BridgeManager(app, "sea", "alice", "b-current", tmp_path)

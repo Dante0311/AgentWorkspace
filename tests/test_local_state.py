@@ -13,9 +13,13 @@ from agent_workspace.util import Conflict, Error, Unavailable, digest, read_json
 
 @pytest.fixture
 def local_app(tmp_path):
+    snapshot = SimpleNamespace(json=lambda path: {'agent': 'alice', 'id': 'b-current'}
+                               if path == 'bindings/b-current.json' else None)
     return SimpleNamespace(
         root=Mock(return_value=tmp_path),
         agent=Mock(return_value={"current": "b-current"}),
+        store=Mock(return_value=SimpleNamespace(snapshot=lambda: snapshot)),
+        binding_worker=Mock(return_value=None),
         require_binding=Mock(return_value=({}, {})),
         checkpoint=Mock(return_value={"id": "initial-b-current", "revision": "saved-revision"}),
     )

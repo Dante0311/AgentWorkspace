@@ -5,9 +5,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_workspace import backend, layout, runtime
+from agent_workspace import backend, layout, maintenance, runtime
 from agent_workspace.commands import execute
-from agent_workspace.util import Conflict, LockBusy, Uncertain, encode, read_json, write_json
+from agent_workspace.util import Conflict, Error, LockBusy, Uncertain, encode, write_json
 
 
 @pytest.fixture
@@ -152,3 +152,30 @@ def test_unknown_cleanup_push_is_not_replayed(exited_runner, monkeypatch):
     with pytest.raises(Uncertain):
         runtime.cleanup_controller(app, "sea", "alice", **args)
     publish.assert_called_once()
+
+
+def test_public_granted_repair_runs_real_cleanup_once_and_only_observes_duplicates(exited_runner, monkeypatch):
+    app, root, store, path, args, native = exited_runner
+    app.create("sea", "maintainer")
+    snap = store.snapshot()
+    workspace_path = layout.shared_path(snap, "workspace.json")
+    meta = snap.json(workspace_path)
+    meta["caretakers"] = {"maintainer": "maintainer"}
+    store.change("main", {workspace_path: encode(meta)}, {workspace_path: snap.entries[workspace_path]}, "Fixture caretaker role")
+    actor_binding = app.reserve("sea", "maintainer")["binding"]
+    app.bind("sea", "maintainer", actor_binding, "maintenance-session")
+    actor = ("sea", "maintainer", actor_binding)
+    request = {"agent_id": "alice", "action": "controller-cleanup", "request_id": "original-cleanup", **args}
+    cleanup = Mock(wraps=runtime.cleanup_controller)
+    monkeypatch.setattr(runtime, "cleanup_controller", cleanup)
+    with pytest.raises(Error):
+        execute(app, "maintenance.repair", request, actor=actor)
+    cleanup.assert_not_called()
+    maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
+    first = execute(app, "maintenance.repair", request, actor=actor)
+    assert first["result"]["state"] == "controller_cleared"
+    assert first["verification"]["cleanup"]["state"] == "controller_cleared"
+    assert execute(app, "maintenance.repair", request, actor=actor)["result"] == first["result"]
+    cleanup.assert_called_once()
+    assert not app.backend.runners and store.snapshot().json(path)["session"] == "original-chat"
+    assert not first["result"]["runner_started"] and not first["result"]["binding_released"]

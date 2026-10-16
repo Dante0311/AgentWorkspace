@@ -11,6 +11,7 @@ import errno
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import urllib.error
@@ -53,17 +54,25 @@ def git_env(env=None):
 
 
 TLS_FAILURES = ("schannel", "sec_e_", "ssl", "tls")
+SCHANNEL_INVALID_TOKEN = "schannel: next initializesecuritycontext failed: sec_e_invalid_token (0x80090308)"
 
 
 def permanent_git_failure(detail: str) -> bool:
     # A partial transfer can mention both a network symptom and invalid data.
     # Do not let the network wording hide an explicit access or integrity failure.
-    return any(word in detail.lower() for word in ("permission denied", "access denied", "authentication failed",
+    detail = detail.lower()
+    if any(word in detail for word in ("permission denied", "access denied", "authentication failed",
             "repository not found", "not a git repository", "certificate", "host key verification failed",
-            "could not read username", "terminal prompts disabled", "corrupt", "bad object",
-            "invalid object", "protocol error", *TLS_FAILURES,
+            "could not read username", "could not read password", "unable to get password from user",
+            "terminal prompts disabled", "corrupt", "bad object",
+            "invalid object", "protocol error",
             "the requested url returned error: 401",
-            "the requested url returned error: 403"))
+            "the requested url returned error: 403")):
+        return True
+    # Retry only the observed handshake failure, with full TLS validation on the new read.
+    # Other TLS diagnostics and explicit access/integrity failures still take precedence.
+    remaining = detail.replace(SCHANNEL_INVALID_TOKEN, "")
+    return any(word in remaining for word in TLS_FAILURES)
 
 
 def temporary_transport_failure(detail: str) -> bool:
@@ -71,6 +80,7 @@ def temporary_transport_failure(detail: str) -> bool:
         return False
     detail = detail.lower()
     return any(word in detail for word in (
+        SCHANNEL_INVALID_TOKEN,
         "could not resolve host", "could not resolve proxy", "could not resolve hostname",
         "temporary failure in name resolution", "failed to connect to", "connection timed out",
         "operation timed out", "connection reset", "connection refused", "network is unreachable",
@@ -235,9 +245,14 @@ class GitStore:
             # This is a write with an unknown outcome, never a retryable read.
             known_failure = permanent_git_failure(full_detail) and not any(word in full_detail.lower() for word in TLS_FAILURES)
             failure = Error(detail) if known_failure else Uncertain(detail)
-            rejected = any(reason in result.stdout.decode("utf-8", errors="replace") for reason in (
+            stdout = result.stdout.decode("utf-8", errors="replace")
+            ref = re.escape(f"refs/heads/{branch}")
+            rejected = any(reason in stdout for reason in (
                 "[rejected] (non-fast-forward)", "[rejected] (fetch first)", "[rejected] (stale info)",
-                "[remote rejected] (incorrect old value provided)"))
+                "[remote rejected] (incorrect old value provided)")) or bool(expected and re.search(
+                    rf"^!\t[^\t\r\n]+:{ref}\t\[remote rejected\] \(cannot lock ref '{ref}': "
+                    rf"is at (?:[0-9a-f]{{40}}|[0-9a-f]{{64}}) but expected {re.escape(expected)}\)\r?$",
+                    stdout, re.MULTILINE))
             if not isinstance(failure, Uncertain) and not rejected:
                 raise failure
         try:

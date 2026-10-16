@@ -257,10 +257,11 @@ def doctor(app, workspace):
 
 
 def repair(app, workspace, agent_id, action, request_id, operation_id=None, bridge=None,
-           expected_binding=None, expected_generation=None, expected_checkpoint=None, worker_id=None):
+           expected_binding=None, expected_generation=None, expected_checkpoint=None, worker_id=None,
+           expected_controller=None, expected_session=None, expected_revision=None, cleanup_commit=None):
     """No arbitrary shell, no automatic reset of a native writer or uncertain send."""
-    if action not in ("publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover"):
-        raise Error("Only publication-reconcile, bridge-retry, sync-idle, continue-stop and runtime-recover are repair operations.")
+    if action not in ("publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover", "controller-cleanup"):
+        raise Error("Only publication-reconcile, bridge-retry, sync-idle, continue-stop, runtime-recover and controller-cleanup are repair operations.")
     if action == "publication-reconcile" and not operation_id:
         raise Error("Publication repair requires the original operation_id.")
     if action == "bridge-retry" and not (bridge and expected_binding and expected_generation):
@@ -269,11 +270,17 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
         raise Error("Stop continuation requires the original expected_binding and expected_checkpoint.")
     if action == "runtime-recover" and not expected_binding:
         raise Error("Runtime recovery requires the original expected_binding.")
+    if action == "controller-cleanup" and not all((expected_binding, expected_controller, expected_session,
+                                                  expected_revision, cleanup_commit)):
+        raise Error("Controller cleanup requires the original Binding, controller, session, snapshot revision and cleanup commit.")
     path = folder(app, workspace) / "repairs" / (slug(request_id) + ".json")
     payload = {"agent_id": agent_id, "action": action, "operation_id": operation_id, "bridge": bridge,
                "expected_binding": expected_binding, "expected_generation": expected_generation}
     if action == "continue-stop":
         payload["expected_checkpoint"] = expected_checkpoint
+    if action == "controller-cleanup":
+        payload.update(expected_controller=expected_controller, expected_session=expected_session,
+                       expected_revision=expected_revision, cleanup_commit=cleanup_commit)
     with locked(path.with_suffix(".lock")):
         receipt = read_json(path)
         snap = app.store(workspace).snapshot()
@@ -329,6 +336,8 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
                 raise Conflict("Bridge configuration changed or was disabled; inspect it again.")
         elif action == "runtime-recover":
             app.require_binding(workspace, agent_id, expected_binding, allow_stopping=True)
+        elif action == "controller-cleanup":
+            app.require_binding(workspace, agent_id, expected_binding, worker_id=worker_id)
         elif action == "sync-idle" and app.agent(workspace, agent_id, worker_id=worker_id)["current"]:
             raise Conflict("Sync repair only runs without an active entry; handoff first.")
         write_json(path, receipt)
@@ -349,6 +358,12 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
                 from .backend import recover
                 kwargs = {"worker_id": worker_id} if worker_id is not None else {}
                 result = recover(app, workspace, agent_id, expected_binding=expected_binding, **kwargs)
+            elif action == "controller-cleanup":
+                from .runtime import cleanup_controller
+                kwargs = {"worker_id": worker_id} if worker_id is not None else {}
+                result = cleanup_controller(app, workspace, agent_id, expected_binding=expected_binding,
+                    expected_controller=expected_controller, expected_session=expected_session,
+                    expected_revision=expected_revision, cleanup_commit=cleanup_commit, **kwargs)
             else:
                 # Prevent a local managed writer from entering during the file update.
                 with layout_lock(root, "runner.lock", wait=0, worker_id=worker_id):
@@ -361,7 +376,7 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
             write_json(path, receipt)
             raise
         # Persist the effect before a separate observation can fail or the process exits.
-        receipt.update(state=result["state"] if action == "runtime-recover" else "applied", result=result)
+        receipt.update(state=result["state"] if action in ("runtime-recover", "controller-cleanup") else "applied", result=result)
         write_json(path, receipt)
         return _verify_repair(app, workspace, path, receipt)
 
@@ -369,12 +384,13 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
 def _verify_repair(app, workspace, path, receipt):
     stop_repair = receipt["request"]["action"] == "continue-stop"
     runtime_repair = receipt["request"]["action"] == "runtime-recover"
-    if not (stop_repair or runtime_repair) and (receipt["state"] != "applied"
+    cleanup_repair = receipt["request"]["action"] == "controller-cleanup"
+    if not (stop_repair or runtime_repair or cleanup_repair) and (receipt["state"] != "applied"
             or receipt.get("verification", {}).get("state") not in (None, "unavailable")):
         return receipt
     try:
         receipt["verification"] = doctor(app, workspace)
-        if stop_repair or runtime_repair:
+        if stop_repair or runtime_repair or cleanup_repair:
             # Observe the fixed request, even after a successor owns the instance.
             binding = receipt["request"]["expected_binding"]
             snap = app.store(workspace).snapshot()
@@ -390,7 +406,22 @@ def _verify_repair(app, workspace, path, receipt):
                     observation.update(state="request_changed", phase=entry["phase"])
                 if stop_repair and entry.get("checkpoint") != receipt["request"]["expected_checkpoint"]:
                     observation.update(state="request_changed", phase=entry["phase"])
-            receipt["verification"]["stop" if stop_repair else "runtime"] = observation
+                if cleanup_repair:
+                    controller = entry.get("controller")
+                    current = app.agent(workspace, receipt["request"]["agent_id"], snap, worker_id=actual_worker)["current"]
+                    changed = (expected_worker != actual_worker or current != binding or entry["phase"] != "active"
+                               or entry.get("session") != receipt["request"]["expected_session"]
+                               or controller not in (None, receipt["request"]["expected_controller"]))
+                    if changed:
+                        state = "request_changed"
+                    elif controller:
+                        state = "controller_present"
+                    else:
+                        state = "controller_cleared"
+                    observation.update(state=state, phase=entry["phase"], controller=controller, current_binding=current,
+                                       revision=snap.revision)
+            key = "cleanup" if cleanup_repair else "stop" if stop_repair else "runtime"
+            receipt["verification"][key] = observation
     except (Error, OSError, ValueError, KeyError) as exc:
         receipt["verification"] = {"state": "unavailable", "observed_at": now(),
                                    "error_type": type(exc).__name__}

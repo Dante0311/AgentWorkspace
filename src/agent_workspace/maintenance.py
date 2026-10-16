@@ -10,6 +10,7 @@ from pathlib import Path
 import threading
 import time
 
+from . import workers
 from .layout import expected as expected_layout, local_path, lock as layout_lock, shared_path
 from .util import Conflict, Error, digest, encode, locked, now, read_json, slug, uid, write_json
 
@@ -104,27 +105,47 @@ def doctor(app, workspace):
     locations = app.local()["workspaces"][workspace].get("instances", {})
     def issue(code, agent=None, **fields):
         issues.append({"code": code, **({"agent": agent} if agent else {}), **fields})
+    instances = []
     for path in snap.entries:
         if not path.startswith(agents_prefix) or not path.endswith(".json"):
             continue
         agent = snap.json(path)
-        aid, binding = agent["id"], agent["current"]
+        aid = agent["id"]
+        if workers.enabled(snap, agent):
+            for worker in workers.list_workers(app, workspace, aid, snapshot=snap):
+                instances.append((aid, worker["id"], worker["current"]))
+        else:
+            instances.append((aid, None, agent["current"]))
+    for aid, worker_id, binding in instances:
+        scope = {"worker": worker_id} if worker_id is not None else {}
+        observation_key = f"{aid}#{worker_id}" if worker_id is not None else aid
         entry = snap.json(shared_path(snap, f"bindings/{binding}.json")) if binding else None
         if binding and (not entry or entry.get("agent") != aid or entry.get("phase") == "released"):
-            issue("binding_inconsistent", aid)
+            issue("binding_inconsistent", aid, **scope)
         if not locations.get(aid):
-            remote_agents.append(aid)
+            if aid not in remote_agents:
+                remote_agents.append(aid)
             continue
-        root = Path(locations[aid][0])
-        local_agents.append(aid)
+        execution = entry.get("execution") if entry else None
+        if execution and execution.get("installation_id") != installation_id(app):
+            if aid not in remote_agents:
+                remote_agents.append(aid)
+            continue
+        directory = execution.get("directory") if execution else None
+        root = Path(directory or locations[aid][0])
+        if directory and Path(directory).resolve() not in [Path(value).resolve() for value in locations[aid]]:
+            issue("execution_copy_unobserved", aid, **scope)
+            continue
+        if aid not in local_agents:
+            local_agents.append(aid)
         if not root.is_dir():
-            issue("instance_directory_missing", aid)
+            issue("instance_directory_missing", aid, **scope)
             continue
         try:
-            control = read_json(local_path(root, "control.json"), {})
-            runtime = read_json(local_path(root, "status.json"), {})
-            running = _lock_held(local_path(root, "runner.lock"))
-            watch = read_json(local_path(root, "watch.json"))
+            control = read_json(local_path(root, "control.json", worker_id=worker_id), {})
+            runtime = read_json(local_path(root, "status.json", worker_id=worker_id), {})
+            running = _lock_held(local_path(root, "runner.lock", worker_id=worker_id))
+            watch = read_json(local_path(root, "watch.json", worker_id=worker_id))
             if watch is None:
                 watch_state = "not_configured"
             elif not watch.get("enabled"):
@@ -132,59 +153,67 @@ def doctor(app, workspace):
             else:
                 watch_state = "enabled" if binding and watch.get("binding") == binding else "binding_mismatch"
             monitor_stopped = bool(binding and control.get("stop") == binding)
-            observations[aid] = {
+            observations[observation_key] = {
                 "binding": binding, "phase": entry.get("phase") if entry else None,
                 "runner_observed": running, "monitor_stop_requested": monitor_stopped,
                 "runtime": runtime if binding and runtime.get("binding") == binding else None,
                 "watch": {**(watch or {}), "state": watch_state},
+                **scope,
             }
             if binding and entry and entry["kind"] != "manual":
                 if entry["phase"] == "stopping" and not running:
-                    issue("stop_confirmation_not_observed", aid, binding=binding,
+                    issue("stop_confirmation_not_observed", aid, **scope, binding=binding,
                           checkpoint=entry.get("checkpoint"))
                 elif not running and not monitor_stopped:
-                    issue("runner_not_observed", aid, binding=binding,
+                    issue("runner_not_observed", aid, **scope, binding=binding,
                           controller_present=bool(entry.get("controller")))
                 if runtime.get("binding") == binding:
                     state = runtime.get("state")
                     if state in ("failed", "connection_failed", "native_stop_unconfirmed"):
-                        issue("runtime_fault", aid, state=state)
+                        issue("runtime_fault", aid, **scope, state=state)
                     elif state == "shared_read_backoff":
-                        issue("runtime_shared_read_backoff", aid, binding=binding)
+                        issue("runtime_shared_read_backoff", aid, **scope, binding=binding)
                     elif state == "stop_observation_unknown":
-                        issue("stop_observation_unknown", aid, binding=binding,
+                        issue("stop_observation_unknown", aid, **scope, binding=binding,
                               checkpoint=entry.get("checkpoint"))
-            for p in local_path(root, "inputs").glob("*.json"):
+            for p in local_path(root, "inputs", worker_id=worker_id).glob("*.json"):
                 record = read_json(p)
                 if record["state"] in ("dispatching", "outcome_unknown"):
-                    issue("input_outcome_unknown", aid, operation=record["id"])
+                    issue("input_outcome_unknown", aid, **scope, operation=record["id"])
                 if (record.get("binding") == binding and record.get("purpose") == "initial"
                         and record["state"] == "completed" and not record.get("checkpoint_revision")):
-                    issue("initial_checkpoint_pending", aid, operation=record["id"])
-            for p in local_path(root, "bridges").glob("*.json"):
+                    issue("initial_checkpoint_pending", aid, **scope, operation=record["id"])
+            for p in local_path(root, "bridges", worker_id=worker_id).glob("*.json"):
                 config = read_json(p)
                 if config.get("enabled"):
                     state = read_json(p.parent / "status" / p.name, {})
                     if state.get("fatal") or state.get("state") in ("failed", "error", "disconnected"):
-                        issue("bridge_fault", aid, binding=binding, bridge=p.stem, generation=config["generation"])
-            transfer = read_json(local_path(root, "transfer.json"))
+                        issue("bridge_fault", aid, **scope, binding=binding, bridge=p.stem, generation=config["generation"])
+            transfer = read_json(local_path(root, "transfer.json", worker_id=worker_id))
             if transfer:
                 if entry and binding == transfer["target_binding"]:
                     from .transfer import observed_target
                     transfer = observed_target(transfer, entry, root)
                 if transfer["state"] != "completed":
-                    issue("transfer_pending", aid, operation=transfer["id"], state=transfer["state"])
+                    issue("transfer_pending", aid, **scope, operation=transfer["id"], state=transfer["state"])
         except (OSError, ValueError, KeyError) as exc:
             # One damaged local record must not hide the health of other instances.
-            issue("local_observation_failed", aid, error_type=type(exc).__name__)
-            observations[aid] = {"binding": binding, "state": "unavailable", "error_type": type(exc).__name__}
+            issue("local_observation_failed", aid, **scope, error_type=type(exc).__name__)
+            observations[observation_key] = {"binding": binding, "state": "unavailable", "error_type": type(exc).__name__, **scope}
     for p in (app.home / "operations").glob("*.json"):
         try:
             receipt = read_json(p)
             if receipt.get("workspace") == workspace and receipt.get("state") != "published":
-                issue("publication_pending", receipt.get("sender") or receipt.get("receiver"), operation=receipt["id"],
-                      state=receipt.get("state", "pending"))
-        except (OSError, ValueError, KeyError) as exc:
+                receipt_worker = receipt.get("sender_worker") or receipt.get("receiver_worker")
+                actor = receipt.get("sender") or receipt.get("receiver")
+                if receipt_worker is None and actor and receipt.get("binding"):
+                    original_entry = snap.json(shared_path(snap, f"bindings/{receipt['binding']}.json"))
+                    if original_entry is not None:
+                        receipt_worker = workers.binding_worker(app, workspace, actor, original_entry, snap)
+                scope = {"worker": receipt_worker} if receipt_worker is not None else {}
+                issue("publication_pending", actor, operation=receipt["id"],
+                      state=receipt.get("state", "pending"), **scope)
+        except (Error, OSError, ValueError, KeyError) as exc:
             issue("publication_record_unreadable", operation=p.stem,
                   scope="installation; workspace ownership unconfirmed", error_type=type(exc).__name__)
     waiting = {}
@@ -193,14 +222,16 @@ def doctor(app, workspace):
         if path.startswith(index_prefix):
             item = snap.json(path)
             if shared_path(snap, f"acks/{item['id']}.json") not in snap.entries and item["to"]["workspace"] == meta["locator"]:
-                aid = item["to"]["agent"]
-                waiting[aid] = waiting.get(aid, 0) + 1
+                from .messages import Messages
+                endpoint = Messages(app)._address(workspace, snap, item["to"], item["id"])
+                key = f"{endpoint['agent']}#{endpoint['worker']}" if endpoint.get("worker") is not None else endpoint["agent"]
+                waiting[key] = waiting.get(key, 0) + 1
     monitoring = _schedule_observation(app, workspace, snap.json(shared_path(snap, "maintenance/schedule.json")))
     if monitoring["state"] == "worker_not_observed":
         issue("maintenance_worker_not_observed")
     elif monitoring["state"] == "unavailable":
         issue("maintenance_observation_failed", error_type=monitoring["error_type"])
-    issues.sort(key=lambda item: (item["code"], item.get("agent", ""), item.get("operation", ""), item.get("bridge", "")))
+    issues.sort(key=lambda item: (item["code"], item.get("agent", ""), item.get("worker", ""), item.get("operation", ""), item.get("bridge", "")))
     partial = bool(remote_agents) or monitoring["state"] == "not_owned"
     return {"state": "degraded" if issues else "partial" if partial else "healthy", "observed_at": observed,
             "revision": snap.revision, "issues": issues, "unacknowledged_notifications": waiting,
@@ -209,7 +240,7 @@ def doctor(app, workspace):
 
 
 def repair(app, workspace, agent_id, action, request_id, operation_id=None, bridge=None,
-           expected_binding=None, expected_generation=None, expected_checkpoint=None):
+           expected_binding=None, expected_generation=None, expected_checkpoint=None, worker_id=None):
     """No arbitrary shell, no automatic reset of a native writer or uncertain send."""
     if action not in ("publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover"):
         raise Error("Only publication-reconcile, bridge-retry, sync-idle, continue-stop and runtime-recover are repair operations.")
@@ -221,7 +252,6 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
         raise Error("Stop continuation requires the original expected_binding and expected_checkpoint.")
     if action == "runtime-recover" and not expected_binding:
         raise Error("Runtime recovery requires the original expected_binding.")
-    root = app.root(workspace, agent_id)
     path = folder(app, workspace) / "repairs" / (slug(request_id) + ".json")
     payload = {"agent_id": agent_id, "action": action, "operation_id": operation_id, "bridge": bridge,
                "expected_binding": expected_binding, "expected_generation": expected_generation}
@@ -229,10 +259,44 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
         payload["expected_checkpoint"] = expected_checkpoint
     with locked(path.with_suffix(".lock")):
         receipt = read_json(path)
+        snap = app.store(workspace).snapshot()
+        agent = workers.agent_record(snap, agent_id)
+        if receipt and "worker_id" in receipt["request"]:
+            selected = receipt["request"]["worker_id"]
+            if worker_id is not None and worker_id != selected:
+                raise Conflict("Repair request ID belongs to a different Worker.")
+            worker_id = selected
+        elif workers.enabled(snap, agent):
+            original_binding = expected_binding
+            if action == "publication-reconcile":
+                publication = read_json(app.home / "operations" / (slug(operation_id) + ".json"))
+                if not publication or publication["workspace"] != workspace or (publication.get("sender") or publication.get("receiver")) != agent_id:
+                    raise Error("Publication receipt is not owned by the selected workspace and instance.")
+                original_binding = publication["binding"]
+            if original_binding:
+                entry = snap.json(shared_path(snap, f"bindings/{original_binding}.json"))
+                if entry is None or entry["agent"] != agent_id:
+                    raise Conflict("The original repair Binding belongs to another target.")
+                selected = workers.binding_worker(app, workspace, agent_id, entry, snap)
+                if worker_id is not None and worker_id != selected:
+                    raise Conflict("Repair target does not match the original Binding's Worker.")
+                worker_id = selected
+            elif receipt:
+                worker_id = app.legacy_worker(workspace, agent_id, "local_operations", request_id, snapshot=snap)
+            else:
+                worker_id = app.worker(workspace, agent_id, worker_id, snapshot=snap)["id"]
+        elif worker_id is not None:
+            raise Error("The selected Agent has not enabled Workers.")
+        if worker_id is not None:
+            payload["worker_id"] = worker_id
         if receipt:
+            if "worker_id" not in receipt["request"]:
+                # An explicitly mapped old receipt remains unchanged; only its observation is updated.
+                payload.pop("worker_id", None)
             if receipt["request"] != payload:
                 raise Conflict("Repair request ID belongs to a different action.")
             return _verify_repair(app, workspace, path, receipt)
+        root = app.root(workspace, agent_id)
         receipt = {"id": request_id, "request": payload, "state": "attempting", "created_at": now()}
         if action == "publication-reconcile":
             source = read_json(app.home / "operations" / (slug(operation_id) + ".json"))
@@ -240,15 +304,15 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
                 raise Error("Publication receipt is not owned by the selected workspace and instance.")
         elif action == "bridge-retry":
             app.require_binding(workspace, agent_id, expected_binding)
-            control = read_json(local_path(root, "control.json"), {})
+            control = read_json(local_path(root, "control.json", worker_id=worker_id), {})
             if control.get("stop") == expected_binding or control.get("handoff") == expected_binding:
                 raise Conflict("An intentionally stopped entry cannot be restarted by maintenance.")
-            config = read_json(local_path(root, f"bridges/{slug(bridge)}.json"))
+            config = read_json(local_path(root, f"bridges/{slug(bridge)}.json", worker_id=worker_id))
             if not config or not config.get("enabled") or config["generation"] != expected_generation:
                 raise Conflict("Bridge configuration changed or was disabled; inspect it again.")
         elif action == "runtime-recover":
             app.require_binding(workspace, agent_id, expected_binding, allow_stopping=True)
-        elif action == "sync-idle" and app.agent(workspace, agent_id)["current"]:
+        elif action == "sync-idle" and app.agent(workspace, agent_id, worker_id=worker_id)["current"]:
             raise Conflict("Sync repair only runs without an active entry; handoff first.")
         write_json(path, receipt)
         try:
@@ -257,20 +321,24 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
                 result = Messages(app).reconcile(operation_id)
             elif action == "bridge-retry":
                 from .bridges import configure
-                result = configure(app, workspace, agent_id, bridge, config, expected_generation=expected_generation)
+                kwargs = {"worker_id": worker_id} if worker_id is not None else {}
+                result = configure(app, workspace, agent_id, bridge, config, expected_generation=expected_generation, **kwargs)
             elif action == "continue-stop":
                 from .runtime import continue_stop
+                kwargs = {"worker_id": worker_id} if worker_id is not None else {}
                 result = continue_stop(app, workspace, agent_id, expected_binding,
-                                       expected_checkpoint=expected_checkpoint)
+                                       expected_checkpoint=expected_checkpoint, **kwargs)
             elif action == "runtime-recover":
                 from .backend import recover
-                result = recover(app, workspace, agent_id, expected_binding=expected_binding)
+                kwargs = {"worker_id": worker_id} if worker_id is not None else {}
+                result = recover(app, workspace, agent_id, expected_binding=expected_binding, **kwargs)
             else:
                 # Prevent a local managed writer from entering during the file update.
-                with layout_lock(root, "runner.lock", wait=0):
-                    if app.agent(workspace, agent_id)["current"]:
+                with layout_lock(root, "runner.lock", wait=0, worker_id=worker_id):
+                    if app.agent(workspace, agent_id, worker_id=worker_id)["current"]:
                         raise Conflict("An entry was acquired before sync repair; no files were changed.")
-                    result = app.sync_agent(workspace, agent_id)
+                    kwargs = {"worker_id": worker_id} if worker_id is not None else {}
+                    result = app.sync_agent(workspace, agent_id, **kwargs)
         except (Error, OSError, ValueError, KeyError) as exc:
             receipt.update(state="outcome_unknown", error_type=type(exc).__name__)
             write_json(path, receipt)
@@ -297,6 +365,12 @@ def _verify_repair(app, workspace, path, receipt):
             observation = {"binding": binding, "state": "not_observed", "observed_at": now()}
             if entry and entry["agent"] == receipt["request"]["agent_id"]:
                 observation.update(state=entry["phase"], checkpoint=entry.get("checkpoint"), session=entry.get("session"))
+                actual_worker = workers.binding_worker(app, workspace, entry["agent"], entry, snap)
+                expected_worker = receipt["request"].get("worker_id", actual_worker)
+                if actual_worker is not None:
+                    observation["worker"] = actual_worker
+                if expected_worker != actual_worker:
+                    observation.update(state="request_changed", phase=entry["phase"])
                 if stop_repair and entry.get("checkpoint") != receipt["request"]["expected_checkpoint"]:
                     observation.update(state="request_changed", phase=entry["phase"])
             receipt["verification"]["stop" if stop_repair else "runtime"] = observation
@@ -371,11 +445,15 @@ def tick(app, workspace):
             run.pop("notice", None)
         elif config["notify"]:
             sentinel = snap.json(shared_path(snap, "workspace.json")).get("caretakers", {}).get("sentinel")
-            binding = app.agent(workspace, sentinel)["current"] if sentinel else None
+            selected = app.agent(workspace, sentinel) if sentinel else None
+            binding = selected["current"] if selected else None
+            worker_id = selected.get("worker_id") if selected else None
             notice = run.get("notice", {})
             if (notice.get("fingerprint"), notice.get("binding")) != (fingerprint, binding):
                 run["notice"] = {"id": uid("health-"), "fingerprint": fingerprint,
                                  "agent": sentinel, "binding": binding, "state": "pending"}
+                if worker_id is not None:
+                    run["notice"]["worker"] = worker_id
             write_json(root / "run.json", run)
             if sentinel and binding and run["notice"]["state"] == "pending":
                 # A user may disable/move the schedule while diagnostics are running.
@@ -386,10 +464,11 @@ def tick(app, workspace):
                 from .runtime import queue_input
                 try:
                     app.require_binding(workspace, sentinel, binding)
+                    kwargs = {"worker_id": worker_id} if worker_id is not None else {}
                     queue_input(app, workspace, sentinel,
                                 "Workspace 巡检发现异常。读取 maintenance.status；需要诊断时发送 Message 给登记的 Maintainer。"
                                 "只在授权范围内修复；禁止重放不明业务。",
-                                purpose="maintenance", request_id=run["notice"]["id"], expected_binding=binding)
+                                purpose="maintenance", request_id=run["notice"]["id"], expected_binding=binding, **kwargs)
                 except Conflict as exc:
                     # A model notification is optional; retain the completed check and original request.
                     run["notice"]["unavailable_reason"] = str(exc)
@@ -415,7 +494,11 @@ def status(app, workspace):
         notice["input_state"] = "not_observed"
         if locations:
             try:
-                path = local_path(Path(locations[0]), f"inputs/{slug(notice['id'])}.json")
+                entry = snap.json(shared_path(snap, f"bindings/{notice['binding']}.json"))
+                worker_id = workers.binding_worker(app, workspace, sentinel, entry, snap) if entry else notice.get("worker")
+                execution = entry.get("execution") if entry else None
+                directory = execution.get("directory") if execution else None
+                path = local_path(Path(directory or locations[0]), f"inputs/{slug(notice['id'])}.json", worker_id=worker_id)
                 record = read_json(path)
                 if (record and record["id"] == notice["id"] and record["binding"] == notice["binding"]
                         and record["purpose"] == "maintenance"):

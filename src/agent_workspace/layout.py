@@ -10,10 +10,11 @@ from .util import Conflict, Error, digest, encode, locked, read_json
 
 
 VERSION = 1
+WORKER_VERSION = 2
 MARKER = '.agentworkspace/layout.json'
 SHARED_ROOTS = frozenset(('agents', 'bindings', 'sessions', 'handoffs', 'checkpoints',
                          'messages', 'acks', 'message-index', 'dispatch', 'direct-messages',
-                         'work', 'maintenance', 'migrations'))
+                         'work', 'maintenance', 'migrations', 'workers', 'worker-mappings'))
 INSTANCE_ROOT_FILES = {'source.json': 'source.json', 'config.json': 'runtime.json'}
 LOCAL_OPERATIONS = frozenset(('context.json', 'launch.json', 'input-sequence.json',
                              'inputs', 'checkpoint-operations', 'fork-operations',
@@ -36,10 +37,12 @@ def _relative(name):
     return path.as_posix() + ('/' if name.endswith('/') else '')
 
 
-def marker(kind, **facts):
+def marker(kind, *, version=VERSION, **facts):
     if kind not in ('workspace', 'instance'):
         raise Error('Unknown layout kind.')
-    return encode({**facts, 'version': VERSION, 'kind': kind})
+    if version not in (VERSION, WORKER_VERSION):
+        raise Error('Unsupported data layout version.')
+    return encode({**facts, 'version': version, 'kind': kind})
 
 
 def version(source, kind):
@@ -57,11 +60,11 @@ def version(source, kind):
         return 0
     if not isinstance(value, dict) or value.get('kind') != kind or type(value.get('version')) is not int:
         raise Error('Invalid data layout marker.')
-    if value['version'] != VERSION:
+    if value['version'] not in (VERSION, WORKER_VERSION):
         raise Error(f"Unsupported {kind} layout version: {value['version']}")
     if value.get('state', 'ready') != 'ready':
         raise MigrationRequired('Finish the original layout migration before accessing this copy.')
-    return VERSION
+    return value['version']
 
 
 def shared_path(snapshot, name):
@@ -76,8 +79,13 @@ def expected(snapshot, objects):
     return {**objects, MARKER: snapshot.entries.get(MARKER)}
 
 
-def instance_relpath(source, name):
+def instance_relpath(source, name, worker_id=None):
     name = _relative(name)
+    if worker_id is not None:
+        from .util import slug
+        if version(source, 'instance') != WORKER_VERSION:
+            raise MigrationRequired('Explicitly migrate this instance before using Worker paths.')
+        return f'.agentworkspace/workers/{slug(worker_id)}/{name}'
     if name.split('/')[0] in ('local', 'layout.json'):
         raise Error('Use local_path for local state; layout metadata belongs to the migration.')
     if version(source, 'instance'):
@@ -91,8 +99,8 @@ def instance_relpath(source, name):
     return f'.aw/{name}'
 
 
-def instance_path(root, name):
-    return Path(root) / instance_relpath(root, name)
+def instance_path(root, name, worker_id=None):
+    return Path(root) / instance_relpath(root, name, worker_id)
 
 
 def local_relpath(name):
@@ -108,20 +116,25 @@ def local_relpath(name):
     return f'runtime/{name}'
 
 
-def local_path(root, name):
+def local_path(root, name, worker_id=None):
     name = _relative(name)
+    if worker_id is not None:
+        from .util import slug
+        if version(root, 'instance') != WORKER_VERSION:
+            raise MigrationRequired('Explicitly migrate this copy before using Worker runtime paths.')
+        return Path(root) / '.agentworkspace/local/workers' / slug(worker_id) / local_relpath(name)
     if version(root, 'instance'):
         return Path(root) / '.agentworkspace/local' / local_relpath(name)
     return Path(root) / '.aw-local' / name
 
 
 @contextmanager
-def lock(root, name, *, wait=30):
+def lock(root, name, *, wait=30, worker_id=None):
     """Recheck the layout after waiting so an old waiter joins the current mutex."""
     while True:
-        path = local_path(root, name)
+        path = local_path(root, name, worker_id)
         with locked(path, wait=wait):
-            if local_path(root, name) != path:
+            if local_path(root, name, worker_id) != path:
                 continue
             yield
             return

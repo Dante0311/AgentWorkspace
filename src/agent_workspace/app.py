@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 
-from . import instance_worktrees, migration, skills as shared_skills, software
+from . import instance_worktrees, migration, skills as shared_skills, software, workers
 from .gitstore import GitStore, GitHubStore, open_store
 from . import model_profiles
 from . import layout
@@ -44,13 +44,13 @@ class App:
             self._stores[address] = open_store(address, self.home)
         return self._stores[address]
 
-    def workspace_init(self, name, directory):
+    def workspace_init(self, name, directory, *, worker_support=True):
         slug(name)
         path = Path(directory).expanduser().resolve()
         GitStore.initialize(path)
         store = open_store(str(path), self.home)
         meta = {"schema": 1, "name": name, "locator": "local:" + name, "friends": {}, "projects": {}}
-        store.branch("main", {layout.MARKER: layout.marker('workspace'),
+        store.branch("main", {layout.MARKER: layout.marker('workspace', version=layout.WORKER_VERSION if worker_support else layout.VERSION),
                               '.agentworkspace/workspace.json': encode(meta)})
         return self.workspace_connect(name, str(path))
 
@@ -73,7 +73,7 @@ class App:
         self.change_local(edit)
         return {"name": name, "locator": meta["locator"], "address": address, "revision": snap.revision}
 
-    def workspace_bootstrap_remote(self, name, address):
+    def workspace_bootstrap_remote(self, name, address, *, worker_support=True):
         """Initialize only an already-created empty remote repo, never create a GitHub account resource."""
         slug(name)
         store = open_store(address, self.home)
@@ -81,9 +81,9 @@ class App:
             raise Conflict("Remote main exists; initialization must not overwrite it.")
         meta = {"schema": 1, "name": name, "locator": address, "friends": {}, "projects": {}}
         if isinstance(store, GitHubStore):
-            store.bootstrap(meta)
+            store.bootstrap(meta, layout_version=layout.WORKER_VERSION if worker_support else layout.VERSION)
         else:
-            store.branch("main", {layout.MARKER: layout.marker('workspace'),
+            store.branch("main", {layout.MARKER: layout.marker('workspace', version=layout.WORKER_VERSION if worker_support else layout.VERSION),
                                   '.agentworkspace/workspace.json': encode(meta)})
         return self.workspace_connect(name, address)
 
@@ -163,33 +163,81 @@ class App:
             raise Error("The other workspace has not registered this workspace as a friend.")
         return store, other
 
-    def agent(self, workspace, agent_id, snapshot=None):
+    def agent(self, workspace, agent_id, snapshot=None, worker_id=None):
         slug(agent_id)
         snap = snapshot or self.store(workspace).snapshot()
         item = snap.json(layout.shared_path(snap, f"agents/{agent_id}.json"))
         if item is None:
             raise Error(f"Unknown agent {agent_id} in {workspace}.")
+        if workers.enabled(snap, item):
+            worker = self.worker(workspace, agent_id, worker_id, snapshot=snap)
+            return {**item, 'worker_id': worker['id'], 'worker': worker,
+                    'current': worker['current'], 'has_run': worker['has_run'], 'handoff': worker['handoff']}
+        if worker_id is not None:
+            raise layout.MigrationRequired('Explicitly migrate this Agent before selecting a Worker.')
         return item
+
+    def worker(self, workspace, agent_id, worker_id=None, snapshot=None):
+        return workers.get(self, workspace, agent_id, worker_id, snapshot)
+
+    def workers(self, workspace, agent_id, archived=None, snapshot=None):
+        return workers.list_workers(self, workspace, agent_id, archived, snapshot)
+
+    def worker_create(self, workspace, agent_id, name, description='', worker_id=None, background='', references=None, binding=None, request_id=None):
+        return workers.create(self, workspace, agent_id, name, description, worker_id, background, references, binding, request_id)
+
+    def worker_update(self, workspace, agent_id, worker_id, revision, **changes):
+        return workers.update(self, workspace, agent_id, worker_id, revision, **changes)
+
+    def worker_default(self, workspace, agent_id, worker_id, revision):
+        return workers.set_default(self, workspace, agent_id, worker_id, revision)
+
+    def worker_archive(self, workspace, agent_id, worker_id, archived=True):
+        return workers.archive(self, workspace, agent_id, worker_id, archived)
+
+    def legacy_worker(self, workspace, agent_id, kind, identifier, snapshot=None):
+        return workers.legacy_worker(self, workspace, agent_id, kind, identifier, snapshot)
+
+    def binding_worker(self, workspace, agent_id, entry, snapshot=None):
+        return workers.binding_worker(self, workspace, agent_id, entry, snapshot or self.store(workspace).snapshot())
+
+    def workers_migrate(self, workspace, agent_id, worker_id, request_id, **options):
+        return migration.workers_migrate(self, workspace, agent_id, worker_id, request_id, **options)
 
     def agents(self, workspace, archived=None, *, snapshot=None):
         snap = snapshot or self.store(workspace).snapshot()
-        items = [snap.json(p) for p in snap.entries if p.startswith(layout.shared_path(snap, "agents/")) and p.endswith(".json")]
+        items = [self.agent(workspace, snap.json(p)['id'], snap) for p in snap.entries
+                 if p.startswith(layout.shared_path(snap, "agents/")) and p.endswith(".json")]
         return [a for a in items if archived is None or a["archived"] == archived]
 
-    def require_binding(self, workspace, agent_id, binding, *, allow_stopping=False, snapshot=None):
+    def require_binding(self, workspace, agent_id, binding, *, allow_stopping=False, snapshot=None, worker_id=None):
         snap = snapshot or self.store(workspace).snapshot()
-        agent = self.agent(workspace, agent_id, snap)
-        if not binding or agent["current"] != binding or agent["archived"]:
+        if not binding:
             raise Conflict("This is not the agent's current execution entry. Do not resume an old session.")
         entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
         if not isinstance(entry, dict) or entry.get("id") != binding or entry.get("agent") != agent_id:
             raise Error("Binding record does not belong to this execution entry.")
+        actual_worker = self.binding_worker(workspace, agent_id, entry, snap)
+        if worker_id is not None and actual_worker != worker_id:
+            raise Conflict('Binding belongs to another Worker; the Agent ID does not grant its execution rights.')
+        agent = self.agent(workspace, agent_id, snap, worker_id=actual_worker)
+        if not binding or agent['current'] != binding or agent['archived'] or agent.get('worker', {}).get('archived'):
+            raise Conflict("This is not the agent's current execution entry. Do not resume an old session.")
         if entry["phase"] != "active" and not (allow_stopping and entry["phase"] == "stopping"):
             raise Conflict(f"Entry is {entry['phase']}; it cannot perform this operation.")
         return agent, entry
 
     def _resources(self, root=None):
         return layout.resource_files(root)
+
+    def _registration(self, snap, item):
+        path = layout.shared_path(snap, f"agents/{item['id']}.json")
+        changes = {path: encode(item)}
+        if item.get('worker_schema') == 1:
+            worker = workers.record(item['id'], item['default_worker'], '日常工作', item['description'] or '本 Agent 的日常工作')
+            worker['created_at'] = item['created_at']
+            changes[workers.path(snap, item['id'], item['default_worker'])] = encode(worker)
+        return changes
 
     def _definition(self, workspace, definition, revision=None, *, root=None):
         prefix = relpath(definition).rstrip("/")
@@ -244,8 +292,8 @@ class App:
                         or identity != {"workspace": snap.json(layout.shared_path(snap, "workspace.json"))["locator"], "agent": agent_id}):
                     raise Conflict("Existing branch does not belong to this creation request.")
                 # Resume only registration of this exact saved creation; never replace assets.
-                store.change("main", {layout.shared_path(snap, f"agents/{agent_id}.json"): encode(saved)},
-                             layout.expected(snap, {layout.shared_path(snap, f"agents/{agent_id}.json"): None}), f"Register {agent_id}")
+                changes = self._registration(snap, saved)
+                store.change("main", changes, layout.expected(snap, {p: None for p in changes}), f"Register {agent_id}")
                 return {**saved, **self.connect_agent(workspace, agent_id, location_target)}
         content = self._resources()
         content[layout.MARKER] = layout.marker('instance')
@@ -275,12 +323,18 @@ class App:
         item = {"id": agent_id, "name": name, "description": description, "branch": branch,
                 "archived": False, "current": None, "has_run": False, "handoff": None,
                 "created_at": now()}
+        if layout.version(snap, 'workspace') == layout.WORKER_VERSION:
+            item.update(worker_schema=1, default_worker='default')
+            for key in ('current', 'has_run', 'handoff'):
+                item.pop(key)
+            content[layout.MARKER] = layout.marker('instance', version=layout.WORKER_VERSION)
         if creation is not None:
             item["creation"] = creation
             content[layout.instance_relpath(content, "creation.json")] = encode(item)
         layout.add_git_excludes(content)
         sha = store.branch(branch, content)
-        store.change("main", {layout.shared_path(snap, f"agents/{agent_id}.json"): encode(item)}, layout.expected(snap, {layout.shared_path(snap, f"agents/{agent_id}.json"): None}),
+        registration = self._registration(snap, item)
+        store.change("main", registration, layout.expected(snap, {p: None for p in registration}),
                      f"Register {agent_id}")
         try:
             location = self.connect_agent(workspace, agent_id, location_target)
@@ -370,10 +424,12 @@ class App:
             software.update_instance(self, workspace, agent_id, str(root))
         return result
 
-    def collect(self, root):
+    def collect(self, root, worker_id=None, shared_paths=None):
         software.require_ready(root)
         if (layout.local_path(root, "skill-install/operation.json")).exists():
             raise Conflict("Finish or recover the pending Skill update before taking a snapshot.")
+        if worker_id is not None:
+            return workers.collect(self, root, worker_id, shared_paths)
         context = read_json(layout.local_path(root, "context.json"))
         excludes = context["exclude"]
         content, skipped = {}, []
@@ -408,8 +464,11 @@ class App:
         if any(local_asset_path(path) for path in snapshot.entries):
             raise Error('Local runtime data is already tracked; migrate it explicitly before saving or syncing.')
 
-    def sync_agent(self, workspace, agent_id, directory=None):
+    def sync_agent(self, workspace, agent_id, directory=None, worker_id=None, shared_paths=None):
         root = Path(self.prepare_agent_directory(workspace, agent_id, directory)['directory'])
+        item = self.agent(workspace, agent_id, worker_id=worker_id)
+        if item.get('worker_id') is not None:
+            return workers.sync(self, workspace, agent_id, root, item['worker_id'], shared_paths)
         with layout.lock(root, "files.lock"):
             context = read_json(layout.local_path(root, "context.json"))
             local, _ = self.collect(root)
@@ -457,7 +516,11 @@ class App:
             write_json(layout.local_path(root, "context.json"), context)
             return {"revision": snap.revision, "directory": str(root)}
 
-    def _save_files(self, workspace, agent_id, root, extra=None, message="Save instance assets"):
+    def _save_files(self, workspace, agent_id, root, extra=None, message="Save instance assets", worker_id=None, shared_paths=None):
+        if layout.version(root, 'instance') == layout.WORKER_VERSION:
+            if worker_id is None:
+                raise Error('Worker saves require an explicit execution scope and common file selection.')
+            return workers.save_files(self, workspace, agent_id, root, worker_id, extra, message, shared_paths)
         context = read_json(layout.local_path(root, "context.json"))
         content, skipped = self.collect(root)
         content.update(extra or {})
@@ -496,8 +559,11 @@ class App:
         return sha, skipped
 
     def checkpoint(self, workspace, agent_id, summary, content="", binding=None, directory=None,
-                   checkpoint_id=None, references=None):
-        item = self.agent(workspace, agent_id)
+                   checkpoint_id=None, references=None, worker_id=None, shared_paths=None):
+        item = self.agent(workspace, agent_id, worker_id=worker_id)
+        if item.get('worker_id') is not None:
+            return workers.checkpoint(self, workspace, agent_id, summary, content, binding, directory,
+                                      checkpoint_id, references, worker_id, shared_paths)
         entry = None
         if item["current"] or binding:
             item, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True)
@@ -542,25 +608,49 @@ class App:
             store.change("main", {index: encode(pointer)}, layout.expected(snap, {index: None}), f"Register checkpoint {cp}")
         return pointer
 
-    def checkpoints(self, workspace, agent_id):
+    def checkpoints(self, workspace, agent_id, worker_id=None):
         snap = self.store(workspace).snapshot()
-        return sorted([snap.json(p) for p in snap.entries if p.startswith(layout.shared_path(snap, f"checkpoints/{agent_id}/"))],
+        agent = self.agent(workspace, agent_id, snap, worker_id=worker_id)
+        worker_id = agent.get('worker_id')
+        prefix = layout.shared_path(snap, f"checkpoints/{agent_id}/")
+        selected = []
+        for path in snap.entries:
+            if not path.startswith(prefix):
+                continue
+            point = snap.json(path)
+            if worker_id is not None:
+                owner = point.get('worker') or self.legacy_worker(workspace, agent_id, 'checkpoints', point['id'], snap)
+                if owner != worker_id:
+                    continue
+            selected.append(point)
+        return sorted(selected,
                       key=lambda p: p["created_at"])
 
-    def checkpoint_show(self, workspace, agent_id, checkpoint):
+    def checkpoint_show(self, workspace, agent_id, checkpoint, worker_id=None):
         store = self.store(workspace)
-        return self._read_checkpoint(store, store.snapshot(), agent_id, checkpoint)
+        snap = store.snapshot()
+        item = self.agent(workspace, agent_id, snap, worker_id=worker_id)
+        return self._read_checkpoint(store, snap, agent_id, checkpoint, item.get('worker_id'))
 
-    def _read_checkpoint(self, store, shared, agent_id, checkpoint):
+    def _read_checkpoint(self, store, shared, agent_id, checkpoint, worker_id=None):
         checkpoint = slug(checkpoint)
-        pointer = shared.json(layout.shared_path(shared, f"checkpoints/{agent_id}/{checkpoint}.json"))
+        pointer = shared.json(workers.checkpoint_index(shared, agent_id, checkpoint, worker_id))
+        if pointer is None and worker_id is not None:
+            legacy = shared.json(workers.checkpoint_index(shared, agent_id, checkpoint))
+            if legacy is not None:
+                mapping = shared.json(layout.shared_path(shared, f'worker-mappings/{agent_id}.json'), {})
+                if mapping.get('checkpoints', {}).get(checkpoint) != worker_id:
+                    raise Conflict('This legacy checkpoint belongs to another or unmapped Worker.')
+                pointer = legacy
         if pointer is None:
             raise Error("Unknown saved checkpoint.")
         if (not isinstance(pointer, dict) or pointer.get("id") != checkpoint or pointer.get("agent") != agent_id
                 or not pointer.get("revision")):
             raise Error("Saved checkpoint reference does not match this instance and checkpoint.")
         snap = store.snapshot(revision=pointer["revision"])
-        if pointer.get('path') != layout.instance_relpath(snap, f'checkpoints/{checkpoint}.json'):
+        if pointer.get('worker') is not None and pointer['worker'] != worker_id:
+            raise Conflict('Checkpoint belongs to another Worker.')
+        if pointer.get('path') != layout.instance_relpath(snap, f'checkpoints/{checkpoint}.json', pointer.get('worker')):
             raise Error('Saved checkpoint path does not match its original layout.')
         identity = snap.json(layout.instance_relpath(snap, "identity.json"))
         if (not isinstance(identity, dict) or identity.get("agent") != agent_id
@@ -569,18 +659,42 @@ class App:
         record = snap.json(pointer["path"])
         if not isinstance(record, dict) or record.get("id") != checkpoint:
             raise Error("Saved checkpoint material is missing or does not match its reference.")
-        return {**pointer, "record": record, "files": list(snap.entries)}
+        if pointer.get('worker') is not None and (record.get('worker') != worker_id or record.get('origin', {}).get('worker') != worker_id):
+            raise Error('Worker checkpoint content and its immutable reference disagree about ownership.')
+        return {**pointer, "record": record, "files": pointer.get('material_paths', list(snap.entries))}
 
-    def fork(self, workspace, agent_id, checkpoint, name, new_id=None, directory=None, *, resume=False):
-        point = self.checkpoint_show(workspace, agent_id, checkpoint)
+    def _fork_files(self, store, source, point, shared, agent_id):
+        if point.get('worker') is None:
+            source_files = source.all()
+            owned = migration.owned_instance_files(source_files, shared, agent_id)
+            return migration.instance_files(source_files, owned=owned)[0]
+        result = {}
+        for path, sha in point['record']['common_versions'].items():
+            relpath(path)
+            if not re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', sha) or path.startswith(('workers/', '.agentworkspace/workers/')):
+                raise Error('Fork common-material references do not match the saved checkpoint.')
+            result[path] = store.blob(sha)
+        for path in point['material_paths']:
+            if not workers.owns(path, point['worker']):
+                # These common files were explicitly selected in this checkpoint.
+                if path.startswith(('workers/', '.agentworkspace/workers/')):
+                    raise Error('Fork checkpoint includes another Worker material scope.')
+            result[path] = source.bytes(path)
+        return result
+
+    def fork(self, workspace, agent_id, checkpoint, name, new_id=None, directory=None, *, resume=False, worker_id=None):
+        point = self.checkpoint_show(workspace, agent_id, checkpoint, worker_id=worker_id)
         target = slug(new_id or name)
         store = self.store(workspace)
         snap = store.snapshot()
+        source_worker = self.agent(workspace, agent_id, snap, worker_id=worker_id).get('worker_id')
         source = store.snapshot(revision=point["revision"])
         locator = snap.json(layout.shared_path(snap, "workspace.json"))["locator"]
         branch = "instance/" + target
         agent_path = layout.shared_path(snap, f"agents/{target}.json")
         origin = {"agent": agent_id, "checkpoint": point["id"], "revision": source.revision}
+        if source_worker is not None:
+            origin['worker'] = source_worker
         identity = {"workspace": locator, "agent": target, "forked_from": origin}
         receipt_path = self.home / "fork-operations" / digest(encode([locator, target])) / "operation.json"
         location = directory
@@ -593,10 +707,12 @@ class App:
                 item = {"id": target, "name": name, "description": "", "branch": branch,
                         "archived": False, "current": None, "has_run": False, "handoff": None,
                         "created_at": now(), "forked_from": origin}
-                source_files = source.all()
-                owned = migration.owned_instance_files(source_files, snap, agent_id)
-                content, _, _ = migration.instance_files(source_files, owned=owned)
-                content[layout.MARKER] = layout.marker('instance')
+                if layout.version(snap, 'workspace') == layout.WORKER_VERSION:
+                    item.update(worker_schema=1, default_worker=source_worker or 'default')
+                    for key in ('current', 'has_run', 'handoff'):
+                        item.pop(key)
+                content = self._fork_files(store, source, point, snap, agent_id)
+                content[layout.MARKER] = layout.marker('instance', version=layout.WORKER_VERSION if item.get('worker_schema') else layout.VERSION)
                 content[layout.instance_relpath(content, "identity.json")] = encode(identity)
                 content[layout.instance_relpath(content, "fork.json")] = encode(item)
                 receipt = {"fingerprint": digest(encode(item)), "registration_unknown": False}
@@ -626,10 +742,8 @@ class App:
                         raise Conflict("Registered target belongs to another Fork identity.")
                     return {**existing, **self.connect_agent(workspace, target, location)}
                 # Until registration, the target must still contain exactly the saved starting files.
-                source_files = source.all()
-                owned = migration.owned_instance_files(source_files, snap, agent_id)
-                content, _, _ = migration.instance_files(source_files, owned=owned)
-                content[layout.MARKER] = layout.marker('instance')
+                content = self._fork_files(store, source, point, snap, agent_id)
+                content[layout.MARKER] = layout.marker('instance', version=layout.WORKER_VERSION if item.get('worker_schema') else layout.VERSION)
                 content[layout.instance_relpath(content, "identity.json")] = encode(identity)
                 content[layout.instance_relpath(content, "fork.json")] = encode(item)
                 if saved.all() != content:
@@ -641,7 +755,8 @@ class App:
             receipt["registration_unknown"] = True
             write_json(receipt_path, receipt)
             try:
-                store.change("main", {agent_path: encode(item)}, layout.expected(snap, {agent_path: None}), f"Fork {target}")
+                registration = self._registration(snap, item)
+                store.change("main", registration, layout.expected(snap, {p: None for p in registration}), f"Fork {target}")
             except Uncertain:
                 raise
             except Error:
@@ -652,10 +767,25 @@ class App:
             write_json(receipt_path, receipt)
             return {**item, **self.connect_agent(workspace, target, location)}
 
-    def configure(self, workspace, agent_id, value, directory=None):
+    def configure(self, workspace, agent_id, value, directory=None, worker_id=None):
         root = self.root(workspace, agent_id, directory)
         if value.get("kind", "manual") not in ("manual", "desktop", "codex", "claude", "codebuddy"):
             raise Error("Runtime kind must be manual, desktop, codex, claude or codebuddy.")
+        if worker_id is not None:
+            self.worker(workspace, agent_id, worker_id)
+            workers.prepare_context(self, workspace, agent_id, root, worker_id)
+            local, choice, _ = model_profiles.split_config(value)
+            if choice:
+                choice = model_profiles.validate(choice)
+            with layout.lock(root, 'files.lock'):
+                portable_path = layout.instance_path(root, 'config.json', worker_id)
+                portable = read_json(portable_path, {})
+                portable['kind'] = local.get('kind', 'manual')
+                if choice:
+                    portable['codex'] = choice
+                write_json(portable_path, portable)
+                write_json(layout.local_path(root, 'runtime.json', worker_id), local)
+            return {'configured': True, 'worker': worker_id, 'entry_changed': False}
         if value.get("kind") in model_profiles.CODEX_KINDS:
             model_profiles.configure(root, value)
         else:
@@ -663,22 +793,22 @@ class App:
                 write_json(layout.local_path(root, "runtime.json"), value)
         return {"configured": True, "entry_changed": False}
 
-    def _binding_history(self, snap, agent_id):
+    def _binding_history(self, snap, agent_id, worker_id=None, workspace=None):
         entries = []
         for path in snap.entries:
             if path.startswith(layout.shared_path(snap, "bindings/")) and path.endswith(".json"):
                 entry = snap.json(path)
-                if entry["agent"] == agent_id:
+                if entry["agent"] == agent_id and (worker_id is None or self.binding_worker(workspace, agent_id, entry, snap) == worker_id):
                     entries.append(entry)
         return sorted(entries, key=lambda entry: (entry["created_at"], entry["id"]))
 
-    def history(self, workspace, agent_id, *, snapshot=None):
+    def history(self, workspace, agent_id, *, snapshot=None, worker_id=None):
         snap = snapshot or self.store(workspace).snapshot()
-        self.agent(workspace, agent_id, snap)
-        return {"agent": agent_id, "bindings": self._binding_history(snap, agent_id),
+        self.agent(workspace, agent_id, snap, worker_id=worker_id)
+        return {"agent": agent_id, "bindings": self._binding_history(snap, agent_id, worker_id, workspace),
                 "snapshot_revision": snap.revision}
 
-    def _observe_copy(self, root, binding, installation):
+    def _observe_copy(self, root, binding, installation, worker_id=None):
         source = {"installation_id": installation, "directory": str(root), "kind": "local_copy"}
         if not root.is_dir():
             return {"directory": str(root), "observation_source": source,
@@ -689,14 +819,19 @@ class App:
                 return {"directory": str(root), "observation_source": source,
                         "unknown_reason": "copy_not_prepared",
                         "observation_error": "The registered copy has no local context; prepare its saved material before observing local state."}
-            local_entry = read_json(layout.local_path(root, "entry.json"), {})
-            status = read_json(layout.local_path(root, "status.json"), {"state": "not_running"})
+            if worker_id is not None and not layout.local_path(root, 'context.json', worker_id).is_file():
+                return {'directory': str(root), 'observation_source': source, 'unknown_reason': 'worker_copy_not_prepared',
+                        'observation_error': 'This Worker has no prepared local context; no runtime state was created.'}
+            local_entry = read_json(layout.local_path(root, "entry.json", worker_id), {})
+            status = read_json(layout.local_path(root, "status.json", worker_id), {"state": "not_running"})
             try:
-                with layout.lock(root, "runner.lock", wait=0):
+                with layout.lock(root, "runner.lock", wait=0, worker_id=worker_id):
                     status["runner_alive"] = False
             except Conflict:
                 status["runner_alive"] = True
             execution = binding.get("execution") if binding else None
+            worker_config = read_json(layout.instance_path(root, 'config.json', worker_id), {}) if worker_id else {}
+            desired_profile = worker_config['codex'] if 'codex' in worker_config else model_profiles.desired(root)
             return {
                 "directory": str(root), "entry_binding": local_entry.get("binding"),
                 "entry_matches_current": bool(binding and local_entry.get("binding") == binding["id"]),
@@ -706,9 +841,9 @@ class App:
                 "execution_matches_local": bool(execution and execution["installation_id"] == installation
                                                  and execution["directory"] == str(root)),
                 "runtime": status,
-                "watch": read_json(layout.local_path(root, "watch.json"), {"enabled": False}),
-                "configured_kind": read_json(layout.local_path(root, "runtime.json"), {}).get("kind", "manual"),
-                "model_selection": model_profiles.desired(root),
+                "watch": read_json(layout.local_path(root, "watch.json", worker_id), {"enabled": False}),
+                "configured_kind": read_json(layout.local_path(root, "runtime.json", worker_id), {}).get("kind", "manual"),
+                "model_selection": desired_profile,
                 "observation_source": source,
             }
         except (Error, ValueError, OSError, KeyError) as exc:
@@ -716,17 +851,21 @@ class App:
                     "unknown_reason": "local_copy_observation_failed",
                     "observation_error": f"Local copy observation failed ({type(exc).__name__}); inspect its local files."}
 
-    def show(self, workspace, agent_id, directory=None, *, snapshot=None):
+    def show(self, workspace, agent_id, directory=None, *, snapshot=None, worker_id=None):
         store = self.store(workspace)
         snap = snapshot or store.snapshot()
-        item = self.agent(workspace, agent_id, snap)
+        item = self.agent(workspace, agent_id, snap, worker_id=worker_id)
+        worker_id = item.get('worker_id')
         binding = snap.json(layout.shared_path(snap, f"bindings/{item['current']}.json")) if item["current"] else None
         locations = self.local()["workspaces"][workspace].get("instances", {}).get(agent_id, [])
         installation = read_json(self.home / "installation.json", {}).get("id")
-        copies = [self._observe_copy(Path(location), binding, installation) for location in locations]
+        copies = [self._observe_copy(Path(location), binding, installation, worker_id) for location in locations]
         result = {**item, "revision": snap.entries[layout.shared_path(snap, f"agents/{agent_id}.json")], "binding": binding,
-                  "directories": locations, "copies": copies, "history": self._binding_history(snap, agent_id),
+                  "directories": locations, "copies": copies, "history": self._binding_history(snap, agent_id, worker_id, workspace),
                   "directory": None}
+        if worker_id is not None:
+            result.update(workers=self.workers(workspace, agent_id, snapshot=snap),
+                          worker_revision=snap.entries[workers.path(snap, agent_id, worker_id)])
         errors = [f"{copy['directory']}: {copy['observation_error']}" for copy in copies if "observation_error" in copy]
         if errors:
             result["observation_error"] = "\n".join(errors)
@@ -758,25 +897,37 @@ class App:
     def archive(self, workspace, agent_id, archived=True, directory=None):
         store = self.store(workspace)
         snap = store.snapshot()
-        item = self.agent(workspace, agent_id, snap)
-        if item["current"]:
+        item = workers.agent_record(snap, agent_id)
+        if (any(w['current'] for w in self.workers(workspace, agent_id, snapshot=snap))
+                if workers.enabled(snap, item) else item['current']):
             raise Conflict("Handoff before archiving. Archive does not revoke a live entry.")
         item["archived"] = archived
         path = layout.shared_path(snap, f"agents/{agent_id}.json")
         store.change("main", {path: encode(item)}, layout.expected(snap, {path: snap.entries[path]}), f"Archive={archived} {agent_id}")
         return item
 
-    def reserve(self, workspace, agent_id, directory=None, binding_id=None, *, expected_handoff=None):
+    def reserve(self, workspace, agent_id, directory=None, binding_id=None, *, expected_handoff=None, worker_id=None):
         root = self.root(workspace, agent_id, directory)
-        model_profiles.migrate(root)
+        initial = self.agent(workspace, agent_id, worker_id=worker_id)
+        worker_id = initial.get('worker_id')
+        if worker_id is None:
+            model_profiles.migrate(root)
+        else:
+            workers.prepare_context(self, workspace, agent_id, root, worker_id)
         with layout.lock(root, "files.lock"):
-            config = read_json(layout.local_path(root, "runtime.json"), {"kind": "manual"})
-            profile = (model_profiles.selected(root) if config.get("kind") in model_profiles.CODEX_KINDS
+            config = read_json(layout.local_path(root, "runtime.json", worker_id), {"kind": "manual"})
+            if worker_id is not None:
+                portable = read_json(layout.instance_path(root, 'config.json', worker_id), {})
+                if 'kind' in portable and config['kind'] != portable['kind']:
+                    raise Error('Prepare this Worker local connection for its selected Harness before reserving an entry.')
+            profile = (workers.selected_profile(root, worker_id) if worker_id and config.get('kind') in model_profiles.CODEX_KINDS else
+                       model_profiles.selected(root) if config.get("kind") in model_profiles.CODEX_KINDS
                        and model_profiles.desired(root) is not None else None)
             store = self.store(workspace)
             snap = store.snapshot()
-            item = self.agent(workspace, agent_id, snap)
-            if item["current"] or item["archived"]:
+            item = self.agent(workspace, agent_id, snap, worker_id=worker_id)
+            path, owner, _ = workers.execution_record(self, workspace, agent_id, snap, worker_id)
+            if item["current"] or item["archived"] or owner['archived']:
                 raise Conflict("Agent already has an entry or is archived; relay cannot take it over.")
             # An automatic continuation must consume its verified handoff, never a later one.
             if expected_handoff is not None and item["handoff"] != expected_handoff:
@@ -786,29 +937,33 @@ class App:
             binding = slug(binding_id) if binding_id else uid("b")
             entry = {"id": binding, "agent": agent_id, "kind": config.get("kind", "manual"),
                      "phase": "starting", "session": None, "created_at": now(), "handoff": item["handoff"]}
+            if worker_id is not None:
+                entry['worker'] = worker_id
             from .maintenance import installation_id
             entry["execution"] = {"installation_id": installation_id(self), "directory": str(root)}
             changes = {layout.shared_path(snap, f"bindings/{binding}.json"): encode(entry)}
-            path = layout.shared_path(snap, f"agents/{agent_id}.json")
-            expected = {path: snap.entries[path], layout.shared_path(snap, f"bindings/{binding}.json"): None}
+            ap = layout.shared_path(snap, f"agents/{agent_id}.json")
+            expected = {path: snap.entries[path], ap: snap.entries[ap], layout.shared_path(snap, f"bindings/{binding}.json"): None}
             if item["handoff"]:
                 handoff_path = layout.shared_path(snap, f"handoffs/{item['handoff']}.json")
                 handoff = snap.json(handoff_path)
+                if worker_id is not None and (handoff.get('worker') or self.legacy_worker(workspace, agent_id, 'bindings', handoff['entry'], snap)) != worker_id:
+                    raise Conflict('The handoff belongs to another Worker.')
                 if handoff["consumed_by"]:
                     raise Conflict("Handoff already consumed.")
                 handoff["consumed_by"] = binding
                 expected[handoff_path] = snap.entries[handoff_path]
                 changes[handoff_path] = encode(handoff)
-            item.update(current=binding, has_run=True, handoff=None)
-            changes[path] = encode(item)
+            owner.update(current=binding, has_run=True, handoff=None)
+            changes[path] = encode(owner)
             store.change("main", changes, layout.expected(snap, expected), f"Reserve entry {binding}")
-            record = {"binding": binding, "config": config}
+            record = {"binding": binding, "config": config, **({'worker': worker_id} if worker_id else {})}
             if profile is not None:
                 record.update(model_profile=profile, model_adopted_at=now())
-            write_json(layout.local_path(root, "entry.json"), record)
-            return {"agent": agent_id, "binding": binding, "phase": "starting", "kind": entry["kind"]}
+            write_json(layout.local_path(root, "entry.json", worker_id), record)
+            return {"agent": agent_id, "binding": binding, "phase": "starting", "kind": entry["kind"], **({'worker': worker_id} if worker_id else {})}
 
-    def bind(self, workspace, agent_id, binding, session, directory=None, *, cwd=None):
+    def bind(self, workspace, agent_id, binding, session, directory=None, *, cwd=None, worker_id=None):
         slug(binding)
         if not session or len(session) > 256 or any(c in session for c in "\r\n\0"):
             raise Error("A real native session ID is required.")
@@ -816,9 +971,15 @@ class App:
             raise Error('Native cwd must be an explicit nonempty path observation.')
         store = self.store(workspace)
         snap = store.snapshot()
-        item = self.agent(workspace, agent_id, snap)
         path = layout.shared_path(snap, f"bindings/{binding}.json")
         entry = snap.json(path)
+        if not entry or entry.get('agent') != agent_id:
+            raise Conflict('Binding does not belong to this Agent.')
+        actual_worker = self.binding_worker(workspace, agent_id, entry, snap)
+        if worker_id is not None and actual_worker != worker_id:
+            raise Conflict('Binding belongs to another Worker.')
+        item = self.agent(workspace, agent_id, snap, worker_id=actual_worker)
+        owner_path, _, _ = workers.execution_record(self, workspace, agent_id, snap, actual_worker)
         if item["current"] != binding or not entry or entry["phase"] != "starting":
             raise Conflict("Binding is not awaiting a new session.")
         for p in snap.entries:
@@ -830,29 +991,34 @@ class App:
         if cwd is not None:
             entry['execution']['cwd'] = cwd
         session_path = layout.shared_path(snap, f"sessions/{entry['kind']}/{digest(session.encode())}.json")
-        store.change("main", {path: encode(entry), session_path: encode({"agent": agent_id, "binding": binding, "session": session})},
+        store.change("main", {path: encode(entry), session_path: encode({"agent": agent_id, "binding": binding, "session": session,
+                     **({'worker': actual_worker} if actual_worker else {})})},
                      layout.expected(snap, {path: snap.entries[path], session_path: None,
+                      owner_path: snap.entries[owner_path],
                       layout.shared_path(snap, f"agents/{agent_id}.json"): snap.entries[layout.shared_path(snap, f"agents/{agent_id}.json")]}), f"Bind {binding}")
         return entry
 
-    def stop(self, workspace, agent_id, binding, checkpoint, directory=None):
+    def stop(self, workspace, agent_id, binding, checkpoint, directory=None, worker_id=None):
         root = self.root(workspace, agent_id, directory)
         with layout.lock(root, "files.lock"):
             store = self.store(workspace)
             snap = store.snapshot()
-            _, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True, snapshot=snap)
-            point = self._read_checkpoint(store, snap, agent_id, checkpoint)
+            item, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True, snapshot=snap, worker_id=worker_id)
+            worker_id = item.get('worker_id')
+            owner_path, _, _ = workers.execution_record(self, workspace, agent_id, snap, worker_id)
+            point = self._read_checkpoint(store, snap, agent_id, checkpoint, worker_id)
+            cp = workers.checkpoint_index(snap, agent_id, checkpoint, worker_id if point.get('worker') else None)
             result = {"state": "awaiting_native_idle", "binding": binding, "checkpoint": checkpoint}
             if entry["phase"] == "stopping":
                 if entry["checkpoint"] != checkpoint:
                     raise Conflict("A pending stop cannot be replaced with a different checkpoint.")
                 return result
             # Disable local automatic restarts before requesting the native end-of-turn observation.
-            write_json(layout.local_path(root, "watch.json"), {"enabled": False, "reason": "handoff"})
+            write_json(layout.local_path(root, "watch.json", worker_id), {"enabled": False, "reason": "handoff"})
             entry.update(phase="stopping", checkpoint=point["id"], stop_requested_at=now())
             path = layout.shared_path(snap, f"bindings/{binding}.json")
             store.change("main", {path: encode(entry)}, layout.expected(snap, {path: snap.entries[path],
-                         layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json"): snap.entries[layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json")],
+                         cp: snap.entries[cp], owner_path: snap.entries[owner_path],
                          layout.shared_path(snap, f"agents/{agent_id}.json"): snap.entries[layout.shared_path(snap, f"agents/{agent_id}.json")]}), "Prepare handoff")
             return result
 
@@ -880,32 +1046,40 @@ class App:
 
     def finish_stop(self, workspace, agent_id, binding, *, observed_idle,
                     expected_controller=_UNOBSERVED, expected_checkpoint=_UNOBSERVED,
-                    expected_session=_UNOBSERVED):
+                    expected_session=_UNOBSERVED, worker_id=None):
         if not observed_idle:
             raise Conflict("Native stop has not been confirmed. Entry remains owned.")
         store = self.store(workspace)
         snap = store.snapshot()
+        original_entry = snap.json(layout.shared_path(snap, f'bindings/{binding}.json'))
+        if original_entry and worker_id is not None and self.binding_worker(workspace, agent_id, original_entry, snap) != worker_id:
+            raise Conflict('Stop observation belongs to another Worker.')
         released = self._released_handoff(snap, agent_id, binding, expected_controller, expected_checkpoint, expected_session)
         if released is not None:
             return released
-        item, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True, snapshot=snap)
+        item, entry = self.require_binding(workspace, agent_id, binding, allow_stopping=True, snapshot=snap, worker_id=worker_id)
+        worker_id = item.get('worker_id')
+        ap, owner, _ = workers.execution_record(self, workspace, agent_id, snap, worker_id)
         if entry["phase"] != "stopping":
             raise Conflict("No explicit handoff request is pending.")
         for field, expected in (("controller", expected_controller), ("checkpoint", expected_checkpoint),
                                 ("session", expected_session)):
             if expected is not _UNOBSERVED and entry.get(field) != expected:
                 raise Conflict(f"The stop observation no longer matches the binding's {field}.")
-        self._read_checkpoint(store, snap, agent_id, entry["checkpoint"])
+        point = self._read_checkpoint(store, snap, agent_id, entry["checkpoint"], worker_id)
         handoff_id = "h" + binding[1:]
         handoff = {"id": handoff_id, "agent": agent_id, "entry": binding,
                    "checkpoint": entry["checkpoint"], "created_at": now(), "consumed_by": None}
-        item.update(current=None, handoff=handoff_id)
+        if worker_id is not None:
+            handoff['worker'] = worker_id
+        owner.update(current=None, handoff=handoff_id)
         entry.update(phase="released", stopped_at=now())
-        ap, bp = layout.shared_path(snap, f"agents/{agent_id}.json"), layout.shared_path(snap, f"bindings/{binding}.json")
-        cp = layout.shared_path(snap, f"checkpoints/{agent_id}/{entry['checkpoint']}.json")
+        bp = layout.shared_path(snap, f"bindings/{binding}.json")
+        agent_path = layout.shared_path(snap, f'agents/{agent_id}.json')
+        cp = workers.checkpoint_index(snap, agent_id, entry['checkpoint'], worker_id if point.get('worker') else None)
         try:
-            store.change("main", {ap: encode(item), bp: encode(entry), layout.shared_path(snap, f"handoffs/{handoff_id}.json"): encode(handoff)},
-                         layout.expected(snap, {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp],
+            store.change("main", {ap: encode(owner), bp: encode(entry), layout.shared_path(snap, f"handoffs/{handoff_id}.json"): encode(handoff)},
+                         layout.expected(snap, {ap: snap.entries[ap], agent_path: snap.entries[agent_path], bp: snap.entries[bp], cp: snap.entries[cp],
                           layout.shared_path(snap, f"handoffs/{handoff_id}.json"): None}), "Release entry")
         except (Conflict, Uncertain) as failure:
             # A competing observer or a lost push reply may have completed this exact request.
@@ -937,7 +1111,7 @@ class App:
             raise Conflict("This entry was taken over from another saved checkpoint.")
         return handoff
 
-    def takeover(self, workspace, agent_id, binding, checkpoint, *, confirm=False):
+    def takeover(self, workspace, agent_id, binding, checkpoint, *, confirm=False, worker_id=None):
         if confirm is not True:
             raise Error("Explicit user confirmation is required to revoke the old execution entry.")
         slug(binding)
@@ -947,7 +1121,15 @@ class App:
         operation = self.home / "takeovers" / digest(locator.encode()) / f"{binding}.json"
         with locked(operation.with_suffix(".lock")):
             snap = store.snapshot()
-            item = self.agent(workspace, agent_id, snap)
+            original_entry = snap.json(layout.shared_path(snap, f'bindings/{binding}.json'))
+            if not original_entry or original_entry.get('agent') != agent_id:
+                raise Conflict('The selected Binding belongs to another Agent or is missing.')
+            actual_worker = self.binding_worker(workspace, agent_id, original_entry, snap)
+            if worker_id is not None and actual_worker != worker_id:
+                raise Conflict('The selected Binding belongs to another Worker.')
+            worker_id = actual_worker
+            item = self.agent(workspace, agent_id, snap, worker_id=worker_id)
+            ap, owner, _ = workers.execution_record(self, workspace, agent_id, snap, worker_id)
             handoff = self._forced_handoff(snap, agent_id, binding, checkpoint)
             if handoff is None:
                 if item["current"] != binding or item["archived"]:
@@ -955,7 +1137,7 @@ class App:
                 entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
                 if entry["agent"] != agent_id or entry["phase"] not in ("starting", "active", "stopping"):
                     raise Conflict("The current execution entry cannot be taken over.")
-                point = self._read_checkpoint(store, snap, agent_id, checkpoint)
+                point = self._read_checkpoint(store, snap, agent_id, checkpoint, worker_id)
                 receipt = read_json(operation, {})
                 if receipt.get("publication_unknown"):
                     if receipt["agent"] != agent_id or receipt["checkpoint"] != checkpoint:
@@ -965,15 +1147,18 @@ class App:
                 handoff = {"id": handoff_id, "agent": agent_id, "entry": binding, "checkpoint": point["id"],
                            "created_at": now(), "consumed_by": None, "forced": True,
                            "native_stop_confirmed": False}
-                item.update(current=None, handoff=handoff_id)
+                if worker_id is not None:
+                    handoff['worker'] = worker_id
+                owner.update(current=None, handoff=handoff_id)
                 entry.update(phase="revoked", checkpoint=point["id"], revoked_at=now(), revocation="user_takeover")
-                ap, bp = layout.shared_path(snap, f"agents/{agent_id}.json"), layout.shared_path(snap, f"bindings/{binding}.json")
-                cp, hp = layout.shared_path(snap, f"checkpoints/{agent_id}/{checkpoint}.json"), layout.shared_path(snap, f"handoffs/{handoff_id}.json")
+                bp = layout.shared_path(snap, f"bindings/{binding}.json")
+                agent_path = layout.shared_path(snap, f'agents/{agent_id}.json')
+                cp, hp = workers.checkpoint_index(snap, agent_id, checkpoint, worker_id if point.get('worker') else None), layout.shared_path(snap, f"handoffs/{handoff_id}.json")
                 pending = {"agent": agent_id, "checkpoint": checkpoint, "publication_unknown": True}
                 write_json(operation, pending)
                 try:
-                    store.change("main", {ap: encode(item), bp: encode(entry), hp: encode(handoff)},
-                                 layout.expected(snap, {ap: snap.entries[ap], bp: snap.entries[bp], cp: snap.entries[cp], hp: None}),
+                    store.change("main", {ap: encode(owner), bp: encode(entry), hp: encode(handoff)},
+                                 layout.expected(snap, {ap: snap.entries[ap], agent_path: snap.entries[agent_path], bp: snap.entries[bp], cp: snap.entries[cp], hp: None}),
                                  "User takeover")
                 except (Conflict, Uncertain) as failure:
                     if isinstance(failure, Conflict):

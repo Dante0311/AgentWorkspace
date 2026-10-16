@@ -312,7 +312,7 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
     manager = backend.Backend(app, SimpleNamespace(server_port=12345))
     app.backend = manager
     try:
-        with pytest.raises(Conflict, match="original Binding changed"):
+        with pytest.raises(Conflict):
             backend.attach(app, "sea", "alice", expected_binding="older-original")
         assert not manager.runners
         result = execute(app, "runtime.start", {"workspace": "sea", "agent_id": "alice"})

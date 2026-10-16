@@ -166,10 +166,11 @@ def test_bridge_input_and_control_use_binding_worker(team, monkeypatch):
         bridges.BridgeManager(app, "team", "owner", bindings["topic"], root, worker_id="default")
     monkeypatch.setenv("AW_WORKER", "stale-peer")
     bridges.configure(app, "team", "owner", "chat", {"command": ["protocol-fixture"], "enabled": True}, worker_id="topic")
-    process = Mock(stdout=[])
+    process = Mock(stdout=[], pid=12345)
     process.poll.return_value = None
     launch = Mock(return_value=process)
-    monkeypatch.setattr(bridges.subprocess, "Popen", launch)
+    monkeypatch.setattr(bridges, "subprocess", SimpleNamespace(Popen=launch, PIPE=bridges.subprocess.PIPE,
+                        TimeoutExpired=bridges.subprocess.TimeoutExpired))
     try:
         manager.tick()
         assert launch.call_args.kwargs["env"]["AW_WORKER"] == "topic"

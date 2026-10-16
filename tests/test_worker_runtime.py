@@ -213,3 +213,16 @@ def test_reservation_inherits_agent_runtime_before_adoption(tmp_path):
     adopted = read_json(layout.local_path(root, "entry.json", "default"))
     assert adopted["config"]["pipe_path"] == "fixture"
     assert adopted["model_profile"]["model"] == "base-model"
+
+
+def test_sdk_worker_adopts_its_explicit_model_and_effort_without_loading_sdk(tmp_path):
+    app = App(tmp_path / "home")
+    app.workspace_init("team", str(tmp_path / "remote.git"), worker_support=True)
+    app.create("team", "owner")
+    app.configure("team", "owner", {"kind": "claude", "executable": "protocol-fixture",
+                  "model": "explicit-sdk-model", "effort": "high"}, worker_id="default")
+    app.reserve("team", "owner", worker_id="default")
+    root = app.root("team", "owner")
+    adopted = read_json(layout.local_path(root, "entry.json", "default"))
+    assert adopted["config"]["model"] == "explicit-sdk-model"
+    assert adopted["config"]["effort"] == "high"

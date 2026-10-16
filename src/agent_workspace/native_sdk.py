@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict
 import importlib
+import inspect
 import json
 import os
 from pathlib import Path
@@ -16,7 +17,7 @@ import shutil
 import sys
 import threading
 
-from . import layout
+from . import layout, session_titles
 from .util import Conflict, Error, Unavailable, now, uid, write_json
 
 
@@ -109,11 +110,18 @@ class NativeSDK:
     # Streaming input is not evidence of native expected-turn steering semantics.
     supports_insert = False
 
-    def __init__(self, app, workspace, agent_id, binding, root, config, session=None):
+    def __init__(self, app, workspace, agent_id, binding, root, config, session=None, *, title=None):
         self.app, self.workspace, self.agent_id = app, workspace, agent_id
         self.binding, self.root, self.session = binding, root, session
         self.sdk, self.client_type, self.options_type, self.options = sdk_options(
             config, app, workspace, agent_id, binding, root, session)
+        self.title_receipt = None
+        if title:
+            supported = "session_name" in inspect.signature(self.options_type).parameters
+            if supported and session is None:
+                self.options["session_name"] = title
+            self.title_receipt = session_titles.receipt(title,
+                "sdk.session_name" if supported else "unsupported_by_installed_sdk_options")
         self.completed = queue.Queue()
         self.record = layout.instance_path(root, "records") / binding / "runtime.jsonl"
         self.record.parent.mkdir(parents=True, exist_ok=True)
@@ -188,6 +196,11 @@ class NativeSDK:
         try:
             async for message in self.client.receive_messages():
                 data = asdict(message)
+                if self.title_receipt is not None:
+                    reported = data.get("session_name") or data.get("data", {}).get("session_name")
+                    if reported is not None:
+                        self.title_receipt = session_titles.receipt(self.title_receipt["requested"],
+                            self.title_receipt["capability"], accepted=True, reported=reported)
                 actual = data.get("session_id") or data.get("data", {}).get("session_id")
                 completion = None
                 terminal_error = isinstance(message, getattr(self.sdk, "ErrorMessage", ()))

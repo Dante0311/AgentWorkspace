@@ -14,7 +14,7 @@ import urllib.parse
 import webbrowser
 
 from . import __version__
-from . import backend, model_profiles, software
+from . import backend, model_profiles, software, session_titles
 from .messages import Messages
 from .shared import requirements
 from .rpc import Rpc
@@ -171,9 +171,10 @@ def desktop_profile(app, workspace, agent_id, model="", effort="", project_id=""
 class Codex:
     supports_insert = True
 
-    def __init__(self, app, workspace, agent_id, binding, root, config, session=None):
+    def __init__(self, app, workspace, agent_id, binding, root, config, session=None, *, title=None):
         self.app, self.workspace, self.agent_id, self.binding, self.root = app, workspace, agent_id, binding, root
         self.session = session
+        self.title_receipt = session_titles.receipt(title, "thread/name/set") if title else None
         model_profiles.migrate(root)
         self.profile = model_profiles.pin(root, binding, model_profiles.adopted(root, binding, session=session))
         self.profile_validation = {"catalog": "unconfirmed", "effective": "unconfirmed"}
@@ -213,7 +214,21 @@ class Codex:
             write_json(layout.local_path(root, "launch.json"), {**launch, "binding": binding,
                        "session": self.session, "model_profile": self.model_receipt})
             model_profiles.require_matching(self.model_receipt)
+            if title and session is None:
+                try:
+                    self.rpc.request("thread/name/set", {"threadId": self.session, "name": title})
+                except Unavailable:
+                    # An older server or a lost reply does not justify creating
+                    # another session or repeating this optional metadata write.
+                    self.title_receipt = session_titles.receipt(title, "unconfirmed")
+                else:
+                    self.title_receipt = session_titles.receipt(title, "thread/name/set", accepted=True)
+                write_json(layout.local_path(root, "launch.json"), {**read_json(layout.local_path(root, "launch.json")),
+                           "native_title": self.title_receipt})
             self.status()
+            if self.title_receipt is not None:
+                write_json(layout.local_path(root, "launch.json"), {**read_json(layout.local_path(root, "launch.json")),
+                           "native_title": self.title_receipt})
         except BaseException:
             self.rpc.close()
             raise
@@ -271,6 +286,9 @@ class Codex:
         # Status does not require a full history export. Turn IDs come from native events.
         result = self.rpc.request("thread/read", {"threadId": self.session, "includeTurns": False})
         thread = result["thread"]
+        if self.title_receipt is not None:
+            self.title_receipt = session_titles.receipt(self.title_receipt["requested"],
+                self.title_receipt["capability"], accepted=self.title_receipt["native_accepted"], reported=thread.get("name"))
         state = thread.get("status", {}).get("type")
         turns = thread.get("turns", [])
         active = next((t for t in reversed(turns) if t.get("status") == "inProgress"), None)
@@ -482,8 +500,10 @@ class Desktop:
     supports_insert = True
 
     """Attach to the desktop-owned MCP control endpoint; never spawn a competing writer."""
-    def __init__(self, root, config, session, *, read_only=False):
+    def __init__(self, root, config, session, *, read_only=False, title=None):
         self.root, self.session = root, session
+        self.requested_title = title
+        self.title_receipt = None
         self.config = config
         self.profile = None
         self.read_only = read_only
@@ -532,6 +552,38 @@ class Desktop:
             raise Conflict("Desktop returned a different native session; its state was not used.")
         return result
 
+    def set_title(self, title):
+        """One optional native metadata write; a lost reply is only read back."""
+        if self.read_only:
+            raise Conflict("A read-only observer cannot change a native title.")
+        schema = self.tool_schemas.get("set_thread_title", {}).get("properties", {})
+        if not {"title", "threadId"}.issubset(schema):
+            self.title_receipt = session_titles.receipt(title, "unsupported_by_installed_schema")
+            return self.title_receipt
+        path = layout.local_path(self.root, "native-titles") / (digest(self.session.encode()) + ".json")
+        with layout.lock(self.root, "native-titles.lock"):
+            original = read_json(path)
+            if original and (original["session"] != self.session or original["requested"] != title):
+                raise Conflict("The original native title request changed; inspect it before requesting another name.")
+            current = original or {**session_titles.receipt(title, "set_thread_title"), "session": self.session}
+            if original is None:
+                write_json(path, current)
+                try:
+                    self.call("set_thread_title", {"threadId": self.session, "title": title})
+                except (Error, OSError) as exc:
+                    current["error_code"] = getattr(exc, "code", None)
+                else:
+                    current["native_accepted"] = True
+                write_json(path, current)
+            try:
+                reported = self.read()["thread"].get("title")
+            except (Error, OSError):
+                reported = None
+            self.title_receipt = session_titles.receipt(title, current["capability"],
+                accepted=current["native_accepted"], reported=reported)
+            write_json(path, {**current, **self.title_receipt})
+            return self.title_receipt
+
     def project(self):
         from .desktop_projects import project_directory
         if not {"create_thread", "list_projects"}.issubset(self.tools):
@@ -561,9 +613,17 @@ class Desktop:
         arguments = {"target": {"type": "project", "projectId": project["projectId"],
                                 "environment": {"type": "local"}}, "prompt": prompt}
         arguments.update(model=profile["model"], thinking=profile["effort"])
+        if self.requested_title:
+            supported = "title" in self.tool_schemas["create_thread"].get("properties", {})
+            self.title_receipt = session_titles.receipt(self.requested_title,
+                "create_thread.title" if supported else "unsupported_by_installed_schema")
+            if supported:
+                arguments["title"] = self.requested_title
         launch = {"binding": binding, "attempted": True, "project_id": project["projectId"],
                   "project_directory": str(Path(project["path"]).resolve()),
                   "model_profile": model_profiles.receipt(profile, validation)}
+        if self.title_receipt is not None:
+            launch["native_title"] = self.title_receipt
         write_json(path, launch)
         result = self.call("create_thread", arguments)
         self.model_receipt = model_profiles.receipt(profile, validation, accepted=True, result=result)
@@ -575,6 +635,17 @@ class Desktop:
         thread = self.read()["thread"]
         if thread.get("id") != self.session or thread.get("hostId") != "local" or not thread.get("cwd") or Path(thread["cwd"]).resolve() != Path(launch["project_directory"]):
             raise Unavailable("The created Desktop chat has not verified the chosen project directory; it was not bound.")
+        if self.title_receipt is not None:
+            reported_title = thread.get("title")
+            if "title" not in arguments:
+                self.set_title(self.requested_title)
+                if self.title_receipt["capability"] != "unsupported_by_installed_schema":
+                    reported_title = self.title_receipt["reported"]
+            self.title_receipt = session_titles.receipt(self.requested_title, self.title_receipt["capability"],
+                accepted=True if "title" in arguments else self.title_receipt["native_accepted"],
+                reported=reported_title)
+            saved = read_json(path)
+            write_json(path, {**saved, "native_title": self.title_receipt})
         return thread
 
     def completed_turns(self, identifiers):
@@ -955,6 +1026,9 @@ class Runner:
         model_receipt = getattr(self.adapter, "model_receipt", None)
         if isinstance(model_receipt, dict):
             values["model_profile"] = model_receipt
+        native_title = getattr(self.adapter, "title_receipt", None)
+        if isinstance(native_title, dict):
+            values["native_title"] = native_title
         write_json(layout.local_path(self.root, "status.json"), {"pid": os.getpid(), "binding": self.binding,
                    "observed_at": now(), **({"primary_failure": self.primary_failure} if self.primary_failure else {}),
                    **({"stop_request": self.stop_request} if self.stop_request else {}),

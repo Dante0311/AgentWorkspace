@@ -312,6 +312,33 @@ def context_hashes(store, previous_context, snapshot):
             else digest(snapshot.bytes(p)) for p, sha in snapshot.entries.items()}
 
 
+def read_legacy_checkpoint_operation(app, workspace, agent_id, worker_id, point, summary, content, pointer):
+    """Old receipts did not record registration outcome; inspect but never replay it."""
+    store = app.store(workspace)
+    snap = store.snapshot()
+    if app.legacy_worker(workspace, agent_id, 'checkpoints', point, snap) != worker_id:
+        raise Conflict('The original checkpoint operation belongs to another Worker.')
+    if pointer.get('id') != point or pointer.get('agent') != agent_id or not pointer.get('revision'):
+        raise Error('Legacy checkpoint receipt does not identify the selected original operation.')
+    original = store.snapshot(revision=pointer['revision'])
+    if pointer.get('path') != layout.instance_relpath(original, f'checkpoints/{point}.json'):
+        raise Error('Legacy checkpoint receipt has a different original material path.')
+    record = original.json(pointer['path'])
+    identity = original.json(layout.instance_relpath(original, 'identity.json'))
+    if (not isinstance(identity, dict) or identity.get('agent') != agent_id or
+            identity.get('workspace') != app.local()['workspaces'][workspace]['locator']):
+        raise Error('Original checkpoint materials belong to another Agent or Workspace.')
+    if not isinstance(record, dict) or record.get('id') != point or (record.get('summary'), record.get('content')) != (summary, content):
+        raise Conflict('The original checkpoint content differs; it cannot be rewritten as a Worker checkpoint.')
+    index = checkpoint_index(snap, agent_id, point)
+    found = snap.bytes(index)
+    if found is not None:
+        if found != encode(pointer):
+            raise Conflict('Original checkpoint registration has different bytes.')
+        return pointer
+    raise Uncertain('This legacy checkpoint receipt does not prove whether registration was attempted; inspect the original publication before continuing. It was not replayed.')
+
+
 def save_files(app, workspace, agent_id, root, worker_id, extra=None, message='Save Worker assets',
                shared_paths=None, before_publish=None):
     context = prepare_context(app, workspace, agent_id, root, worker_id)
@@ -398,17 +425,25 @@ def checkpoint(app, workspace, agent_id, summary, content='', binding=None, dire
     index = checkpoint_index(snap, agent_id, point, worker_id)
     selected_common = sorted(shared_selection(root, shared_paths))
     found = snap.json(index)
+    if found is None:
+        legacy = snap.json(checkpoint_index(snap, agent_id, point))
+        if legacy is not None and app.legacy_worker(workspace, agent_id, 'checkpoints', point, snap) == worker_id:
+            found = legacy
     if found:
         previous = app._read_checkpoint(store, snap, agent_id, point, worker_id)
         if ((previous['record']['summary'], previous['record']['content']) != (summary, content)
                 or previous['record'].get('shared_paths', []) != selected_common
-                or previous['record']['record_refs'] != (references or [])):
+                or (references is not None and previous['record']['record_refs'] != references)):
             raise Conflict('Checkpoint ID is immutable and already has different content.')
         return found
     with layout.lock(root, 'files.lock'):
         context = prepare_context(app, workspace, agent_id, root, worker_id)
         receipt_path = layout.local_path(root, f'checkpoint-operations/{point}.json', worker_id)
         receipt = read_json(receipt_path)
+        if receipt and 'record' not in receipt:
+            if selected_common:
+                raise Conflict('The old checkpoint selection is immutable; save new common changes under a new checkpoint ID.')
+            return read_legacy_checkpoint_operation(app, workspace, agent_id, worker_id, point, summary, content, receipt)
         if receipt:
             record = receipt['record']
             if ((record['summary'], record['content']) != (summary, content)

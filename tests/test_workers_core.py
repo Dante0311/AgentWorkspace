@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -49,6 +50,7 @@ def test_workers_have_independent_entries_checkpoints_handoff_and_archive(team):
     assert app.agents('team', archived=False)[0]['id'] == 'owner'
     app.worker_archive('team', 'owner', 'default')
     assert app.worker('team', 'owner', 'default')['archived']
+    assert app.agents('team', archived=False)[0]['id'] == 'owner'
     assert app.worker('team', 'owner', 'topic')['current'] == bindings['topic']
     with pytest.raises(Conflict):
         app.archive('team', 'owner')
@@ -179,6 +181,13 @@ def test_legacy_mapping_preserves_protocol_bytes_and_never_uses_new_default(app)
     protected = {layout.shared_path(snap, 'messages/old-message.json'): encode(message),
                  layout.shared_path(snap, 'message-index/old-message.json'): encode({k: message[k] for k in ('id','from','to','created_at','delivery')}),
                  layout.shared_path(snap, 'acks/old-message.json'): encode({'message_id': 'old-message'})}
+    for identifier, source, target in (
+        ('native-out', {'workspace': locator, 'agent': 'alice'}, {'workspace': locator, 'agent': 'peer'}),
+        ('native-in', {'workspace': locator, 'agent': 'peer'}, {'workspace': locator, 'agent': 'alice'}),
+        ('foreign-name', {'workspace': 'workspace:other', 'agent': 'alice'}, {'workspace': locator, 'agent': 'peer'}),
+    ):
+        protected[layout.shared_path(snap, f'direct-messages/{identifier}.json')] = encode(
+            {'id': identifier, 'from': source, 'to': target, 'content': 'optional native observation'})
     store.change('main', protected, {p: None for p in protected}, 'legacy protocol fixture')
     snap = store.snapshot()
     protected[layout.shared_path(snap, f'bindings/{binding}.json')] = snap.bytes(layout.shared_path(snap, f'bindings/{binding}.json'))
@@ -203,6 +212,10 @@ def test_legacy_mapping_preserves_protocol_bytes_and_never_uses_new_default(app)
     current_agent = app.show('sea', 'alice', worker_id='daily')
     app.worker_default('sea', 'alice', 'other', current_agent['revision'])
     assert app.legacy_worker('sea', 'alice', 'messages', 'old-message') == 'daily'
+    assert app.legacy_worker('sea', 'alice', 'messages', 'native-out') == 'daily'
+    assert app.legacy_worker('sea', 'alice', 'messages', 'native-in') == 'daily'
+    with pytest.raises(Conflict):
+        app.legacy_worker('sea', 'alice', 'messages', 'foreign-name')
     with pytest.raises(Conflict):
         app.legacy_worker('sea', 'alice', 'messages', 'unmapped-message')
     with pytest.raises(Conflict):
@@ -314,3 +327,61 @@ def test_partial_worker_migration_reconciles_original_registration_without_repla
         with pytest.raises(Uncertain):
             app.workers_migrate('sea', 'legacy', 'daily', 'partial', compatible_writers=['worker-v2'])
     assert len(attempts) == 1
+
+
+@pytest.mark.parametrize('registered', [False, True])
+def test_migrated_legacy_checkpoint_keeps_original_pointer_and_holds_ambiguous_receipt(app, monkeypatch, registered):
+    app.create('sea', 'legacy')
+    binding = app.reserve('sea', 'legacy')['binding']
+    app.bind('sea', 'legacy', binding, 'original-session')
+    store = app.store('sea')
+    change = store.change
+    def stop_registration(branch, changes, expected, message, **kwargs):
+        if any(p.endswith('checkpoints/legacy/old-point.json') for p in changes):
+            raise Error('fixture registration did not complete')
+        return change(branch, changes, expected, message, **kwargs)
+    if registered:
+        original = app.checkpoint('sea', 'legacy', 'historical point', binding=binding, checkpoint_id='old-point')
+    else:
+        with monkeypatch.context() as fault:
+            fault.setattr(store, 'change', stop_registration)
+            with pytest.raises(Error):
+                app.checkpoint('sea', 'legacy', 'historical point', binding=binding, checkpoint_id='old-point')
+        original = read_json(layout.local_path(app.root('sea', 'legacy'), 'checkpoint-operations/old-point.json'))
+    app.workers_migrate('sea', 'legacy', 'daily', 'legacy-checkpoint', compatible_writers=['worker-v2'])
+    root = app.root('sea', 'legacy')
+    operation = layout.local_path(root, 'checkpoint-operations/old-point.json', 'daily')
+    before = operation.read_bytes()
+    def no_publish(*args, **kwargs):
+        pytest.fail('Reading a legacy checkpoint must not replay any publication')
+    monkeypatch.setattr(GitStore, 'publish', no_publish)
+    if registered:
+        repeated = app.checkpoint('sea', 'legacy', 'historical point', binding=binding, worker_id='daily', checkpoint_id='old-point')
+        assert repeated == original and 'worker' not in repeated
+    else:
+        with pytest.raises(Uncertain):
+            app.checkpoint('sea', 'legacy', 'historical point', binding=binding, worker_id='daily', checkpoint_id='old-point')
+    assert operation.read_bytes() == before
+    snap = store.snapshot()
+    assert snap.bytes(layout.shared_path(snap, 'checkpoints/legacy/daily/old-point.json')) is None
+
+
+def test_worker_migration_covers_registered_copies_and_refuses_later_legacy_copy_adoption(app, tmp_path):
+    app.create('sea', 'copies')
+    root = app.root('sea', 'copies')
+    old_copy = tmp_path / 'preserved-unregistered-copy'
+    shutil.copytree(root, old_copy, ignore=shutil.ignore_patterns('.git'))
+    original_identity = layout.instance_path(old_copy, 'identity.json').read_bytes()
+    second = tmp_path / 'second-registered-copy'
+    app.connect_agent('sea', 'copies', str(second))
+    with pytest.raises(Conflict):
+        app.workers_migrate('sea', 'copies', 'daily', 'all-copies', directory=str(root), compatible_writers=['worker-v2'])
+    assert layout.version(root, 'instance') == layout.VERSION
+    assert layout.version(second, 'instance') == layout.VERSION
+    app.workers_migrate('sea', 'copies', 'daily', 'all-copies', compatible_writers=['worker-v2'])
+    assert layout.version(root, 'instance') == layout.WORKER_VERSION
+    assert layout.version(second, 'instance') == layout.WORKER_VERSION
+    with pytest.raises(layout.MigrationRequired):
+        app.connect_agent('sea', 'copies', str(old_copy))
+    assert layout.version(old_copy, 'instance') == layout.VERSION
+    assert layout.instance_path(old_copy, 'identity.json').read_bytes() == original_identity

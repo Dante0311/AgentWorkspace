@@ -45,6 +45,9 @@ def workers_migrate(app, workspace, agent_id, worker_id, request_id, *, director
                     'starts_session': False, 'mapping': receipt['mapping']}
         if layout.version(snap, 'workspace') == 0:
             raise layout.MigrationRequired('Complete the explicit legacy layout migration before the Worker migration.')
+        registered = app.local()['workspaces'][workspace].get('instances', {}).get(agent_id, [])
+        if directory is not None and len(registered) > 1:
+            raise Conflict('The Worker format applies to this Agent across its registered copies. Sync them and explicitly migrate all local copies together without a single directory selection.')
         roots = [app.root(workspace, agent_id, directory)] if directory else [Path(p) for p in
                  app.local()['workspaces'][workspace].get('instances', {}).get(agent_id, [])]
         if not roots:
@@ -92,7 +95,7 @@ def workers_migrate(app, workspace, agent_id, worker_id, request_id, *, director
                     elif path.startswith(layout.shared_path(snap, f'checkpoints/{agent_id}/')):
                         point = snap.json(path)
                         mapping['checkpoints'][point['id']] = worker_id
-                    elif path.startswith(layout.shared_path(snap, 'message-index/')):
+                    elif path.startswith(layout.shared_path(snap, 'message-index/')) or path.startswith(layout.shared_path(snap, 'direct-messages/')):
                         message = snap.json(path)
                         if any(message.get(side, {}).get('agent') == agent_id and
                                message[side].get('workspace') == locator for side in ('from', 'to')):

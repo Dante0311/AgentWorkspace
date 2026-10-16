@@ -374,6 +374,8 @@ class App:
                 if (not isinstance(identity, dict) or (existing["locator"], existing["agent"]) != (locator, agent_id)
                         or identity['workspace'] != locator or identity['agent'] != agent_id):
                     raise Conflict("Directory belongs to another instance.")
+                if item.get('worker_schema') == 1 and layout.version(root, 'instance') != layout.WORKER_VERSION:
+                    raise layout.MigrationRequired('This registered copy has not adopted the Worker format; preserve it and finish its explicit migration.')
                 revision = existing['revision']
             else:
                 if root.exists() and any(root.iterdir()) and repository is None:
@@ -387,6 +389,8 @@ class App:
                 identity = snap.json(layout.instance_relpath(snap, 'identity.json'))
                 if not isinstance(identity, dict) or identity.get('workspace') != locator or identity.get('agent') != agent_id:
                     raise Conflict('The saved branch belongs to another instance; no directory was prepared.')
+                if item.get('worker_schema') == 1 and layout.version(snap, 'instance') != layout.WORKER_VERSION:
+                    raise layout.MigrationRequired('A Worker copy must come from its saved Worker-version material.')
                 content = snap.all()
                 context = {"workspace": workspace, "locator": locator, "agent": agent_id, "revision": snap.revision,
                            "saved": {p: digest(data) for p, data in content.items()}, "exclude": DEFAULT_EXCLUDES}

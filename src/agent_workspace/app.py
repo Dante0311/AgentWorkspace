@@ -849,7 +849,7 @@ class App:
                                                  and execution["directory"] == str(root)),
                 "runtime": status,
                 "watch": read_json(layout.local_path(root, "watch.json", worker_id), {"enabled": False}),
-                "configured_kind": read_json(layout.local_path(root, "runtime.json", worker_id), {}).get("kind", "manual"),
+                "configured_kind": model_profiles.runtime_config(root, worker_id).get("kind", "manual"),
                 "model_selection": desired_profile,
                 "observation_source": source,
             }

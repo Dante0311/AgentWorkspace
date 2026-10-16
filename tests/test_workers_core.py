@@ -287,6 +287,26 @@ def test_non_codex_worker_keeps_its_native_model_and_effort(tmp_path, kind):
     assert not read_json(layout.instance_path(root, 'config.json', 'default')).get('codex')
 
 
+def test_show_reports_inherited_and_overridden_kind_without_changing_adoption(team):
+    app, root, bindings = team
+    app.configure('team', 'owner', {'kind': 'desktop', 'pipe_path': 'fixture',
+                                 'model': 'explicit-model', 'effort': 'high'})
+    for worker in ('default', 'topic'):
+        local_config = layout.local_path(root, 'runtime.json', worker)
+        assert not local_config.exists()
+        shown = app.show('team', 'owner', worker_id=worker)
+        assert shown['configured_kind'] == 'desktop'
+        assert shown['copies'][0]['configured_kind'] == 'desktop'
+        assert shown['binding']['id'] == bindings[worker]
+        assert shown['binding']['kind'] == 'manual'
+        assert read_json(layout.local_path(root, 'entry.json', worker))['config']['kind'] == 'manual'
+        assert not local_config.exists()
+    app.configure('team', 'owner', {'kind': 'claude', 'model': 'worker-model', 'effort': 'high'}, worker_id='topic')
+    assert app.show('team', 'owner', worker_id='topic')['configured_kind'] == 'claude'
+    assert app.show('team', 'owner', worker_id='default')['configured_kind'] == 'desktop'
+    assert app.require_binding('team', 'owner', bindings['topic'])[1]['kind'] == 'manual'
+
+
 def test_worker_creation_can_resume_same_request_and_configuration_stays_scoped(team):
     app, root, bindings = team
     created = app.worker_create('team', 'owner', '中文工作', 'A user-approved independent task',

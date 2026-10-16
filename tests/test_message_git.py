@@ -14,6 +14,7 @@ from agent_workspace.direct_messages import DirectMessages
 from agent_workspace.gitstore import GitStore
 from agent_workspace import commands, layout, maintenance
 from agent_workspace.util import Conflict, Error, Uncertain, encode
+from agent_workspace.app import App
 
 
 SCRIPT = Path(__file__).parents[1] / "src/agent_workspace/resources/skills/message/scripts/message_git.py"
@@ -49,6 +50,96 @@ def seeded(pair, tmp_path):
 
 def load_helper():
     return runpy.run_path(str(SCRIPT))
+
+
+@pytest.fixture
+def worker_protocol(tmp_path):
+    app = App(tmp_path / "worker-home")
+    app.workspace_init("sea", str(tmp_path / "worker-sea.git"), worker_support=True)
+    app.create("sea", "team")
+    app.worker_create("sea", "team", "Topic", "Independent work", worker_id="topic")
+    bindings = {}
+    for wid in ("default", "topic"):
+        bid = app.reserve("sea", "team", worker_id=wid)["binding"]
+        app.bind("sea", "team", bid, "native-" + wid, worker_id=wid)
+        bindings[wid] = bid
+    Messages(app).send("sea", "team", bindings["default"], "team", "原始 Worker 通知\n保留字节",
+                       to_worker="topic", request_id="worker-original")
+    return app, bindings, clone(tmp_path, app, "sea", "worker-cache")
+
+
+def worker_command(repo, bid, action, *extra):
+    return (action, "--repo", repo, "--agent", "team", "--binding", bid,
+            "--id", "worker-original", *extra)
+
+
+def test_script_worker_ack_reply_and_default_change_without_aw_import(worker_protocol, tmp_path):
+    app, bids, repo = worker_protocol
+    store = app.store("sea")
+    snap = store.snapshot()
+    path = layout.shared_path(snap, "messages/worker-original.json")
+    original = snap.bytes(path)
+    shown = command(tmp_path, *worker_command(repo, bids["topic"], "show"))
+    assert shown["message_json"].encode() == original
+    wrong = tmp_path / "wrong-worker.json"
+    command(tmp_path, *worker_command(repo, bids["default"], "receive", "--record", wrong, "--publish"), success=False)
+    assert not wrong.exists()
+    ack = command(tmp_path, *worker_command(repo, bids["topic"], "receive", "--record", tmp_path / "worker-ack.json", "--publish"))
+    assert ack["state"] == "published" and ack["actor"]["worker"] == "topic"
+    assert Messages(app).show("sea", "worker-original")["ack"] == {"message_id": "worker-original"}
+    content = tmp_path / "worker-reply.md"
+    content.write_text("明确回复原 Worker", encoding="utf-8")
+    journal = tmp_path / "worker-reply.json"
+    prepared = command(tmp_path, *worker_command(repo, bids["topic"], "reply", "--content-file", content,
+                       "--request-id", "worker-reply", "--record", journal))
+    assert prepared["format"] == "message-git-operation-v2"
+    app.worker_default("sea", "team", "topic", app.show("sea", "team")["revision"])
+    published = command(tmp_path, "continue", "--agent", "team", "--binding", bids["topic"], "--record", journal)
+    assert published["state"] == "published" and published["records"] == prepared["records"]
+    reply = Messages(app).show("sea", "worker-reply")["message"]
+    assert reply["from"]["worker"] == "topic" and reply["to"]["worker"] == "default"
+    assert reply["reply_to"] == "worker-original"
+    assert store.snapshot().bytes(path) == original
+
+
+def test_script_worker_unknown_write_is_only_observed(worker_protocol, tmp_path, monkeypatch):
+    app, bids, repo = worker_protocol
+    journal = tmp_path / "worker-unknown.json"
+    prepared = command(tmp_path, *worker_command(repo, bids["topic"], "receive", "--record", journal))
+    namespace = load_helper()
+    calls = []
+
+    def lost(repo, commit, parent):
+        calls.append(commit)
+        raise subprocess.TimeoutExpired("isolated original push", 1)
+
+    monkeypatch.setattr(namespace["Repository"], "push", lost)
+    first = namespace["publish"](journal, prepared)
+    assert first["state"] == "outcome_unknown" and len(calls) == 1
+    app.worker_default("sea", "team", "topic", app.show("sea", "team")["revision"])
+    second = namespace["publish"](journal, json.loads(journal.read_bytes()))
+    assert second["state"] == "outcome_unknown" and len(calls) == 1
+    assert second["records"] == first["records"]
+    assert Messages(app).show("sea", "worker-original")["ack"] is None
+
+
+def test_script_prepared_legacy_ack_uses_explicit_worker_mapping(app, tmp_path):
+    app.create("sea", "team")
+    bid = app.reserve("sea", "team")["binding"]
+    app.bind("sea", "team", bid, "original-session")
+    Messages(app).send("sea", "team", bid, "team", "legacy notification", request_id="worker-original")
+    repo = clone(tmp_path, app, "sea", "legacy-worker-cache")
+    journal = tmp_path / "legacy-worker-ack.json"
+    prepared = command(tmp_path, *worker_command(repo, bid, "receive", "--record", journal))
+    original = Messages(app).show("sea", "worker-original")["message"]
+    app.checkpoint("sea", "team", "before explicit Worker mapping", binding=bid)
+    app.workers_migrate("sea", "team", "daily", "legacy-helper-map", compatible_writers=["worker-v2"])
+    app.worker_create("sea", "team", "Other", "New work", worker_id="other")
+    app.worker_default("sea", "team", "other", app.show("sea", "team")["revision"])
+    result = command(tmp_path, "continue", "--agent", "team", "--binding", bid, "--record", journal)
+    assert result["state"] == "published" and result["records"] == prepared["records"]
+    assert Messages(app).show("sea", "worker-original")["message"] == original
+    assert Messages(app).show("sea", "worker-original")["ack"] == {"message_id": "worker-original"}
 
 
 def fixture_shared_layout(store, current):
@@ -134,7 +225,7 @@ def test_script_layout_continues_original_prepared_v1_operation_after_path_chang
 @pytest.mark.parametrize("own_current", [False, True])
 def test_script_layout_cross_workspace_targets_choose_their_own_layout(pair, tmp_path, own_current):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"))
+    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "peer-fixture-session")
@@ -306,7 +397,7 @@ def test_aw_layout_missing_current_record_does_not_read_a_legacy_file(pair):
 
 def test_aw_layout_guard_keeps_a_partial_ack_from_writing_the_old_peer_path(pair, tmp_path, monkeypatch):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"))
+    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "peer-fixture-session")
@@ -426,7 +517,7 @@ def test_script_confirms_notification_when_body_missing_or_damaged(pair, tmp_pat
 
 def test_cross_workspace_partial_reply_continues_original_bytes(pair, tmp_path, monkeypatch):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"))
+    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "isolated-sender-session")

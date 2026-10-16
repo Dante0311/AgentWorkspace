@@ -29,14 +29,19 @@ def set_default(app, wid):
     app.worker_default("sea", "team", wid, revision)
 
 
-def test_frozen_default_explicit_reply_wrong_worker_and_offline_archive(team):
+def test_frozen_default_explicit_reply_wrong_worker_and_offline_archive(team, monkeypatch):
     app, ids = team
     messages = Messages(app)
     sent = messages.send("sea", "team", ids["topic"], "team", "first", request_id="frozen")
     assert sent["payload"]["from"]["worker"] == "topic"
     assert sent["payload"]["to"]["worker"] == "default"
     original = app.store("sea").snapshot().bytes(layout.shared_path(app.store("sea").snapshot(), "messages/frozen.json"))
+    with monkeypatch.context() as pending:
+        pending.setattr(messages, "reconcile", lambda operation_id: {"id": operation_id, "state": "pending"})
+        messages.send("sea", "team", ids["topic"], "team", "original pending payload", request_id="pending")
     set_default(app, "topic")
+    assert messages.operation("sea", "pending")["payload"]["to"]["worker"] == "default"
+    assert messages.reconcile("pending")["payload"]["to"]["worker"] == "default"
     repeated = messages.send("sea", "team", ids["topic"], "team", "first", request_id="frozen")
     assert repeated["payload"] == sent["payload"]
     with pytest.raises(Conflict):

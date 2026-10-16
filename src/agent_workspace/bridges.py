@@ -55,7 +55,8 @@ def send(app, workspace, agent_id, binding, name, target, text, request_id=None,
 class BridgeManager:
     def __init__(self, app, workspace, agent_id, binding, root, worker_id=None):
         self.app, self.workspace, self.agent_id, self.binding, self.root = app, workspace, agent_id, binding, root
-        owner, _ = app.require_binding(workspace, agent_id, binding, worker_id=worker_id)
+        # Stop cleanup still needs the Worker identity; send and tick retain their active-entry checks.
+        owner, _ = app.require_binding(workspace, agent_id, binding, worker_id=worker_id, allow_stopping=True)
         self.worker_id = owner.get("worker_id")
         self.processes = {}
         self.events = queue.Queue()

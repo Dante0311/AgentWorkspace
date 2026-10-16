@@ -179,6 +179,23 @@ def test_bridge_input_and_control_use_binding_worker(team, monkeypatch):
         manager.stop_all()
 
 
+def test_stopping_worker_bridge_can_initialize_for_cleanup_but_cannot_deliver(team):
+    app, root, bindings = team
+    bridges.configure(app, "team", "owner", "chat", {"command": ["must-not-start"], "enabled": True}, worker_id="topic")
+    point = app.checkpoint("team", "owner", "explicit stop", binding=bindings["topic"], worker_id="topic")
+    app.stop("team", "owner", bindings["topic"], point["id"], worker_id="topic")
+    manager = bridges.BridgeManager(app, "team", "owner", bindings["topic"], root)
+    assert manager.worker_id == "topic"
+    with pytest.raises(Conflict):
+        manager.tick()
+    with pytest.raises(Conflict):
+        bridges.send(app, "team", "owner", bindings["topic"], "chat", "test", "must not deliver")
+    assert not manager.processes
+    assert not list(layout.local_path(root, "bridge-sends", "topic").glob("*.json"))
+    assert app.worker("team", "owner", "topic")["current"] == bindings["topic"]
+    assert app.worker("team", "owner", "default")["current"] == bindings["default"]
+
+
 def test_precompact_uses_only_source_worker_summary_and_files(team, tmp_path):
     app, root, bindings = team
     for worker in bindings:

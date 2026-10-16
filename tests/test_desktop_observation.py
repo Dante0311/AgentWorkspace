@@ -31,7 +31,7 @@ def test_observe_returns_actual_current_local_session_without_model_input(app, d
     assert result["local_session_confirmed"] and result["phase"] == "active"
     assert result["binding"] == binding and result["session"] == "actual-native-id"
     assert result["native_host"] == "local" and result["native_cwd"] == str(root) and result["native_state"] == "busy"
-    assert constructor.call_args.kwargs == {"read_only": True}
+    assert constructor.call_args.kwargs["read_only"] is True
     peer.read.assert_called_once()
     peer.close.assert_called_once()
     peer.create.assert_not_called()

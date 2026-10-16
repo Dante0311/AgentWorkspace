@@ -106,6 +106,10 @@ class BridgeManager:
             env = dict(os.environ, AW_HOME=str(self.app.home), AW_WORKSPACE=self.workspace,
                        AW_AGENT=self.agent_id, AW_BINDING=self.binding, AW_BRIDGE_NAME=name,
                        AW_INSTANCE_ROOT=str(self.root))
+            if self.worker_id is None:
+                env.pop("AW_WORKER", None)
+            else:
+                env["AW_WORKER"] = self.worker_id
             log = layout.local_path(self.root, f"bridge-{name}.log", self.worker_id)
             log.parent.mkdir(parents=True, exist_ok=True)
             with log.open("ab") as output:

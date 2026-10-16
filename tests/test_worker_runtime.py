@@ -16,7 +16,7 @@ def team(tmp_path):
     app = App(tmp_path / "home")
     app.workspace_init("team", str(tmp_path / "remote.git"), worker_support=True)
     app.create("team", "owner")
-    app.worker_create("team", "owner", "Topic", worker_id="topic")
+    app.worker_create("team", "owner", "Topic", "Isolated protocol test task", worker_id="topic")
     app.configure("team", "owner", {"kind": "desktop", "command": ["protocol-fixture"],
                   "pipe_path": "fixture", "caller_thread": "fixture", "model": "base-model", "effort": "low"})
     root = app.root("team", "owner")
@@ -151,7 +151,7 @@ def test_unknown_transfer_preserves_peer_and_original_launch(team, monkeypatch):
     assert not layout.local_path(root, "control.json", "default").exists()
 
 
-def test_bridge_input_and_control_use_binding_worker(team):
+def test_bridge_input_and_control_use_binding_worker(team, monkeypatch):
     app, root, bindings = team
     manager = bridges.BridgeManager(app, "team", "owner", bindings["topic"], root)
     manager._event("chat", {"event": "input", "id": "original", "text": "external fixture"})
@@ -160,6 +160,18 @@ def test_bridge_input_and_control_use_binding_worker(team):
     assert not list(layout.local_path(root, "inputs", "default").glob("*.json"))
     with pytest.raises(Conflict):
         bridges.BridgeManager(app, "team", "owner", bindings["topic"], root, worker_id="default")
+    monkeypatch.setenv("AW_WORKER", "stale-peer")
+    bridges.configure(app, "team", "owner", "chat", {"command": ["protocol-fixture"], "enabled": True}, worker_id="topic")
+    process = Mock(stdout=[])
+    process.poll.return_value = None
+    launch = Mock(return_value=process)
+    monkeypatch.setattr(bridges.subprocess, "Popen", launch)
+    try:
+        manager.tick()
+        assert launch.call_args.kwargs["env"]["AW_WORKER"] == "topic"
+        assert launch.call_args.kwargs["env"]["AW_BINDING"] == bindings["topic"]
+    finally:
+        manager.stop_all()
 
 
 def test_precompact_uses_only_source_worker_summary_and_files(team, tmp_path):

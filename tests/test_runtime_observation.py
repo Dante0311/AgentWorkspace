@@ -38,7 +38,7 @@ def original_entry(app, monkeypatch, request):
     peer = {"reads": threading.Event(), "sent": threading.Event(), "attached": [], "closed": [], "inputs": [], "state": "idle"}
 
     class Native:
-        def __init__(self, directory, config, session, *, read_only=False):
+        def __init__(self, directory, config, session, *, read_only=False, worker_id=None, title=None):
             assert not read_only and directory == root and session == "original-chat"
             assert config["pipe_path"] == "original-pipe"
             self.session = session
@@ -218,7 +218,7 @@ def test_confirmed_managed_cli_reconnects_original_session_and_keeps_user_pause(
     connected = threading.Event()
 
     class OriginalCli:
-        def __init__(self, app, workspace, agent_id, entry, directory, config, session):
+        def __init__(self, app, workspace, agent_id, entry, directory, config, session, *, worker_id=None, title=None):
             assert session == "original-cli-session" and entry == binding and directory == root
             self.session = session
             self.profile = {"model": "fixture-model", "effort": "low"}

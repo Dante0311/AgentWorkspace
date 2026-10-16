@@ -29,7 +29,7 @@ def desktop_owner(app, monkeypatch):
     class DesktopPeer:
         supports_insert = True
 
-        def __init__(self, root, config, session, *, read_only=False):
+        def __init__(self, root, config, session, *, read_only=False, worker_id=None, title=None):
             self.root, self.read_only = root, read_only
             self.session = session
             native["attached"].append(session)
@@ -649,7 +649,7 @@ def test_stop_command_starts_only_stop_observer(desktop_owner, monkeypatch):
     point = app.checkpoint("sea", "alice", "stop via public command", binding=binding)
     launches = []
 
-    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None):
+    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None, worker_id=None):
         launches.append(stop_binding)
         runtime.Runner(app, workspace, agent_id, directory, stop_binding=stop_binding).run()
         return {"pid": 1, "state": "starting_runner"}
@@ -672,7 +672,7 @@ def test_stop_after_public_monitor_pause_confirms_original_idle_session(desktop_
     assert read_json(layout.local_path(root, "control.json"))["stop"] == binding
     launches = []
 
-    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None):
+    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None, worker_id=None):
         launches.append(stop_binding)
         runtime.Runner(app, workspace, agent_id, directory, stop_binding=stop_binding).run()
         return {"pid": 1, "state": "starting_runner"}

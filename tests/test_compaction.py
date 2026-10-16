@@ -106,7 +106,7 @@ def test_unbound_payload_cannot_claim_identity_and_cli_emits_codex_json(app, tmp
 
     result = response(app, payload)
     assert "没有 AW 执行身份" in result["systemMessage"]
-    assert app.checkpoints("sea", "e2e") == []
+    assert not any(item["id"] == "e2e" for item in app.agents("sea"))
 
     from agent_workspace import cli
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))

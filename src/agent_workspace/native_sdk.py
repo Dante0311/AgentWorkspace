@@ -83,7 +83,7 @@ def _codebuddy_client(sdk, executable):
     return client
 
 
-def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
+def sdk_options(config, app, workspace, agent_id, binding, root, session=None, worker_id=None):
     """Secrets are read at launch and passed only to the child process."""
     module, client_name, options_name, executable_key = SDK_TYPES[config["kind"]]
     try:
@@ -91,7 +91,7 @@ def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
     except ImportError as exc:
         raise Unavailable(f"Install AgentWorkspace's {config['kind']} extra before launching this entry.") from exc
     env = {"AW_HOME": str(app.home), "AW_WORKSPACE": workspace, "AW_AGENT": agent_id,
-           "AW_BINDING": binding, **sdk_environment(config)}
+           "AW_BINDING": binding, "AW_WORKER": worker_id or "", **sdk_environment(config)}
     # No automatic user/project MCP configuration or broad native permissions.
     options = {"cwd": str(root), executable_key: config["executable"], "env": env,
                "setting_sources": [], "model": config.get("model"), "effort": config.get("effort"),
@@ -115,7 +115,7 @@ class NativeSDK:
         self.binding, self.root, self.session = binding, root, session
         self.worker_id = worker_id
         self.sdk, self.client_type, self.options_type, self.options = sdk_options(
-            config, app, workspace, agent_id, binding, root, session)
+            config, app, workspace, agent_id, binding, root, session, worker_id)
         self.title_receipt = None
         if title:
             supported = "session_name" in inspect.signature(self.options_type).parameters
@@ -275,6 +275,8 @@ class NativeSDK:
         path = layout.local_path(self.root, "inputs", self.worker_id) / f"boot-{self.binding}.json"
         item = {"id": path.stem, "binding": self.binding, "text": prompt, "delivery": "normal",
                 "purpose": "initial", "state": "dispatching", "sequence": 0, "created_at": now()}
+        if self.worker_id is not None:
+            item["worker"] = self.worker_id
         write_json(path, item)
         response = self.notify(prompt, "normal")
         item.update(state="submitted", result=response)

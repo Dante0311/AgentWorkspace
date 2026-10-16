@@ -184,7 +184,7 @@ def test_user_opened_chat_relays_same_agent_and_saved_business_without_creating_
     peer.notify.assert_not_called()
     peer.call.assert_not_called()
     peer.close.assert_called_once()
-    attach.assert_called_once_with(app, 'sea', 'alice', str(root))
+    attach.assert_called_once_with(app, 'sea', 'alice', str(root), worker_id=None)
     monkeypatch.chdir(common)
     assert runtime.desktop_directory_actor(app) == ('sea', 'alice', current)
     observed = runtime.desktop_observe(app, 'sea', 'alice')

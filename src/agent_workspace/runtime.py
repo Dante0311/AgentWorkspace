@@ -216,6 +216,10 @@ class Codex:
         self.record = layout.instance_path(root, "records", self.worker_id) / binding / "runtime.jsonl"
         self.record.parent.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, AW_HOME=str(app.home), AW_WORKSPACE=workspace, AW_AGENT=agent_id, AW_BINDING=binding)
+        if self.worker_id is None:
+            env.pop("AW_WORKER", None)
+        else:
+            env["AW_WORKER"] = self.worker_id
         self.rpc = Rpc(config.get("command", ["codex", "app-server"]), cwd=root, env=env,
                        on_event=self.event, on_request=self.tool_call)
         try:

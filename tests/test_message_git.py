@@ -540,7 +540,8 @@ def test_script_confirms_notification_when_body_missing_or_damaged(pair, tmp_pat
     assert app.store("sea").snapshot().json(".agentworkspace/acks/original.json") == {"message_id": "original"}
 
 
-def test_cross_workspace_partial_reply_continues_original_bytes(pair, tmp_path, monkeypatch):
+@pytest.mark.parametrize("failure_stage", ["target-validation", "peer-publication"])
+def test_cross_workspace_partial_reply_continues_original_bytes(pair, tmp_path, monkeypatch, failure_stage):
     app, bindings = pair
     app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
     app.create("peer", "sender")
@@ -560,24 +561,60 @@ def test_cross_workspace_partial_reply_continues_original_bytes(pair, tmp_path, 
                         "--id", "original", "--content-file", reply, "--request-id", "reply-one", "--record", record)
     helper = load_helper()
     repository = helper["Repository"]
-    head = repository.head
+    head, commit, push = repository.head, repository.commit, repository.push
+    own_path, peer_path = str(own.resolve()), str(peer.resolve())
+    own_before, peer_before = app.store("sea").snapshot(), app.store("peer").snapshot()
+    saved_journal = record.read_bytes()
+    original_records = dict(operation["records"])
+    writes = []
 
     def unavailable(repo):
-        if repo.path == str(peer.resolve()):
+        # Let destination validation finish when testing the later partial publication.
+        if repo.path == peer_path and (failure_stage == "target-validation"
+                or operation["targets"][0].get("state") == "confirmed"):
             raise helper["ProtocolError"]("isolated peer read unavailable before any peer write")
         return head(repo)
 
+    def observed_commit(repo, parent, records):
+        writes.append(("commit", repo.path))
+        return commit(repo, parent, records)
+
+    def observed_push(repo, revision, parent):
+        writes.append(("push", repo.path))
+        return push(repo, revision, parent)
+
     with monkeypatch.context() as scoped:
         scoped.setattr(repository, "head", unavailable)
+        scoped.setattr(repository, "commit", observed_commit)
+        scoped.setattr(repository, "push", observed_push)
         with pytest.raises(helper["ProtocolError"]):
             helper["publish"](record, operation)
     before = app.store("sea").snapshot()
+    assert app.store("peer").snapshot().revision == peer_before.revision
+    paths = (".agentworkspace/messages/reply-one.json", ".agentworkspace/message-index/reply-one.json")
+    expected_records = {path: base64.b64decode(original_records[path.removeprefix(".agentworkspace/")]) for path in paths}
+    assert operation["records"] == original_records
     original_reply = before.bytes(".agentworkspace/messages/reply-one.json")
-    assert original_reply is not None and app.store("peer").snapshot().bytes(".agentworkspace/messages/reply-one.json") is None
-    assert command(tmp_path, *continue_args(bindings["bob"], record))["state"] == "published"
-    assert app.store("sea").snapshot().revision == before.revision
-    assert app.store("peer").snapshot().bytes(".agentworkspace/messages/reply-one.json") == original_reply
-    assert app.store("peer").snapshot().bytes(".agentworkspace/message-index/reply-one.json") == before.bytes(".agentworkspace/message-index/reply-one.json")
+    if failure_stage == "target-validation":
+        assert writes == []
+        assert before.revision == own_before.revision
+        assert record.read_bytes() == saved_journal
+        assert all(before.bytes(path) is None for path in paths)
+    else:
+        assert writes == [("commit", own_path), ("push", own_path)]
+        assert all(before.bytes(path) == raw for path, raw in expected_records.items())
+        assert json.loads(record.read_bytes())["targets"][0]["state"] == "confirmed"
+    assert all(app.store("peer").snapshot().bytes(path) is None for path in paths)
+
+    continued = command(tmp_path, *continue_args(bindings["bob"], record))
+    assert continued["state"] == "published" and continued["records"] == original_records
+    after = app.store("sea").snapshot()
+    peer_after = app.store("peer").snapshot()
+    assert all(after.bytes(path) == peer_after.bytes(path) == raw for path, raw in expected_records.items())
+    assert {path: blob for path, blob in after.entries.items() if path not in paths} == own_before.entries
+    assert {path: blob for path, blob in peer_after.entries.items() if path not in paths} == peer_before.entries
+    if failure_stage == "peer-publication":
+        assert original_reply is not None and after.revision == before.revision
 
 
 @pytest.mark.parametrize("landed", [True, False])

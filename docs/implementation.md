@@ -159,7 +159,11 @@ Windows Codex Desktop 的限定实测覆盖自动创建、目录和身份绑定�
 
 日常使用曾确认共享仓库读取失败令运行器退出，以及运行器退出后 `stopping` 缺少继续确认交出的路径。当前代码已合入这两项的 Core、Runtime 和维护入口修复，并完成隔离故障与组合开发回归；原 Desktop 入口的恢复和后继接手仍待独立实机复验。正常路径的历史通过结果不替代异常路径复验。具体原因、修复范围和验收要求只在开发仓的 [AW-RUNTIME-001 / AW-RUNTIME-002 登记](https://github.com/Dante0311/AW-Workspace/blob/main/development/issues.md)维护。
 
-当前公共存储已区分读取故障，并补齐停止条件。`RetryableRead` 只表示当前 Git 读取可重试，不能据此重跑投递或整个业务操作；缓存锁忙与普通运行锁冲突分开，权限、TLS、损坏和未知错误不默认重试。Git push 超时按原提交只读核对，确认原提交或其后继包含该提交才成功，否则保留 `outcome_unknown`。GitHub GET 的明确暂时故障采用同一分类，写入及其核对失败不会降成读取重试。
+当前公共存储已区分读取故障，并补齐停止条件。`RetryableRead` 只表示当前 Git 读取可重试，不能据此重跑投递或整个业务操作；缓存锁忙与普通运行锁冲突分开，权限、TLS、损坏和未知错误不默认重试。GitHub GET 的明确暂时故障采用同一分类，写入及其核对失败不会降成读取重试。
+
+只对已观察到的 `schannel: next InitializeSecurityContext failed: SEC_E_INVALID_TOKEN (0x80090308)`，允许 `ls-remote` / `fetch` 进入既有读取退避；不修改调用方的次数或等待规则，Runner 等待仍可由停止请求取消。新请求仍完整执行 TLS 校验，其他 TLS 诊断、证书、认证或完整性错误优先阻止重试。这不是已查明 TLS 根因或保证下一次读取成功；该错误码只说明输入令牌格式无效，参见 [Microsoft Schannel 说明](https://learn.microsoft.com/en-us/windows/win32/secauthn/initializesecuritycontext--schannel)。
+
+Git push 超时或 TLS 失败仍按原提交只读核对，确认原提交或其后继包含该提交才成功，否则保留 `outcome_unknown`。明确的远端并发拒绝（包含本次目标 ref 和预期版本匹配的 `cannot lock ref ... is at ... but expected ...`）也先核对原提交；确认未发布后才返回 `Conflict`，由 `change` 重新读取并验证原文件版本，不能覆盖别人已改动的对象或重推旧提交。无法核对时仍为 `outcome_unknown`；其他锁失败不套用并发重试。
 
 `finish_stop` 可接收 `expected_controller`、`expected_checkpoint` 和 `expected_session`。受管调用方应传入实际停止观测所对应的值，核心在同一共享快照中核对入口、检查点归属和材料，并将相关版本纳入条件提交。重复 stop 不改变原检查点，重复或并发确认只返回匹配的既有 handoff；原入口的已发布结果读回不会改变后继入口。发布结果核对包含快照及 Binding/handoff 内容读取；发布可能发生后的内容读取暂时失败保留 `outcome_unknown`，不能作为停止前读取重试。兼容旧调用方省略观测字段，但不把这一兼容路径当作实际原生观测证明。运行循环已对可恢复读取故障退避并保留原输入进度。独立停止观察过程只继续既有请求；正常启动、`agent.stop`、维护 `continue-stop` 与工作台均可复用该入口，仍须由真实 Harness 确认忙碌、空闲或未知，不以协议夹具代替 Desktop 实测。
 

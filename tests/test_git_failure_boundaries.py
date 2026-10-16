@@ -13,6 +13,12 @@ from agent_workspace.gitstore import GitHubStore, GitStore
 from agent_workspace.util import Error, Conflict, LockBusy, RetryableRead, Uncertain, command_detail, locked
 
 
+SCHANNEL_READ_FAILURE = (
+    b"fatal: unable to access 'https://fixture.invalid/repo/': schannel: next "
+    b"InitializeSecurityContext failed: SEC_E_INVALID_TOKEN (0x80090308) - "
+    b"The token supplied to the function is invalid\n")
+
+
 @pytest.fixture
 def store(tmp_path):
     remote = tmp_path / "remote.git"
@@ -42,9 +48,38 @@ def test_access_integrity_tls_and_unknown_errors_are_not_retryable(store, monkey
     assert not isinstance(result.value, RetryableRead)
 
 
+@pytest.mark.parametrize("command", ["ls-remote", "fetch"])
+def test_observed_schannel_token_failure_is_retryable_only_for_reads(store, monkeypatch, command):
+    monkeypatch.setattr(gitstore, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a[0], 128, b"", SCHANNEL_READ_FAILURE))
+    with pytest.raises(RetryableRead):
+        store.git(command, "origin")
+    with pytest.raises(Error) as result:
+        store.git("push", "origin")
+    assert not isinstance(result.value, RetryableRead)
+
+
+@pytest.mark.parametrize("detail", [
+    b"SSL certificate problem", b"SEC_E_UNTRUSTED_ROOT", b"SEC_E_CERT_EXPIRED",
+    b"SEC_E_MESSAGE_ALTERED", b"SEC_E_LOGON_DENIED", b"Authentication failed",
+    b"fatal: unable to get password from user", b"bad object", b"protocol error",
+    b"unrecognized TLS failure",
+])
+def test_schannel_retry_does_not_hide_other_security_or_integrity_failures(store, monkeypatch, detail):
+    failure = SCHANNEL_READ_FAILURE + detail + b"; connection reset"
+    monkeypatch.setattr(gitstore, "run", lambda *a, **k: subprocess.CompletedProcess(a[0], 128, b"", failure))
+    with pytest.raises(Error) as result:
+        store.git("ls-remote", "origin")
+    assert not isinstance(result.value, RetryableRead)
+
+
 @pytest.mark.parametrize("command,detail,expected", [
     ("ls-remote", None, RetryableRead), ("fetch", b"partial read", RetryableRead),
     ("ls-remote", "schannel: SEC_E_INVALID_TOKEN", Error),
+    ("ls-remote", SCHANNEL_READ_FAILURE, RetryableRead),
+    ("fetch", SCHANNEL_READ_FAILURE + b"SSL certificate problem", Error),
+    ("ls-remote", b"fatal: unable to get password from user", Error),
+    ("fetch", b"fatal: could not read Password for 'https://fixture.invalid'", Error),
     ("fetch", b"authentication failed", Error), ("commit-tree", None, Error),
 ])
 def test_timeout_classification_keeps_the_read_boundary(store, monkeypatch, command, detail, expected):
@@ -135,7 +170,8 @@ def test_successor_commit_can_confirm_a_lost_original_reply(store, monkeypatch):
     assert store.snapshot().bytes("asset") == b"new"
 
 
-@pytest.mark.parametrize("detail", [b"schannel: SEC_E_INVALID_TOKEN", b"unrecognized push reply"])
+@pytest.mark.parametrize("detail", [b"schannel: SEC_E_INVALID_TOKEN", SCHANNEL_READ_FAILURE,
+                                   b"unrecognized push reply"])
 @pytest.mark.parametrize("accepted", [False, True])
 def test_ambiguous_push_errors_check_the_original_result(store, monkeypatch, detail, accepted):
     base = store.branch("main", {"asset": b"old"})
@@ -219,6 +255,95 @@ def test_incorrect_old_value_is_a_conflict_not_a_transport_retry(store, monkeypa
     with pytest.raises(Conflict):
         store.publish("main", candidate, base)
     assert store.head("main") == base
+
+
+def lock_ref_rejection(commit, actual, expected, branch="main"):
+    return subprocess.CompletedProcess(["git", "push"], 1,
+        (f"!\t{commit}:refs/heads/{branch}\t[remote rejected] "
+         f"(cannot lock ref 'refs/heads/{branch}': is at {actual} but expected {expected})\n").encode(), b"")
+
+
+@pytest.mark.parametrize("same_binding", [False, True])
+def test_lock_ref_race_rereads_file_versions_and_preserves_peer_cleanup(store, monkeypatch, same_binding):
+    base = store.branch("main", {"bindings/core.json": b'{"controller":"core"}',
+                                 "bindings/peer.json": b'{"controller":"peer"}'})
+    before = store.snapshot()
+    path = "bindings/core.json" if same_binding else "bindings/peer.json"
+    peer = store.commit(base, {path: b"{}"}, "peer cleanup")
+    git = store.git
+    attempts = []
+    def race(*args, **kwargs):
+        if args[0] == "push":
+            attempts.append(args)
+            if len(attempts) == 1:
+                git("push", "origin", f"{peer}:refs/heads/main")
+                return lock_ref_rejection(args[-1].split(":")[0], peer, base)
+        return git(*args, **kwargs)
+    monkeypatch.setattr(store, "git", race)
+    if same_binding:
+        with pytest.raises(Conflict):
+            store.change("main", {"bindings/core.json": b"{}"},
+                         {"bindings/core.json": before.entries["bindings/core.json"]}, "core cleanup")
+        assert len(attempts) == 1 and store.head("main") == peer
+    else:
+        published = store.change("main", {"bindings/core.json": b"{}"},
+                                 {"bindings/core.json": before.entries["bindings/core.json"]}, "core cleanup")
+        assert len(attempts) == 2 and store.head("main") == published
+        assert store.contains_commit(peer, published)
+        assert store.snapshot().bytes("bindings/peer.json") == b"{}"
+    assert store.snapshot().bytes("bindings/core.json") == b"{}"
+
+
+@pytest.mark.parametrize("outcome", ["original", "successor", "absent", "read-fails", "ancestry-fails"])
+def test_lock_ref_rejection_checks_original_commit_before_conflict(store, monkeypatch, outcome):
+    base = store.branch("main", {"asset": b"old"})
+    candidate = store.commit(base, {"asset": b"mine"}, "candidate")
+    successor = store.commit(candidate, {"peer": b"other"}, "peer")
+    git = store.git
+    attempts = []
+    def reject(*args, **kwargs):
+        if args[0] == "push":
+            attempts.append(args)
+            if outcome in ("original", "successor"):
+                confirmed = candidate if outcome == "original" else successor
+                git("push", "origin", f"{confirmed}:refs/heads/main")
+            return lock_ref_rejection(candidate, successor, base)
+        if args[0] == "ls-remote" and outcome == "read-fails":
+            raise RetryableRead("fixture reconciliation unavailable")
+        if args[0] == "merge-base" and outcome == "ancestry-fails":
+            return subprocess.CompletedProcess(["git"], 128, b"", b"bad object")
+        return git(*args, **kwargs)
+    monkeypatch.setattr(store, "git", reject)
+    if outcome in ("original", "successor"):
+        store.publish("main", candidate, base)
+    else:
+        expected = Conflict if outcome == "absent" else Uncertain
+        with pytest.raises(expected):
+            store.publish("main", candidate, base)
+    assert len(attempts) == 1
+
+
+@pytest.mark.parametrize("rejection", ["other-ref", "other-version", "lock-file", "stderr-only"])
+def test_other_lock_failures_remain_unknown_writes(store, monkeypatch, rejection):
+    base = store.branch("main", {"asset": b"old"})
+    candidate = store.commit(base, {"asset": b"mine"}, "candidate")
+    response = lock_ref_rejection(candidate, candidate, "f" * 40 if rejection == "other-version" else base,
+                                  "elsewhere" if rejection == "other-ref" else "main")
+    if rejection == "lock-file":
+        response.stdout = response.stdout.replace(b"is at ", b"unable to create lock file; is at ")
+    if rejection == "stderr-only":
+        response.stderr, response.stdout = response.stdout, b""
+    git = store.git
+    attempts = []
+    def reject(*args, **kwargs):
+        if args[0] == "push":
+            attempts.append(args)
+            return response
+        return git(*args, **kwargs)
+    monkeypatch.setattr(store, "git", reject)
+    with pytest.raises(Uncertain):
+        store.change("main", {"asset": b"mine"}, {"asset": store.snapshot().entries["asset"]}, "candidate")
+    assert len(attempts) == 1 and store.head("main") == base
 
 
 @pytest.mark.parametrize("method,status,expected", [

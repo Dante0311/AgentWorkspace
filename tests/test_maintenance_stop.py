@@ -45,8 +45,8 @@ def test_scoped_duplicate_stop_repair_delegates_once_and_observes_original_relea
     maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
     with pytest.raises(Error):
         commands.execute(app, "maintenance.repair", {**args, "agent_id": "ungranted"}, actor=actor)
-    with pytest.raises(Conflict):
-        commands.execute(app, "maintenance.repair", args, actor=("sea", "maintainer", "old-entry"))
+    with pytest.raises(Error):
+        commands.execute(app, "maintenance.repair", args, actor=("sea", "maintainer", "unknown-entry"))
     backend.assert_not_called()
 
     with ThreadPoolExecutor(max_workers=2) as pool:

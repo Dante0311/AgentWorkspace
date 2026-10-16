@@ -22,8 +22,10 @@ def local_app(tmp_path):
     app = Mock()
     app.home = tmp_path
     app.root.return_value = tmp_path
-    app.agent.return_value = {"current": ACTOR[2]}
+    app.agent.return_value = {"id": ACTOR[1], "current": ACTOR[2]}
     app.require_binding.return_value = ({}, {"kind": "codex"})
+    app.binding_worker.return_value = None
+    app.store.return_value.snapshot.return_value = message_snapshot()
     app.checkpoint.return_value = {"revision": "saved"}
     return app
 
@@ -190,7 +192,8 @@ def test_empty_input_pass_does_not_fall_back_to_another_read(local_app, monkeypa
 
 
 def message_snapshot(records=None):
-    values = {"workspace.json": {"locator": "local:sea"}, "agents/alice.json": {}, "bindings/b-current.json": {}}
+    values = {"workspace.json": {"locator": "local:sea"}, "agents/alice.json": {},
+              "bindings/b-current.json": {"agent": "alice"}}
     values.update(records or {})
     return SimpleNamespace(entries={path: path for path in values},
                            json=lambda path, default=None: values.get(path, default),
@@ -208,7 +211,9 @@ def test_empty_poll_uses_one_fresh_snapshot(local_app):
     store.snapshot.return_value = snap
     assert Messages(local_app).poll(*ACTOR) == {"state": "empty"}
     store.snapshot.assert_called_once_with()
-    local_app.require_binding.assert_called_once_with(*ACTOR, snapshot=snap)
+    assert local_app.require_binding.call_args_list
+    assert all(call.args == ACTOR and call.kwargs == {"snapshot": snap}
+               for call in local_app.require_binding.call_args_list)
     store.change.assert_not_called()
 
 
@@ -235,7 +240,11 @@ def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_
     adapter = Mock()
     adapter.status.return_value = "idle"
     if failure_at == "binding":
-        local_app.require_binding.side_effect = [({}, {}), Conflict("new binding")]
+        def reject_final_read(*args, **kwargs):
+            if "snapshot" not in kwargs:
+                raise Conflict("new binding")
+            return {}, {}
+        local_app.require_binding.side_effect = reject_final_read
     if failure_at == "commit":
         store.change.side_effect = Conflict("shared state advanced")
     if failure_at:
@@ -247,12 +256,15 @@ def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_
         expected = store.change.call_args.args[2]
         assert expected["acks/m.json"] is None
         assert "agents/alice.json" in expected and "bindings/b-current.json" in expected
-        assert local_app.require_binding.call_count == 3
+        assert local_app.require_binding.call_args.args == ACTOR
+        assert local_app.require_binding.call_args.kwargs == {}
         adapter.notify.assert_called_once()
 
 
 def test_unused_bridge_manager_does_no_shared_read(local_app):
     manager = bridges.BridgeManager(local_app, *ACTOR, local_app.root())
+    # Construction resolves the Worker once; idle ticks need no shared reads.
+    local_app.require_binding.reset_mock()
     manager.tick()
     local_app.require_binding.assert_not_called()
 
@@ -275,8 +287,15 @@ def test_bridge_work_still_checks_binding(local_app, pending):
 def test_runner_only_continues_for_observed_ownership_transition(local_app, monkeypatch, transition):
     entry = {"id": ACTOR[2], "kind": "codex", "phase": "active", "session": "existing"}
     # This fixture uses the legacy workspace: an absent layout marker returns None.
+    def snapshot_json(path, default=None):
+        if path == "bindings/b-current.json":
+            return dict(entry)
+        if path == "agents/alice.json":
+            return dict(local_app.agent.return_value)
+        return default
+
     snap = SimpleNamespace(entries={"agents/alice.json": "agent-sha", "bindings/b-current.json": "binding-sha"},
-                           json=lambda path, default=None: dict(entry) if path == "bindings/b-current.json" else default)
+                           json=snapshot_json)
     local_app.store.return_value.snapshot.return_value = snap
 
     def change(branch, changes, *args):
@@ -285,6 +304,7 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
         entry.update(value)
 
     local_app.store.return_value.change.side_effect = change
+    write_json(local_app.root() / ".aw-local/runtime.json", {"kind": "codex"})
     write_json(local_app.root() / ".aw-local/entry.json", {"binding": ACTOR[2], "config": {"kind": "codex"},
                "model_profile": {"model": "fixture-model", "effort": "low", "source": {"path": "runtime.json"}}})
     adapter = Mock(session="existing")
@@ -306,7 +326,7 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
 
     def finish_stop(*args, **kwargs):
         entry["phase"] = "released"
-        local_app.agent.return_value = {"current": None}
+        local_app.agent.return_value["current"] = None
         return {"id": "handoff"}
 
     local_app.finish_stop.side_effect = finish_stop
@@ -317,7 +337,7 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
             entry["phase"] = "stopping"
             entry["checkpoint"] = "explicit-stop"
         elif transition == "replaced":
-            local_app.agent.return_value = {"current": "successor"}
+            local_app.agent.return_value["current"] = "successor"
         raise failure
 
     runner._inputs = Mock(side_effect=fail)

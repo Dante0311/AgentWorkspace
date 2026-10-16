@@ -195,7 +195,7 @@ def command_map(app):
         "agent.desktop-prepare": partial(desktop_projects.prepare, app),
         "agent.desktop-project-save": partial(desktop_projects.save, app),
         "workspace.init": partial(onboarding.init_workspace, app), "workspace.connect": app.workspace_connect,
-        "workspace.bootstrap-remote": partial(app.workspace_bootstrap_remote, worker_support=True),
+        "workspace.bootstrap-remote": app.workspace_bootstrap_remote,
         "workspace.read": partial(shared.read, app),
         "workspace.skills": partial(skills.catalog, app),
         "agent.skills": partial(skills.inspect, app),
@@ -292,22 +292,8 @@ def execute(app, command, arguments, *, actor=None):
         if command in USER_MANAGEMENT and not maintenance.allowed(app, actor, command, args):
             raise Error("This is a user-management operation; a scoped caretaker grant is required.")
         own_target = args.get("workspace", workspace) == workspace and args.get("agent_id", aid) == aid
-        actor_item = None
-        if command not in READ_ONLY:
-            actor_item, _ = app.require_binding(workspace, aid, binding,
-                                               allow_stopping=command in ("checkpoint.create", "agent.stop", "worker.stop"))
         if own_target and "worker_id" in signature.parameters and command != "worker.create":
-            actual_worker = actor_item.get("worker_id") if actor_item else None
-            if command in READ_ONLY and args.get("worker_id") is None:
-                snap = app.store(workspace).snapshot()
-                entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
-                if entry is None or entry["agent"] != aid:
-                    raise Conflict("The calling Binding does not identify a Worker; select an explicit read target.")
-                actual_worker = app.binding_worker(workspace, aid, entry, snapshot=snap)
-            if args.get("worker_id") is None:
-                args["worker_id"] = actual_worker
-            if command in WORKER_BOUND and args["worker_id"] != actual_worker:
-                raise Conflict("This operation must use the calling Worker's execution entry.")
+            args.setdefault("worker_id", None)
         if command == "worker.create" and own_target:
             args["binding"] = binding
         if command in ("workspace.read", "workspace.skills") and args["workspace"] != workspace:
@@ -327,4 +313,21 @@ def execute(app, command, arguments, *, actor=None):
         signature.bind(**args)
     except TypeError as exc:
         raise Error(f"Invalid arguments for {command}: {exc}") from exc
+    if actor and command not in SOFTWARE_OPERATIONS:
+        actor_item = None
+        if command not in READ_ONLY:
+            actor_item, _ = app.require_binding(workspace, aid, binding,
+                                               allow_stopping=command in ("checkpoint.create", "agent.stop", "worker.stop"))
+        if own_target and "worker_id" in signature.parameters and command != "worker.create":
+            actual_worker = actor_item.get("worker_id") if actor_item else None
+            if command in READ_ONLY and args["worker_id"] is None:
+                snap = app.store(workspace).snapshot()
+                entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
+                if entry is None or entry["agent"] != aid:
+                    raise Conflict("The calling Binding does not identify a Worker; select an explicit read target.")
+                actual_worker = app.binding_worker(workspace, aid, entry, snapshot=snap)
+            if args["worker_id"] is None:
+                args["worker_id"] = actual_worker
+            if command in WORKER_BOUND and args["worker_id"] != actual_worker:
+                raise Conflict("This operation must use the calling Worker's execution entry.")
     return handler(**args)

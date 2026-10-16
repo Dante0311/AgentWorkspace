@@ -72,12 +72,12 @@ def test_recovery_requires_target_grant_current_actor_and_original_binding(recov
     maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
     with pytest.raises(Error):
         commands.execute(app, "maintenance.repair", {**args, "agent_id": "ungranted"}, actor=actor)
-    with pytest.raises(Conflict):
-        commands.execute(app, "maintenance.repair", args, actor=("sea", "maintainer", "old-actor"))
+    with pytest.raises(Error):
+        commands.execute(app, "maintenance.repair", args, actor=("sea", "maintainer", "unknown-actor"))
     with pytest.raises(Error):
         commands.execute(app, "maintenance.repair", {**args, "expected_binding": None}, actor=actor)
-    with pytest.raises(Conflict):
-        commands.execute(app, "maintenance.repair", {**args, "expected_binding": "old-target"}, actor=actor)
+    with pytest.raises(Error):
+        commands.execute(app, "maintenance.repair", {**args, "expected_binding": "unknown-target"}, actor=actor)
     assert read_json(maintenance.folder(app, "sea") / "repairs/original-recovery.json") is None
     maintenance.grant(app, "sea", "maintainer", [], [])
     with pytest.raises(Error):

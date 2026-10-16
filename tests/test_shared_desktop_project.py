@@ -69,6 +69,7 @@ def test_selected_shared_project_preserves_personal_roots_and_independent_defaul
         assert renamed['primary_folder'] == str(common)
         adapter = runtime.Desktop.__new__(runtime.Desktop)
         adapter.root, adapter.config = root, {'project_id': 'shared-id'}
+        adapter.worker_id = None
         adapter.tools = {'list_projects', 'create_thread'}
         adapter.call = lambda *args: {'projects': [{'projectId': 'shared-id', 'path': str(common),
                                                   'hostId': 'local', 'projectKind': 'local'}]}
@@ -107,6 +108,8 @@ def test_new_shared_chat_keeps_original_project_intent_in_launch_receipt(app, tm
                           project_directory=str(common), revision=initial['revision'])
     adapter = runtime.Desktop.__new__(runtime.Desktop)
     adapter.root, adapter.config, adapter.session, adapter.read_only = root, {}, None, False
+    adapter.worker_id = None
+    adapter.requested_title, adapter.title_receipt = None, None
     adapter.tools = {'list_projects', 'create_thread', 'read_thread'}
     adapter.model_choice = lambda *args: ({'model': 'fixture-model', 'effort': 'low'},
                                          {'catalog': 'unconfirmed', 'effective': 'unconfirmed'})
@@ -193,7 +196,8 @@ def test_user_opened_chat_relays_same_agent_and_saved_business_without_creating_
     assert not runtime.desktop_observe(app, 'sea', 'alice')['local_session_confirmed']
     monkeypatch.setenv('CODEX_THREAD_ID', 'fixture-old-chat')
     assert cli.main(['-w', 'sea', 'asset', 'write', 'alice', '--path', 'notes/stale.txt', '--content', 'wrong']) == 2
-    assert 'handed off' in capsys.readouterr().err
+    failure = json.loads(capsys.readouterr().err)
+    assert failure['ok'] is False and failure['code'] == 'conflict'
     assert not (root / 'notes/stale.txt').exists()
     assert app.agent('sea', 'alice')['current'] == current
 

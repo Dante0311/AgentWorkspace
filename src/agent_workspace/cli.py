@@ -42,6 +42,7 @@ def parser():
         service[key].add_argument("--open", dest="open_app", action="store_true")
     service["log"].add_argument("--agent-id")
     service["log"].add_argument("--directory")
+    service["log"].add_argument("--worker", dest="worker_id")
     service["log"].add_argument("--lines", type=int, default=100)
 
     actions("software", ["status", "update"])
@@ -53,6 +54,7 @@ def parser():
     courier["connect"].add_argument("--extension-id", required=True)
     courier["connect"].add_argument("--request-id", required=True)
     courier["connect"].add_argument("--port", type=int, default=8765)
+    courier["connect"].add_argument("--worker", dest="worker_id")
     for key in ("status", "revoke"):
         courier[key].add_argument("connection_id")
     courier["revoke"].add_argument("--request-id", required=True)
@@ -163,6 +165,57 @@ def parser():
     ag["desktop-prepare"].add_argument("--create-section", action="store_true")
     ag["desktop-prepare"].add_argument("--revision")
 
+    for key in ("show", "history", "start", "bind", "stop", "takeover", "handoff", "renew", "input", "sync", "fork",
+                "configure", "configure-codex", "configure-sdk", "configure-desktop", "capture-desktop",
+                "transfer", "transfer-profile", "transfer-continue", "transfer-status", "desktop-project", "desktop-project-save", "desktop-discover", "desktop-prepare"):
+        ag[key].add_argument("--worker", dest="worker_id")
+    ag["sync"].add_argument("--shared-path", dest="shared_paths", action="append")
+
+    wr = actions("worker", ["create", "list", "show", "update", "default", "archive", "unarchive", "migrate",
+                            "start", "bind", "stop", "handoff", "renew", "input", "history", "configure",
+                            "configure-codex", "configure-sdk", "configure-desktop"])
+    for key, sub in wr.items():
+        sub.add_argument("agent_id")
+        if key not in ("create", "list"):
+            sub.add_argument("worker_id")
+    wr["create"].add_argument("name")
+    wr["create"].add_argument("--id", dest="worker_id")
+    wr["create"].add_argument("--request-id", help="Continue the same creation request after reading its original result.")
+    wr["create"].add_argument("--description", required=True)
+    wr["create"].add_argument("--background", default="")
+    wr["create"].add_argument("--reference", dest="references", action="append")
+    wr["list"].add_argument("--archived", action=argparse.BooleanOptionalAction, default=None)
+    wr["update"].add_argument("--revision", required=True)
+    for field in ("name", "description", "background"):
+        wr["update"].add_argument("--" + field)
+    wr["update"].add_argument("--reference", dest="references", action="append")
+    wr["default"].add_argument("--revision", required=True, help="Agent revision from agent show, not a Worker revision.")
+    wr["migrate"].add_argument("--request-id", required=True)
+    wr["migrate"].add_argument("--directory")
+    wr["migrate"].add_argument("--compatible-writers", required=True,
+                               help="Explicit writer confirmation as JSON or @file.json.")
+    for key in ("start", "bind", "stop", "handoff", "renew", "input", "configure", "configure-desktop"):
+        wr[key].add_argument("--directory")
+    wr["start"].add_argument("--open", dest="open_app", action="store_true")
+    wr["start"].add_argument("--here", action="store_true")
+    wr["bind"].add_argument("--binding", required=True)
+    wr["bind"].add_argument("--session", required=True)
+    wr["stop"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
+    wr["stop"].add_argument("--checkpoint", required=True)
+    wr["stop"].add_argument("--confirm-stopped", action="store_true")
+    wr["input"].add_argument("--text", required=True)
+    wr["input"].add_argument("--delivery", choices=["normal", "insert"], default="normal")
+    wr["input"].add_argument("--request-id")
+    wr["configure"].add_argument("--config", dest="value", required=True, help="JSON or @file.json")
+    for key in ("configure-codex", "configure-sdk"):
+        wr[key].add_argument("--allow-http", action="store_true")
+        for field in ("model", "effort", "base-url", "env-key", "executable"):
+            wr[key].add_argument("--" + field, default=None if field == "executable" else "")
+    wr["configure-sdk"].add_argument("--kind", required=True, choices=["claude", "codebuddy"])
+    wr["configure-sdk"].add_argument("--allowed-tool", dest="allowed_tools", action="append")
+    for field in ("model", "effort", "project-id"):
+        wr["configure-desktop"].add_argument("--" + field, default="")
+
     mt = actions("maintenance", ["status", "schedule", "grant", "repair", "run"])
     mt["schedule"].add_argument("--enabled", action=argparse.BooleanOptionalAction, required=True)
     mt["schedule"].add_argument("--interval", type=float, default=300)
@@ -173,17 +226,20 @@ def parser():
     mt["repair"].add_argument("agent_id")
     mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover"], required=True)
     mt["repair"].add_argument("--request-id", required=True)
+    mt["repair"].add_argument("--worker", dest="worker_id")
     for field in ("operation-id", "bridge", "expected-binding", "expected-generation", "expected-checkpoint"):
         mt["repair"].add_argument("--" + field)
 
     cp = actions("checkpoint", ["create", "list", "show"])
     for sub in cp.values():
         sub.add_argument("agent_id")
+        sub.add_argument("--worker", dest="worker_id")
     cp["create"].add_argument("--summary", required=True)
     cp["create"].add_argument("--content", default="")
     cp["create"].add_argument("--binding", default=os.environ.get("AW_BINDING"))
     cp["create"].add_argument("--directory")
     cp["create"].add_argument("--id", dest="checkpoint_id")
+    cp["create"].add_argument("--shared-path", dest="shared_paths", action="append")
     cp["show"].add_argument("--id", dest="checkpoint", required=True)
 
     wk = actions("work", ["create", "list", "show", "update", "deliver"])
@@ -208,13 +264,16 @@ def parser():
         msg[key].add_argument("agent_id")
     for key in ("send", "receive", "poll"):
         msg[key].add_argument("--binding", default=os.environ.get("AW_BINDING"))
-    msg["send"].add_argument("--to", required=True)
+    msg["send"].add_argument("--to")
+    msg["send"].add_argument("--to-worker")
+    msg["send"].add_argument("--reply-to", help="Reply to the selected original sender and Worker.")
     msg["send"].add_argument("--content")
     msg["send"].add_argument("--content-file")
     msg["send"].add_argument("--delivery", choices=["normal", "insert"], required=True)
     msg["send"].add_argument("--ref", dest="message_refs", action="append")
     msg["send"].add_argument("--request-id")
     msg["list"].add_argument("--agent", dest="agent_id")
+    msg["list"].add_argument("--worker", dest="worker_id")
     msg["list"].add_argument("--direction", choices=["in", "out"], default="in")
     msg["list"].add_argument("--unacked", action="store_true")
     for key in ("show", "receive"):
@@ -224,12 +283,14 @@ def parser():
     msg["watch"].add_argument("operation", choices=["start", "stop", "status"])
     msg["watch"].add_argument("--interval", type=float, default=5)
     msg["watch"].add_argument("--directory")
+    msg["watch"].add_argument("--worker", dest="worker_id")
     msg["reconcile"].add_argument("operation_id")
 
     rt = actions("runtime", ["run", "start", "stop", "status", "desktop-observe", "launch-show", "reconcile-create"])
     for sub in rt.values():
         sub.add_argument("agent_id")
         sub.add_argument("--directory")
+        sub.add_argument("--worker", dest="worker_id")
     rt["run"].add_argument("--stop-binding")
     rt["reconcile-create"].add_argument("--binding", required=True)
     rt["reconcile-create"].add_argument("--session", required=True)
@@ -237,6 +298,7 @@ def parser():
     for key, sub in bridge.items():
         sub.add_argument("agent_id")
         sub.add_argument("--directory")
+        sub.add_argument("--worker", dest="worker_id")
         if key != "status":
             sub.add_argument("--name", required=True)
     bridge["configure"].add_argument("--config", dest="value", required=True)
@@ -248,6 +310,7 @@ def parser():
     for key, sub in asset.items():
         sub.add_argument("agent_id")
         sub.add_argument("--directory")
+        sub.add_argument("--worker", dest="worker_id")
         if key != "list":
             sub.add_argument("--path", required=True)
     asset["write"].add_argument("--content", required=True)
@@ -282,8 +345,8 @@ def main(argv=None):
     try:
         actor = None
         operation = options.get("command") if domain == "call" else domain + "." + str(action)
-        if (operation == "agent.start" and options.get("here")
-                or domain == "call" and operation == "agent.start" and parse_json(options["arguments"]).get("here")):
+        if (operation in ("agent.start", "worker.start") and options.get("here")
+                or domain == "call" and operation in ("agent.start", "worker.start") and parse_json(options["arguments"]).get("here")):
             operation = "agent.start-here"
         software_operation = operation in SOFTWARE_OPERATIONS or domain == "serve"
         # Local software control uses the host's tool permissions, not an Agent's execution entry.
@@ -352,10 +415,10 @@ def main(argv=None):
                 command = "workspace.relation"
             if command == "agent.import":
                 command = "agent.create"
-            if command == "agent.unarchive":
-                command, args["archived"] = "agent.archive", False
-            if command == "agent.renew":
-                command, args["renew"] = "agent.handoff", True
+            if command in ("agent.unarchive", "worker.unarchive"):
+                command, args["archived"] = domain + ".archive", False
+            if command in ("agent.renew", "worker.renew"):
+                command, args["renew"] = domain + ".handoff", True
             if domain == "bridge" and action in ("start", "stop"):
                 command, args["enabled"] = "bridge.switch", action == "start"
         if command == "backend.log" and args.get("agent_id"):

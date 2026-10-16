@@ -26,18 +26,20 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 
 <a id="worker-plan"></a>
 
-## Worker 并行工作（2026-10-16 设计确认，尚未实现）
+## Worker 并行工作（2026-10-16 开发候选）
 
-产品合同集中在 [设计第 3.5 节](design.md#workers)，包括 Agent / Worker / 原生 Session 的关系、名称格式、路由、资料、交接及保留规则；可选 worker Skill 的判断和用户决定见设计第 12 节。此处只记录实施顺序与验证要求，不复制另一份合同。
+产品合同集中在 [设计第 3.5 节](design.md#workers)，可选 worker Skill 的判断和用户决定见设计第 12 节。公共命令见 [Worker 用法](usage.md#workers)，此处记录已接入范围与验证状态。
 
-当前 Core 仍使用 Agent 的单个 current / handoff；Runtime 与本机后台按实例目录维护入口；正式 Message 的地址只有 Workspace / Agent；检查点保存会收集整份实例目录。Worker 寻址、独立运行、范围保存和第八个内置 Skill 均未接入，也没有 Worker 的真实多会话验收。本次仅更新设计与开发说明，没有创建 Worker、改动日常 Binding、重命名聊天或迁移资料。
+新建 Workspace 使用 Worker 数据版本 2，Agent 默认带一个 `default` Worker；旧版本 0/1 保持原入口规则，软件更新不自动迁移。Core 已接入 Worker 登记、独立 current / handoff、Binding 归属、固定创建请求与旧数据显式映射。实际调用者按 Session / Binding 确定 Worker，切换默认收件人不能改变调用身份。
 
-按以下顺序完成一条可验证流程；前置阶段通过不等于可提前在旧实例启用并行：
+Runtime、Backend、Message 与公共接口已采用同一 Worker 归属：
 
-1. Core 明确 Worker 登记与当前 Binding 归属，保留 Agent 身份；实现按 Worker 保存、引用共同资料版本及并发版本检查。旧工具与旧布局必须能拒绝误操作，不能将 current 直接改成列表作为完成。
-2. Runtime / Adapter 与 Communication / Maintenance 接入同一套 Worker 归属：真实调用身份、配置采用、运行状态、输入与消息队列、默认目标、明确回复、接续和恢复。一个 Worker 的操作不影响其他 Worker；正式 Message 和直发继续区分。
-3. 公共 CLI/MCP、原生标题、展示与内置材料共同更新。worker Skill 正常可发现并可主动建议，用户决定创建；现有 agent、message、handoff、relay 与 fork 材料同步说明对象差异。先不发布调用未实现接口的教程。
-4. 在隔离数据验证旧单入口 Agent 对应默认 Worker 的迁移与原记录保留；迁移和新版程序安装分别处理。日常实例采用需有明确范围，不凭设计自动迁移、重启或批量创建会话。
+1. 保存只收集本 Worker 的 `workers/<id>/` 与 `.agentworkspace/workers/<id>/`，共同资料通过明确的文件路径加入；记录所读共同资料版本并检查冲突。Git 文件操作使用 Agent 级文件锁，保留其他 Worker 尚未保存的内容。
+2. Runtime 分开保存 Worker 的采用配置、原生记录、输入队列、运行状态、控制与恢复记录；Backend 以 Agent、Worker、目录定位任务。Agent 配置作为默认值，Worker 可明确覆盖；当前入口继续使用启动时的采用值。原生标题请求使用“Workspace 简称 · Agent 名称 · Worker 名称”，请求与原生读回分开记录。
+3. 正式 Message 在首次发布前固定 `to.worker`，按 Worker 排队与 ACK；`reply_to` 指向原消息的发送 Worker。旧原文与 ID 保留，历史归属来自显式映射。直发记录、Git 手动脚本、Web Courier 与 maintenance 同步携带实际 Worker。
+4. CLI/HTTP/MCP 提供 Worker 管理与按 Worker 的运行、保存和查询；工作台详情可切换 Worker。八个内置 Skills 包含可选 worker Skill，并同步更新 agent、message、handoff、relay、fork 和进入材料。建议创建时由用户决定；批准的创建与启动范围分别说明。
+
+日常实例采用仍需明确范围。本批只准备隔离开发与验收环境，没有迁移日常 Agent、修改其 Binding、升级日常安装或批量重命名原聊天。
 
 独立 E2E 针对确定提交和构建验证以下流程，保留实际执行者、原消息/操作 ID、检查点及原生会话关联：
 
@@ -49,13 +51,13 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 | 跨 Harness | 稳定 Worker 地址在换原生聊天后保持；按实际可用的 Harness 接口验证正式通信与接续，手动路径、协议夹具与真实模型分别说明，未取得的效果不计为通过。 |
 | 旧实例与可选 Skill | 隔离旧数据保留身份、配置、原聊天和历史；只有用户同意才创建 Worker，不把分工建议当作创建或新增任务授权，拒绝拆分后仍可正常工作。 |
 
-以上均为待执行的验收场景。原单入口、历史 Fork、临时子代理或已有双 Agent 测试，不能替代同一 Agent 的双 Worker 验收。
+开发测试覆盖本机 Git、公共 HTTP、原生协议夹具及真实浏览器页面。独立 E2E 已接单，真实双 Worker 会话和跨 Harness 验收尚待确定构建；原单入口、历史 Fork、临时子代理或已有双 Agent 测试不能替代本次验收。
 
 ## 模块
 
 | 文件 | 当前职责 |
 | --- | --- |
-| `app.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding 历史、本地副本观察、Work 和 Git 访问。 |
+| `app.py`、`workers.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding 历史、本地副本观察、Work 和 Git 访问。 |
 | `layout.py`、`migration.py` | 按整体布局版本解析路径，显式迁移共享记录与副本，保留原请求和未知结果，并在复制期间持续互斥。 |
 | `software.py` | 统一检查和更新本机注册副本的内置材料；保护用户修改，继续原中断更新，不发布业务检查点。 |
 | `onboarding.py` | 只发现和引导的首次使用、只读 Git 检查、三份管家定义/实例和本机准备。 |
@@ -72,7 +74,7 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 | `web_courier.py`、`extensions/web-courier/` | 与当前 manual Binding 和网页会话对应的受限连接、原通知单次尝试、网页观察与 ACK 查询；不另建消息队列。 |
 | `maintenance.py` | 作用域授权、健康观测、安装位置归属明确的巡检、有限维修和结果复查。 |
 | `bridges.py`、`wecom.py` | 可选外部渠道、文本收发与组件看护。 |
-| `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和七个 Skill；内置 Skill 的 references/scripts 及固定通知模板随包分发。 |
+| `commands.py`、`cli.py`、`server.py`、`resources/` | 共用 CLI/HTTP/MCP 分发、本机工作台、首次配置、定义和八个 Skill；内置 Skill 的 references/scripts 及固定通知模板随包分发。 |
 | `npm/`、`scripts/build_npm.py`、CI | 自带 Python 运行时的 Windows x64 npm 包、实际安装与替换检查、Web Courier 模拟测试和扩展 ZIP；wheel/sdist 和旧安装器保留为底层构建及开发工具。 |
 
 没有引入通用调度平台、模型网关、ACP 依赖或新的 Agent Loop。SDK 是按需安装的原生客户端，不是我们自研 Harness。元数据探测与实际会话共用凭据路由；Claude 握手返回模型选项，无需发送提示词，自有服务不使用内置目录。
@@ -131,7 +133,7 @@ message Skill 同时指导 AW 工具和手动 Git Backend 操作，包含精确�
 | 当前接入未实现的能力 | Claude/CodeBuddy SDK 的已验证 insert/steer；CodeBuddy 模型目录探测目前不提供，字段手工配置并注明 unchecked。不能用中断并重开轮次冒充 insert。 |
 | 单独授权事项 | 合并 PR/main、正式版本发布、许可证、生产环境变更。 |
 
-当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制说明，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。这不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。后续如获授权并取得可靠接口，再按同一执行权规则增加支持。不静默改用后台 CLI，不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、V2 独立身份和通用迁移仍留待后续；Worker 并行已确认设计，实施缺项见[上述计划](#worker-plan)。
+当前未提供的 Claude/WorkBuddy Desktop 自动化、SDK insert 与 CodeBuddy 目录查询按本版公开限制说明，详见随包维护的[支持范围](../src/agent_workspace/resources/prompts/capabilities.md)。这不是声称上游无接口，也不是仅待用户验收；不为补齐功能表强行扩展复杂度。后续如获授权并取得可靠接口，再按同一执行权规则增加支持。不静默改用后台 CLI，不将发现程序当作具备控制权，不为绕过接口限制预建新的会话界面。统一聊天、V2 独立身份和通用迁移仍留待后续；Worker 并行的候选范围与验收状态见[上述说明](#worker-plan)。
 
 ## 共同职责、共享 Skill 与桌面准备
 

@@ -580,3 +580,42 @@ def test_real_backend_browser_restart_stop_and_reconnect_without_workspace(tmp_p
             if current.get("running"):
                 backend.stop(app)
                 wait_status(lambda result: result.get("running") is False)
+
+
+@pytest.mark.parametrize("width", [390, 1440])
+def test_worker_selection_shows_only_its_own_session(tmp_path, browser, width):
+    from agent_workspace.app import App
+
+    app = App(tmp_path / "worker-home")
+    app.workspace_init("team", str(tmp_path / "team.git"), worker_support=True)
+    app.create("team", "helper")
+    app.worker_create("team", "helper", "日志调查", "独立检查构建日志", worker_id="logs")
+    for worker_id in ("default", "logs"):
+        binding = app.reserve("team", "helper", worker_id=worker_id)["binding"]
+        app.bind("team", "helper", binding, "manual-worker-" + worker_id, worker_id=worker_id)
+    server = make_server(app, 0, "worker-browser-token")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    context = browser.new_context(viewport={"width": width, "height": 960})
+    page = context.new_page()
+    failures = []
+    page.on("pageerror", lambda error: failures.append(str(error)))
+    try:
+        page.goto(f"http://127.0.0.1:{server.server_port}/#token=worker-browser-token")
+        page.wait_for_selector("#app:not(.hidden)")
+        assert page.get_by_text("2 个 Worker", exact=True).is_visible()
+        page.locator(".agent-name").click()
+        assert page.locator("#worker-select").input_value() == "default"
+        assert "manual-worker-default" in page.locator("#content").inner_text()
+        assert "manual-worker-logs" not in page.locator("#content").inner_text()
+        page.locator("#worker-select").select_option("logs")
+        assert "manual-worker-logs" in page.locator("#content").inner_text()
+        assert "manual-worker-default" not in page.locator("#content").inner_text()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.screenshot(path=str(tmp_path / f"worker-detail-{width}.png"), full_page=True, animations="disabled")
+        assert not failures
+    finally:
+        context.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(5)

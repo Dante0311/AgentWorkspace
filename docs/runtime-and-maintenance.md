@@ -6,7 +6,7 @@
 
 正式用户路径使用 npm。当前先提供 Windows x64 安装包，需要 Node.js 22+；Git 和所用原生客户端仍由用户自行安装、登录。从所选提交的 GitHub Actions `CI` 获取 `agent-workspace-build` 制品，解压后选择 `.tgz` 文件，并用同目录 `SHA256SUMS` 核对下载内容。制品有保留期限，当前没有 npm Registry 或正式 Release 发布。
 
-包内已带程序、网页、七个 Skills 和固定版本的 Python 运行时，不需要系统 Python，也没有安装后下载运行时的脚本。包内 `build.json` 记录 wheel 与 Python 的版本、来源和 SHA-256。同一个预览版本可能对应不同提交，判断构建来源应看提交和文件校验值。
+包内已带程序、网页、八个 Skills 和固定版本的 Python 运行时，不需要系统 Python，也没有安装后下载运行时的脚本。包内 `build.json` 记录 wheel 与 Python 的版本、来源和 SHA-256。同一个预览版本可能对应不同提交，判断构建来源应看提交和文件校验值。
 
 ```powershell
 npm install --global .\git-native-agent-workspace-0.1.0-alpha.1.tgz

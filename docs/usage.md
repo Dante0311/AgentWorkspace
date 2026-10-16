@@ -12,7 +12,7 @@ aw --help
 aw backend start --open
 ```
 
-Windows x64 的 npm 预览包需要 Node.js 22+，已包含 Python 运行时、网页与七个 Skills，无需保留源码。获取和升级方法见[安装和依赖](runtime-and-maintenance.md#1-安装和依赖)。工作台提供 Agent 与环境、消息历史、本机后台三项；创建、配置和交接继续使用下列 CLI 与 Skills。共享事实和本机观察分别标明，详见[工作台说明](workbench.md)。
+Windows x64 的 npm 预览包需要 Node.js 22+，已包含 Python 运行时、网页与八个 Skills，无需保留源码。获取和升级方法见[安装和依赖](runtime-and-maintenance.md#1-安装和依赖)。工作台提供 Agent 与环境、消息历史、本机后台三项；创建、配置和交接继续使用下列 CLI 与 Skills。共享事实和本机观察分别标明，详见[工作台说明](workbench.md)。
 
 全局参数放在模块名之前：`aw --home PATH --workspace sea agent list`。环境变量 `AW_HOME`、`AW_WORKSPACE` 可代替前两项。通过 GitHub REST 访问时凭据仅从 `GITHUB_TOKEN` / `GH_TOKEN` 读取，不写进配置、仓库或返回结果。
 
@@ -72,6 +72,45 @@ aw -w sea agent import helper --from-directory /path/to/existing-agent --asset A
 ```
 
 只导入明确选定的普通文件；不改原目录、不覆盖原 `.git`、不接管旧会话。嵌套 Git、symlink、密钥、数据库整体迁移不自动猜测；原生历史应先通过来源环境明确导出。该操作不是 V2 membership。
+
+<a id="workers"></a>
+
+### 3.1 同一 Agent 的 Worker
+
+新 Workspace 的 Agent 默认包含名为“日常工作”的 `default` Worker。只用这一个即可；需要独立保留另一项工作的上下文时，先查看已有 Worker，再按用户已批准的分工创建。Agent 身份与共同资料不变，每个 Worker 分别维护执行入口、消息和检查点。
+
+```sh
+aw -w sea worker list helper
+aw -w sea worker create helper "日志调查" --id logs --description "调查已指定的构建日志" --request-id create-logs
+aw -w sea worker show helper logs
+aw -w sea worker start helper logs
+aw -w sea agent show helper --worker logs
+```
+
+创建登记不会自动启动会话；`start` 是独立动作。Worker 继承 Agent 的 Harness 和模型默认值，明确的专用设置使用 `worker configure`、`worker configure-codex`、`worker configure-sdk` 或 `worker configure-desktop`。修改默认值不改变已运行入口采用的配置。原生标题使用 `Workspace 简称 · Agent 名称 · Worker 名称`；宿主实际采用情况仍须读回。
+
+`worker update` 修改名称、说明、背景和材料引用，`--revision` 使用 `worker show` 返回的 Worker revision。`worker default` 改默认收件位置，`--revision` 使用 `agent show` 的 Agent revision。默认 Worker 没有管理其他 Worker 的权限，只负责接收未指定 Worker 的新消息。
+
+```sh
+aw -w sea worker update helper logs --revision WORKER_REVISION --name "构建日志调查"
+aw -w sea worker default helper logs --revision AGENT_REVISION
+aw -w sea message send helper --binding GRANTED_BINDING --to core --to-worker rules --delivery normal --content-file task.md --request-id task-one
+aw -w sea message send helper --binding GRANTED_BINDING --reply-to ORIGINAL_MESSAGE_ID --delivery normal --content-file reply.md --request-id reply-one
+```
+
+发送方由真实 Binding 决定。明确回复回到原来源 Worker；普通 `message_refs` 不决定路由。改变默认收件位置不改投已保存消息，离线目标保留队列，归档目标拒绝新的发送。同一 Agent 的其他 Worker 不能代为 ACK。
+
+过程文件放在 `workers/<worker-id>/`。检查点保存本 Worker 的材料；共同文件必须逐个明确选择，不收集同伴的未提交修改。更新产品代码时仍使用产品仓的任务 worktree。
+
+```sh
+aw -w sea checkpoint create helper --worker logs --binding GRANTED_BINDING --summary "调查结果" --shared-path knowledge/build-notes.md
+aw -w sea worker stop helper logs --binding GRANTED_BINDING --checkpoint CHECKPOINT_ID
+aw -w sea worker start helper logs --here
+```
+
+上述交出与接续按实际 Harness 执行；`--here` 只用于当前真实的新 Codex Desktop 聊天。完成任务不会自动停工或归档。`worker archive helper logs` 要求该 Worker 已交出入口，保留其他 Worker；归档整个 Agent 则要求全部 Worker 已交出。
+
+既有布局 v0/v1 继续使用旧单入口，不因安装新版自动迁移。启用 Worker 时使用明确的用户管理操作 `worker migrate`，指定旧 Agent 对应的 Worker ID、原请求 ID 和全部写入端已兼容的确认；v0 先完成原目录迁移。例如 `aw -w sea worker migrate helper default --request-id migrate-helper --compatible-writers '["worker-v2"]'`。这是对实际写入端的确认，不能为通过检查随意填写。迁移保持旧 Message、ACK、检查点和 Binding 原字节，用单独映射确定其 Worker，不重新创建原生聊天。
 
 ## 4. 手动与 Codex 入口
 

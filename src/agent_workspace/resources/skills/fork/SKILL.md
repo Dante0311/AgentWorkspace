@@ -7,16 +7,18 @@ description: 从已经保存的检查点创建另一个 Agent，保留资产与�
 
 Fork 创建一个新的持久 Agent 身份，原 Agent 不必停工。本地目录只是这个 Agent 的一份资料副本，准备目录不会启动原生会话或取得执行权。不从任意未保存的聊天位置分叉。
 
+同一 Agent 内独立推进另一件事可以使用 Worker；只有需要新的 Agent 身份时才 Fork。用户已明确选择 Fork 时按其请求执行，不擅自改成 Worker。来源检查点可能属于某个 Worker，创建结果仍是新 Agent，不能继承来源或同伴的有效 Binding。
+
 ```sh
-aw -w sea checkpoint list helper
-aw -w sea checkpoint show helper --id CHECKPOINT_ID
-aw -w sea agent fork helper --checkpoint CHECKPOINT_ID --name exploration
+aw -w sea checkpoint list helper --worker WORKER_ID
+aw -w sea checkpoint show helper --worker WORKER_ID --id CHECKPOINT_ID
+aw -w sea agent fork helper --worker WORKER_ID --checkpoint CHECKPOINT_ID --name exploration
 ```
 
 如果新分支已经保存，但 Agent 登记或本地目录准备未完成，明确继续原目标：
 
 ```sh
-aw -w sea agent fork helper --checkpoint CHECKPOINT_ID --name exploration --new-id exploration --resume
+aw -w sea agent fork helper --worker WORKER_ID --checkpoint CHECKPOINT_ID --name exploration --new-id exploration --resume
 ```
 
 继续时保留原来源 Agent、检查点、名称和目标 ID。平台核对检查点资料版本、原目标身份与来源，只补尚未完成的登记或目录准备；已有目录中的用户修改不会覆盖。普通 Fork 遇到已有目标仍拒绝创建。已经登记的目标只准备或复用本地副本，不另建身份。

@@ -68,7 +68,7 @@ from importlib.resources import files
 import sys
 assert sys.version_info[:2] == (3, 13)
 root = files('agent_workspace').joinpath('resources')
-for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork'):
+for name in ('workspace', 'work', 'message', 'agent', 'worker', 'handoff', 'relay', 'fork'):
     assert root.joinpath('skills', name, 'SKILL.md').read_text(encoding='utf-8')
 for name in ('index.html', 'setup.html', 'sessions.html'):
     assert root.joinpath(name).read_text(encoding='utf-8')
@@ -132,7 +132,7 @@ for name in ('index.html', 'setup.html', 'sessions.html'):
         print(json.dumps({"ok": True, "artifact": artifact.name,
                           "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
                           "npm_version": build["version"], "program_version": version,
-                          "checks": ["no application build caches", "offline npm install", "bundled runtime", "seven Skills and web resources",
+                          "checks": ["no application build caches", "offline npm install", "bundled runtime", "eight Skills and web resources",
                                      "CLI and HTTP", "backend singleton, restart, logs and separate home",
                                      "package replacement preserves user data", "orderly shutdown"]}))
 

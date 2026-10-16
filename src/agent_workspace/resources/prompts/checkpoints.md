@@ -22,7 +22,8 @@ checkpoint 是可以单独使用的主动保存能力。当前入口保存以后
 为 handoff 保存时，同时说明自己承担什么职责、正在处理什么任务、实际工作位置、已完成事项、下一步与未决结果。平台从当前登记补充 Workspace、Agent、实例分支、个人资料根、职责入口及实际会话位置；已知字段不要求模型凭记忆手填，未知位置不编造。接手时重新解析本机路径与新 Binding，不把检查点里的旧资格直接恢复。
 CLI：aw -w WORKSPACE checkpoint create AGENT --binding BINDING --summary "累计摘要" --content "阶段记录"
 动态工具：{"command":"checkpoint.create","arguments":{"summary":"累计摘要","content":"阶段记录"}}
-工具会保存资料根中未被排除的文件快照，并按 Workspace 配置提交到本地或远端仓库；保存的不只是摘要。返回结果包含 ID、revision 与排除范围。`.git`、`.agentworkspace/local`、旧 `.aw-local`、`.local`、secrets、环境文件等按公开排除规则不上传；外部产品仓没有自动备份。发现资料根中有尚未获准共享的敏感材料时，先确认处理方式，不能假定排除规则已经覆盖它。
+采用 Worker 后，工具按当前 Binding 选择实际 Worker，只保存 `workers/<worker-id>/` 和 `.agentworkspace/workers/<worker-id>/` 的材料。共同文件需要通过 `shared_paths` 或重复的 `--shared-path` 明确选择单个路径，例如 `--shared-path knowledge/summary.md`；目录或通配符不能代替明确选择。未选择的共同修改、同伴的未提交文件和缺失的同伴文件均不随本次快照提交或删除。共同文件有并发改动时先核对版本，不能覆盖。
+旧单入口数据保留原资料快照规则。检查点按 Workspace 配置提交到本地或远端仓库，保存的不只是摘要。返回结果包含 ID、Worker、revision 与排除范围。`.git`、`.agentworkspace/local`、旧 `.aw-local`、`.local`、secrets、环境文件等按公开排除规则不上传；外部产品仓没有自动备份。发现资料根中有尚未获准共享的敏感材料时，先确认处理方式，不能假定排除规则已经覆盖它。
 资产来自登记的个人资料根，不随共用项目或当前 cwd 改变。支持 worktree 的版本复用公共准备能力；若目录缺失只能取回已保存版本，须说明本轮尚未保存资料的范围，不能据此声称已经完整交接。
 不要把未取得的原生记录说成已保存；如需纳入其他资料，先按使用者选择保存或提供固定引用。snapshot 后无权修改旧检查点，纠正应新增。
 检查点不释放控制权。停工交出由 handoff/stop 完成，Fork 只选已经保存并登记的检查点。
@@ -33,7 +34,7 @@ CLI：aw -w WORKSPACE checkpoint create AGENT --binding BINDING --summary "累�
 
 用户启用并信任 Codex `PreCompact` hook 后，`aw --home AW_HOME codex-hook` 可在自动或手动压缩前同步保存检查点。它从原生 hook 的标准输入读取事件，核对当前 AW 执行入口与会话；未绑定的普通聊天不保存，已交出或会话不匹配的入口拒绝保存。
 
-钩子保留该会话截至读取时的原始 transcript 字节、来源和覆盖位置，并随实例资料快照保存。启用前应确认这些会话原文可以保存到该 Workspace；它沿用 Workspace 的本地或远端 Git 存储，并不只保存在 Codex 本机。原文仅代表宿主实际提供的记录，不能保证包含未公开的内部状态；没有可核对的原文或超过现有单文件限制时明确报告失败。
+钩子保留该会话截至读取时的原始 transcript 字节、来源和覆盖位置，并随实际 Worker 的资料快照保存；旧单入口仍保存自身资料。它从真实 session/Binding 确定 Worker，不读取当前默认收件 Worker 来代替来源。启用前应确认这些会话原文可以保存到该 Workspace；它沿用 Workspace 的本地或远端 Git 存储，并不只保存在 Codex 本机。原文仅代表宿主实际提供的记录，不能保证包含未公开的内部状态；没有可核对的原文或超过现有单文件限制时明确报告失败。
 
 自动检查点沿用最近一次人工/Agent 保存的业务总结，并注明总结的来源和时间；它不会生成新总结，不表示旧总结已覆盖压缩前的全部进展。因此主动 checkpoint 的指引仍然需要。相同会话、轮次和相同原文字节复用同一保存请求；失败或结果未知按原 ID 核对。默认保存失败会显示提示并让 Codex 继续压缩，不执行 stop、handoff 或新的模型轮次。
 

@@ -7,6 +7,8 @@ description: 创建、完善和管理持久 Agent 身份，在重要工作节点
 
 Agent 是持久身份，资料根保存它自己的职责、Skills 和工作资料；原生项目与会话 cwd 可以指向别处。同一 Agent 保留自己的实例分支，可以在不同环境准备副本；准备副本、启动原生会话和取得执行权是三件事。使用入口材料给出的资料路径，不把当前目录自动当成个人资料根。
 
+同一 Agent 可以按需使用多个持久 Worker，共用职责、Skills 和长期资料，各自保留负责事项、进展与执行入口。适合独立推进的工作可以按 worker Skill 提出建议，先考虑复用，用户决定是否新增；一个 Worker 也是完整用法。Worker 不是新的 Agent 身份，当前资格以实际 Worker 的 Binding 为准。
+
 ```sh
 aw -w sea agent create helper --description "构建排错助手"
 aw -w sea agent create ui --definition definitions/ui --skill design-review
@@ -43,7 +45,7 @@ checkpoint 可以在继续工作的过程中单独使用。完成重要阶段、
 Codex 模型选择在 `.agentworkspace/config.json` 的 `codex` 对象中保存 `model` 和 `effort`，自动启动要求两者明确填写。Definition 可提供 `runtime.json` 创建模板；Agent 此后独立维护。通用 configure 接收原生连接配置；原有 model / effort 参数会存入 Agent 文件。不要将实例配置当成本机连接文件，也不要从发起者设置补值。保存不启动模型，活动会话继续使用当前入口的采用记录。
 AW 软件和受管材料由统一安装与后台维护，`software update` 一次处理本机登记的副本，不要求逐 Agent 接单。用户改过的文件保留并报告，结果含各副本状态；旧目录须先明确迁移。`agent upgrade-tools` 只保留为单副本入口。升级不重置自有职责和资料，也不替运行中的模型重载材料。`agent update` 只更新选定职责来源；报告本地差异时先交由使用者处理，不自动合并。
 提升只发布用户明确选择的文件，不整体合并实例分支，不删除原资料，不自动替别人更新。
-归档前先 handoff；解除归档不自动进入。已有外部目录可用 agent import --from-directory --asset 明确导入选定文件，原目录不改变。
+归档整个 Agent 前须处理全部 Worker 的有效入口，只交出默认 Worker 还不够；解除归档不自动进入。只结束某个 Worker 时处理该 Worker，不归档整个 Agent。已有外部目录可用 agent import --from-directory --asset 明确导入选定文件，原目录不改变。
 
 用户明确要求强制接手时，先展示 agent show / history 中选定的当前 Binding 与已保存检查点，并说明旧原生聊天可能仍在运行、未保存资料不会迁移。agent takeover 只能由用户管理入口执行，Agent 或 caretaker 不能自动调用；用户应在没有 Agent 调用身份的管理终端中执行：
 
@@ -53,7 +55,7 @@ aw -w sea agent takeover helper --binding CURRENT_BINDING --checkpoint SAVED_CHE
 
 此操作撤销旧 Binding 的 AW 执行资格并保存同一 Agent 的交接点，不停止旧聊天、不启动新会话。之后按 relay 使用 agent start 取得新的唯一入口。重复原请求只读取原交接结果，不影响已启动的后继入口。原发表结果未知时保留原操作并读取核实，不自动重发或另建身份。
 
-七个内置 Skill 不限制 Agent 自己的 Skill 数量。共享 skills/ 自动发现但不自动全装；安装完整目录到 .agents/skills/，独立来源由 .agentworkspace/skill-sources.json 管理，Definition 来源另存 .agentworkspace/source.json。agent.versions/update 管 Definition，agent.skills/skill-update 管独立 Skill；私人修改、同名来源、大小写冲突先报告，源删除保留副本。更新不自动重载模型或发布检查点。pending_update 时按原名称/版本恢复，不删暂存；恢复前不能启动、交出或发布快照。
+八个内置 Skill 不限制 Agent 自己的 Skill 数量，worker Skill 可选使用。共享 skills/ 自动发现但不自动全装；安装完整目录到 .agents/skills/，独立来源由 .agentworkspace/skill-sources.json 管理，Definition 来源另存 .agentworkspace/source.json。agent.versions/update 管 Definition，agent.skills/skill-update 管独立 Skill；私人修改、同名来源、大小写冲突先报告，源删除保留副本。更新不自动重载模型或发布检查点。pending_update 时按原名称/版本恢复，不删暂存；恢复前不能启动、交出或发布快照。
 
 ## 普通会话与桌面组织
 

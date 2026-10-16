@@ -159,7 +159,7 @@ def resource_files(root=None):
         require_current(root)
     source = package_files('agent_workspace') / 'resources'
     result = {}
-    for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork'):
+    for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork', 'worker'):
         pending = [(source / 'skills' / name, f'.agents/skills/{name}')]
         while pending:
             directory, prefix = pending.pop()

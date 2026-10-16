@@ -1,8 +1,16 @@
 # 当前版本支持范围
 
+## Agent 与 Worker
+
+本开发候选支持同一 Agent 下多个持久 Worker。新建 Workspace 默认使用 Worker 数据版本；每个 Agent 自动有一个“日常工作”Worker。`worker` 是第八个可选内置 Skill，可主动建议合理分工，用户决定是否创建和启动；单 Worker 仍是完整用法。
+
+Worker 分别保存执行入口、输入队列、消息和检查点。来源从真实 session/Binding 确定；默认收件 Worker 的变化不转移已保存消息。过程文件放在 `workers/<worker-id>/`，共同文件通过明确的 `shared_paths` 保存。相同 Agent ID 或共用目录不授权同伴的 ACK、停工或检查点操作。
+
+旧单入口数据不会自动迁移，必须通过已授权的 `worker migrate` 显式登记历史映射；不修改旧 Message、ACK 和 Binding 字节，不因升级重建聊天。具体构建的真实 Desktop、跨 Harness 和迁移验收以对应报告为准，源码能力不代替本机实际可用性。
+
 这是当前安装的 AgentWorkspace 的能力说明，不是执行授权，也不代表上游产品永久没有相应接口。设计中的目标不等于本版本已支持。
 
-近期优先 Codex Desktop 与 ChatGPT Web。Web 当前手动收件；已有 Web Courier MVP 已纳入开发与独立 E2E，首批为人工确认的单条正式 Message，尚未完成 AW 接入和真实浏览器验收。tclaude 尚待验证。其他 Harness、模型供应商与企业微信保留已有底层能力，暂缓继续扩展。Windows x64 npm 包包含 Python 后端、网页和七个 Skills，不包含全部可选 SDK。
+近期优先 Codex Desktop 与 ChatGPT Web。Web 当前手动收件；已有 Web Courier MVP 已纳入开发与独立 E2E，首批为人工确认的单条正式 Message，尚未完成 AW 接入和真实浏览器验收。tclaude 尚待验证。其他 Harness、模型供应商与企业微信保留已有底层能力，暂缓继续扩展。Windows x64 npm 包包含 Python 后端、网页和八个 Skills，不包含全部可选 SDK。
 
 ## 状态怎么读
 
@@ -55,4 +63,4 @@ checkpoint 可在继续工作时单独保存。完成重要阶段、形成关键
 
 workspace.read 从所属 Workspace 的同一 Git 快照读取明确材料路径，返回完整 UTF-8 正文及版本；不要求本机检出 main。AGENTS.md 原样保留 @workspace-read 指令，每个新会话（含 relay/fork）必须实际读取，预检成功不证明模型已读或理解；缺文件/网络错误/超限如实失败。没有指令的原定义不变，平台不改写私人职责或产品规则。
 
-workspace.skills 发现共享 skills/ 候选；agent.create 可选 skills，已有实例用 agent.skills 与 skill-install/skill-update。全目录复制、来源按 Skill 保存，不自动全装/覆盖/重载模型。Definition 的专用 Skill、软件七个 Skill 和自有 Skill 保留各自更新边界，来源删除不删实例副本，私人差异与同名冲突须处理。交换未完成先恢复原记录，不发布半成品。实际用户模型、目标 Desktop 分区写入和最终 Windows 安装仍须按对应构建验证，开发夹具不替代实机。
+workspace.skills 发现共享 skills/ 候选；agent.create 可选 skills，已有实例用 agent.skills 与 skill-install/skill-update。全目录复制、来源按 Skill 保存，不自动全装/覆盖/重载模型。Definition 的专用 Skill、软件八个 Skill 和自有 Skill 保留各自更新边界，来源删除不删实例副本，私人差异与同名冲突须处理。交换未完成先恢复原记录，不发布半成品。实际用户模型、目标 Desktop 分区写入和最终 Windows 安装仍须按对应构建验证，开发夹具不替代实机。

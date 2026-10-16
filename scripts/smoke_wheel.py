@@ -225,7 +225,7 @@ def main() -> None:
         resource_check = """
 from importlib.resources import files
 root = files('agent_workspace').joinpath('resources')
-for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork'):
+for name in ('workspace', 'work', 'message', 'agent', 'worker', 'handoff', 'relay', 'fork'):
     assert root.joinpath('skills', name, 'SKILL.md').read_text(encoding='utf-8')
 for name in ('checkpoints', 'entry', 'handoff', 'initialization', 'capabilities', 'desktop-projects'):
     assert root.joinpath('prompts', name + '.md').read_text(encoding='utf-8')

@@ -9,7 +9,7 @@ from .util import Conflict, Error, Unavailable, digest, encode, inside, now, rea
 
 MANIFEST = '.agentworkspace/software.json'
 OPERATION = 'software-update.json'
-BUILTIN_SKILLS = frozenset(('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork'))
+BUILTIN_SKILLS = frozenset(('workspace', 'work', 'message', 'agent', 'worker', 'handoff', 'relay', 'fork'))
 
 
 def _hash(root, path):

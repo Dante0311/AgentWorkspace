@@ -129,14 +129,16 @@ def inspect_codex(base_url="", env_key="", executable=None, *, allow_http=False)
 
 
 def configure_codex(app, workspace, agent_id, model="", effort="", base_url="", env_key="", executable=None,
-                    *, allow_http=False):
+                    *, allow_http=False, worker_id=None):
     config = codex_config(model, effort, base_url, env_key, executable, allow_http=allow_http)
     root = app.root(workspace, agent_id)
     # Lifecycle operations remain explicit. Saving a profile never starts a session.
-    with layout.lock(root, "runner.lock", wait=0):
-        if app.agent(workspace, agent_id)["current"]:
+    with layout.lock(root, "runner.lock", wait=0, worker_id=worker_id):
+        if worker_id is not None and app.agent(workspace, agent_id, worker_id=worker_id)["current"]:
+            raise Conflict("先完成此 Worker 的 handoff，再改变它的 Harness 或模型服务配置。")
+        if worker_id is None and not app.workers(workspace, agent_id) and app.agent(workspace, agent_id)["current"]:
             raise Conflict("先完成 handoff，再改变此实例的 Harness 或模型服务配置。")
-        result = app.configure(workspace, agent_id, config)
+        result = app.configure(workspace, agent_id, config, worker_id=worker_id)
     return {**result, "model_access": "unchecked", "effort_support": "unchecked",
             "credential_state": "missing" if env_key and not os.environ.get(env_key) else "not_validated",
             "sessions_started": False, "global_configuration_changed": False}
@@ -169,13 +171,15 @@ def sdk_config(kind, model="", effort="", base_url="", env_key="", executable=No
 
 
 def configure_sdk(app, workspace, agent_id, kind, model="", effort="", base_url="", env_key="", executable=None,
-                  allowed_tools=None, *, allow_http=False):
+                  allowed_tools=None, *, allow_http=False, worker_id=None):
     config = sdk_config(kind, model, effort, base_url, env_key, executable, allowed_tools, allow_http=allow_http)
     root = app.root(workspace, agent_id)
-    with layout.lock(root, "runner.lock", wait=0):
-        if app.agent(workspace, agent_id)["current"]:
+    with layout.lock(root, "runner.lock", wait=0, worker_id=worker_id):
+        if worker_id is not None and app.agent(workspace, agent_id, worker_id=worker_id)["current"]:
+            raise Conflict("Handoff before replacing this Worker's runtime profile.")
+        if worker_id is None and not app.workers(workspace, agent_id) and app.agent(workspace, agent_id)["current"]:
             raise Conflict("Handoff before replacing an instance's runtime profile.")
-        result = app.configure(workspace, agent_id, config)
+        result = app.configure(workspace, agent_id, config, worker_id=worker_id)
     return {**result, "sessions_started": False, "model_access": "unchecked", "effort_support": "unchecked",
             "global_configuration_changed": False}
 

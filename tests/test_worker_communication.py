@@ -228,3 +228,50 @@ def test_transfer_health_does_not_accept_another_workers_boot_record(team):
     pending = [row for row in report["issues"] if row["code"] == "transfer_pending"]
     assert len(pending) == 1
     assert pending[0]["worker"] == "topic" and pending[0]["state"] == "session_bound"
+
+
+def test_worker_without_execution_does_not_require_installation_identity(tmp_path):
+    app = App(tmp_path / "home")
+    app.workspace_init("sea", str(tmp_path / "sea.git"), worker_support=True)
+    app.create("sea", "team")
+
+    report = maintenance.doctor(app, "sea")
+
+    assert report["state"] == "healthy"
+    assert "installation_identity" not in report["coverage"]
+    assert not (app.home / "installation.json").exists()
+
+
+@pytest.mark.parametrize("identity_bytes", [b"{broken", None], ids=["damaged", "missing"])
+def test_unknown_installation_identity_preserves_worker_observations(team, identity_bytes):
+    app, ids = team
+    root = app.root("sea", "team")
+    for wid, bid in ids.items():
+        write_json(layout.local_path(root, "status.json", worker_id=wid), {"binding": bid, "state": "failed"})
+    write_json(layout.local_path(root, "inputs/unknown.json", worker_id="topic"),
+               {"id": "unknown", "binding": ids["topic"], "state": "outcome_unknown"})
+    identity = app.home / "installation.json"
+    if identity_bytes is None:
+        identity.unlink()
+    else:
+        identity.write_bytes(identity_bytes)
+    original_revision = app.store("sea").snapshot().revision
+
+    report = maintenance.doctor(app, "sea")
+
+    assert report["coverage"]["local"] == ["team"]
+    assert report["coverage"]["unobserved_remote"] == []
+    assert report["coverage"]["installation_identity"]["state"] == "unavailable"
+    if identity_bytes is None:
+        assert report["coverage"]["installation_identity"]["reason"] == "installation_identity_missing"
+        assert not identity.exists()
+    else:
+        assert report["coverage"]["installation_identity"]["error_type"] == "JSONDecodeError"
+        assert identity.read_bytes() == identity_bytes
+    for wid, bid in ids.items():
+        observation = report["local_observations"][f"team#{wid}"]
+        assert observation["binding"] == bid and observation["worker"] == wid
+        assert observation["runtime"] == {"binding": bid, "state": "failed"}
+    faults = [row for row in report["issues"] if row["code"] == "input_outcome_unknown"]
+    assert len(faults) == 1 and faults[0]["worker"] == "topic"
+    assert app.store("sea").snapshot().revision == original_revision

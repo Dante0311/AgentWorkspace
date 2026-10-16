@@ -103,10 +103,18 @@ def doctor(app, workspace):
         return {"state": "unavailable", "observed_at": observed, "issues": [{"code": "store_unavailable"}],
                 "coverage": "shared state unavailable; no execution eligibility inferred", "error_type": type(exc).__name__}
     locations = app.local()["workspaces"][workspace].get("instances", {})
-    local_installation = read_json(app.home / "installation.json", {}).get("id")
+    installation_observation = None
+    try:
+        local_installation = read_json(app.home / "installation.json", {}).get("id")
+        if local_installation is None:
+            installation_observation = {"state": "unavailable", "reason": "installation_identity_missing"}
+    except (OSError, ValueError) as exc:
+        local_installation = None
+        installation_observation = {"state": "unavailable", "error_type": type(exc).__name__}
     def issue(code, agent=None, **fields):
         issues.append({"code": code, **({"agent": agent} if agent else {}), **fields})
     instances = []
+    ownership_unconfirmed = False
     for path in snap.entries:
         if not path.startswith(agents_prefix) or not path.endswith(".json"):
             continue
@@ -128,10 +136,13 @@ def doctor(app, workspace):
                 remote_agents.append(aid)
             continue
         execution = entry.get("execution") if entry else None
-        if execution and execution.get("installation_id") != local_installation:
-            if aid not in remote_agents:
-                remote_agents.append(aid)
-            continue
+        if execution:
+            if local_installation is None:
+                ownership_unconfirmed = True
+            elif execution.get("installation_id") != local_installation:
+                if aid not in remote_agents:
+                    remote_agents.append(aid)
+                continue
         directory = execution.get("directory") if execution else None
         root = Path(directory or locations[aid][0])
         if directory and Path(directory).resolve() not in [Path(value).resolve() for value in locations[aid]]:
@@ -234,10 +245,14 @@ def doctor(app, workspace):
     elif monitoring["state"] == "unavailable":
         issue("maintenance_observation_failed", error_type=monitoring["error_type"])
     issues.sort(key=lambda item: (item["code"], item.get("agent", ""), item.get("worker", ""), item.get("operation", ""), item.get("bridge", "")))
-    partial = bool(remote_agents) or monitoring["state"] == "not_owned"
+    coverage = {"local": local_agents, "unobserved_remote": remote_agents}
+    if ownership_unconfirmed:
+        coverage["installation_identity"] = installation_observation
+    partial = (bool(remote_agents) or monitoring["state"] == "not_owned"
+               or ownership_unconfirmed)
     return {"state": "degraded" if issues else "partial" if partial else "healthy", "observed_at": observed,
             "revision": snap.revision, "issues": issues, "unacknowledged_notifications": waiting,
-            "coverage": {"local": local_agents, "unobserved_remote": remote_agents},
+            "coverage": coverage,
             "local_observations": observations, "maintenance": monitoring}
 
 

@@ -192,7 +192,7 @@ def desktop_profile(app, workspace, agent_id, model="", effort="", project_id=""
         project = adapter.project()
     finally:
         adapter.close()
-    model_profiles.configure(root, config, worker_id)
+    app.configure(workspace, agent_id, config, str(root), worker_id=worker_id)
     return {"configured": True, "kind": "desktop", "project_id": project["projectId"],
             "project_name": project["label"], "primary_folder": project["path"], "model": model, "effort": effort}
 

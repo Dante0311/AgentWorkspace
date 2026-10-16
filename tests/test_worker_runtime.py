@@ -17,11 +17,13 @@ def team(tmp_path):
     app.workspace_init("team", str(tmp_path / "remote.git"), worker_support=True)
     app.create("team", "owner")
     app.worker_create("team", "owner", "Topic", "Isolated protocol test task", worker_id="topic")
-    app.configure("team", "owner", {"kind": "desktop", "command": ["protocol-fixture"],
-                  "pipe_path": "fixture", "caller_thread": "fixture", "model": "base-model", "effort": "low"})
+    config = {"kind": "desktop", "command": ["protocol-fixture"],
+              "pipe_path": "fixture", "caller_thread": "fixture"}
+    app.configure("team", "owner", {**config, "model": "base-model", "effort": "low"})
     root = app.root("team", "owner")
     bindings = {}
     for worker in ("default", "topic"):
+        app.configure("team", "owner", config, worker_id=worker)
         binding = app.reserve("team", "owner", worker_id=worker)["binding"]
         app.bind("team", "owner", binding, "session-" + worker, worker_id=worker)
         bindings[worker] = binding
@@ -58,13 +60,15 @@ def test_worker_overrides_and_adopted_configuration_remain_independent(team):
     model_profiles.configure(root, {"kind": "desktop", "model": "topic-model", "effort": "high"}, "topic")
     assert model_profiles.selected(root, "topic")["model"] == "topic-model"
     assert model_profiles.selected(root, "default")["model"] == "base-model"
+    app.worker_create("team", "owner", "Inherit", "Check the default before adopting a configuration", worker_id="inherit")
     app.configure("team", "owner", {"kind": "manual", "model": "later-model", "effort": "medium"})
     for worker, binding in bindings.items():
         adopted = read_json(layout.local_path(root, "entry.json", worker))
         assert adopted["config"]["kind"] == "desktop"
         assert adopted["config"]["pipe_path"] == "fixture"
         assert model_profiles.adopted(root, binding, worker_id=worker)["model"] == "base-model"
-    assert model_profiles.runtime_config(root, "default")["kind"] == "manual"
+    assert model_profiles.runtime_config(root, "inherit")["kind"] == "manual"
+    assert model_profiles.runtime_config(root, "default")["kind"] == "desktop"
     assert model_profiles.runtime_config(root, "topic")["kind"] == "desktop"
 
 
@@ -195,3 +199,17 @@ def test_precompact_uses_only_source_worker_summary_and_files(team, tmp_path):
     assert (root / "workers/default/unfinished.md").read_bytes() == b"peer unsaved work"
     assert len(app.checkpoints("team", "owner", worker_id="default")) == 1
     assert compaction.run(app, payload, actor=("team", "owner", bindings["topic"])) == reply
+
+
+def test_reservation_inherits_agent_runtime_before_adoption(tmp_path):
+    app = App(tmp_path / "home")
+    app.workspace_init("team", str(tmp_path / "remote.git"), worker_support=True)
+    app.create("team", "owner")
+    app.configure("team", "owner", {"kind": "desktop", "command": ["protocol-fixture"],
+                  "pipe_path": "fixture", "caller_thread": "fixture", "model": "base-model", "effort": "low"})
+    reserved = app.reserve("team", "owner", worker_id="default")
+    assert reserved["kind"] == "desktop"
+    root = app.root("team", "owner")
+    adopted = read_json(layout.local_path(root, "entry.json", "default"))
+    assert adopted["config"]["pipe_path"] == "fixture"
+    assert adopted["model_profile"]["model"] == "base-model"

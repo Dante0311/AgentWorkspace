@@ -255,7 +255,7 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
             # Both stores retain the same native ID. A partial write is visible in the receipt.
             write_json(preferences, value)
         # Core configure owns files.lock; keep its write outside our critical section.
-        model_profiles.configure(root, {**config, 'project_id': selected['projectId']}, worker_id)
+        app.configure(workspace, agent_id, {**config, 'project_id': selected['projectId']}, worker_id=worker_id)
         result = {**plan(app, workspace, agent_id, worker_id=worker_id), 'state': 'ready', 'native_project_verified': True,
                   'native_project_id': selected['projectId'], 'section_state': section_state, 'section_error': section_error,
                   'native_project_changed': False, 'binding_changed': False, 'session_created': False,

@@ -52,6 +52,16 @@ def load_helper():
     return runpy.run_path(str(SCRIPT))
 
 
+def legacy_workspace(app, name, directory):
+    """Historical 0/1 transitions start from a real v1 repository, not new v3."""
+    GitStore.initialize(directory)
+    store = GitStore(str(directory), app.home)
+    metadata = {"schema": 1, "name": name, "locator": "local:" + name, "friends": {}, "projects": {}}
+    store.branch("main", {layout.MARKER: layout.marker("workspace"),
+                          ".agentworkspace/workspace.json": encode(metadata)})
+    app.workspace_connect(name, str(directory))
+
+
 @pytest.fixture
 def worker_protocol(tmp_path):
     app = App(tmp_path / "worker-home")
@@ -76,7 +86,7 @@ def worker_command(repo, bid, action, *extra):
 def test_script_worker_ack_reply_and_default_change_without_aw_import(worker_protocol, tmp_path):
     app, bids, repo = worker_protocol
     store = app.store("sea")
-    snap = store.snapshot()
+    snap = store.message_snapshot().messages
     path = layout.shared_path(snap, "messages/worker-original.json")
     original = snap.bytes(path)
     shown = command(tmp_path, *worker_command(repo, bids["topic"], "show"))
@@ -99,7 +109,7 @@ def test_script_worker_ack_reply_and_default_change_without_aw_import(worker_pro
     reply = Messages(app).show("sea", "worker-reply")["message"]
     assert reply["from"]["worker"] == "topic" and reply["to"]["worker"] == "default"
     assert reply["reply_to"] == "worker-original"
-    assert store.snapshot().bytes(path) == original
+    assert store.message_snapshot().messages.bytes(path) == original
 
 
 def test_script_worker_unknown_write_is_only_observed(worker_protocol, tmp_path, monkeypatch):
@@ -109,7 +119,7 @@ def test_script_worker_unknown_write_is_only_observed(worker_protocol, tmp_path,
     namespace = load_helper()
     calls = []
 
-    def lost(repo, commit, parent):
+    def lost(repo, commit, parent, **kwargs):
         calls.append(commit)
         raise subprocess.TimeoutExpired("isolated original push", 1)
 
@@ -250,7 +260,7 @@ def test_script_layout_continues_original_prepared_v1_operation_after_path_chang
 @pytest.mark.parametrize("own_current", [False, True])
 def test_script_layout_cross_workspace_targets_choose_their_own_layout(pair, tmp_path, own_current):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
+    legacy_workspace(app, "peer", tmp_path / "peer.git")
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "peer-fixture-session")
@@ -422,7 +432,7 @@ def test_aw_layout_missing_current_record_does_not_read_a_legacy_file(pair):
 
 def test_aw_layout_guard_keeps_a_partial_ack_from_writing_the_old_peer_path(pair, tmp_path, monkeypatch):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
+    legacy_workspace(app, "peer", tmp_path / "peer.git")
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "peer-fixture-session")
@@ -543,7 +553,7 @@ def test_script_confirms_notification_when_body_missing_or_damaged(pair, tmp_pat
 @pytest.mark.parametrize("failure_stage", ["target-validation", "peer-publication"])
 def test_cross_workspace_partial_reply_continues_original_bytes(pair, tmp_path, monkeypatch, failure_stage):
     app, bindings = pair
-    app.workspace_init("peer", str(tmp_path / "peer.git"), worker_support=False)
+    legacy_workspace(app, "peer", tmp_path / "peer.git")
     app.create("peer", "sender")
     sender = app.reserve("peer", "sender")["binding"]
     app.bind("peer", "sender", sender, "isolated-sender-session")

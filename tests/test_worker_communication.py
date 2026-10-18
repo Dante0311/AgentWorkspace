@@ -35,7 +35,8 @@ def test_frozen_default_explicit_reply_wrong_worker_and_offline_archive(team, mo
     sent = messages.send("sea", "team", ids["topic"], "team", "first", request_id="frozen")
     assert sent["payload"]["from"]["worker"] == "topic"
     assert sent["payload"]["to"]["worker"] == "default"
-    original = app.store("sea").snapshot().bytes(layout.shared_path(app.store("sea").snapshot(), "messages/frozen.json"))
+    snap = app.store("sea").message_snapshot().messages
+    original = snap.bytes(layout.shared_path(snap, "messages/frozen.json"))
     with monkeypatch.context() as pending:
         pending.setattr(messages, "reconcile", lambda operation_id: {"id": operation_id, "state": "pending"})
         messages.send("sea", "team", ids["topic"], "team", "original pending payload", request_id="pending")
@@ -56,7 +57,7 @@ def test_frozen_default_explicit_reply_wrong_worker_and_offline_archive(team, mo
     refs = messages.send("sea", "team", ids["default"], "team", "references only",
                          message_refs=["frozen", "reply"], request_id="references")
     assert refs["payload"]["to"]["worker"] == "topic" and "reply_to" not in refs["payload"]
-    snap = app.store("sea").snapshot()
+    snap = app.store("sea").message_snapshot().messages
     assert snap.bytes(layout.shared_path(snap, "messages/frozen.json")) == original
     root = app.root("sea", "team")
     assert layout.instance_path(root, "messages/frozen.json", worker_id="default").exists()
@@ -102,7 +103,7 @@ def test_fifo_and_ack_are_independent_for_workers_of_same_agent(team):
     messages.receive("sea", "team", ids["default"], "default-1")
     assert messages.poll("sea", "team", ids["default"], adapter=adapters["default"])["message_id"] == "default-2"
     assert messages.poll("sea", "team", ids["topic"], adapter=adapters["topic"])["state"] == "waiting_ack"
-    snap = app.store("sea").snapshot()
+    snap = app.store("sea").message_snapshot().messages
     assert snap.json(layout.shared_path(snap, "dispatch/team/default.json"))["message_id"] == "default-2"
     assert snap.json(layout.shared_path(snap, "dispatch/team/topic.json"))["message_id"] == "topic-1"
     assert len(adapters["topic"].calls) == 1

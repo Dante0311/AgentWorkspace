@@ -697,9 +697,16 @@ def test_explicit_stop_repair_resumes_original_observation_and_can_be_cancelled_
     execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
     native["states"] = ["busy"]
     observed = threading.Event()
-    native["on_status"] = observed.set
     manager = backend.Backend(app, SimpleNamespace(server_port=0))
     app.backend = manager
+
+    def wait_for_cancel():
+        observed.set()
+        # Keep this read pending until cancellation signals the live observer.
+        # Otherwise it can exit on control.json before backend.cancel reaches it.
+        assert manager.runners[root]["runner"].stop_event.wait(30)
+
+    native["on_status"] = wait_for_cancel
     monkeypatch.setattr(runtime, "start", Mock(side_effect=AssertionError("No successor during stop recovery")))
     args = {"workspace": "sea", "agent_id": "alice", "action": "continue-stop",
             "request_id": "original-confirmation", "expected_binding": binding, "expected_checkpoint": point["id"]}
@@ -708,6 +715,7 @@ def test_explicit_stop_repair_resumes_original_observation_and_can_be_cancelled_
         assert receipt["state"] == "applied" and observed.wait(30)
         task = manager.runners[root]
         assert task["runner"].stop_only and native["read_only"] == [True]
+        assert task["thread"].is_alive() and not task["runner"].stop_event.is_set()
         cancelled = execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
         assert cancelled["observer_signalled"]
         task["thread"].join(30)

@@ -277,8 +277,6 @@ def test_stale_value_in_any_target_blocks_entire_batch_before_writing(pair, monk
                 actor=("sea", "alice", bindings["alice"]))
     assert config_path(app, "bob").read_bytes() == bob_before
     assert read_json(app.home / f"model-change-requests/sea/{request_id}.json")["state"] == "pending"
-
-
 def test_request_id_cannot_be_reused_for_a_different_scope(pair):
     app, bindings = codex_targets(pair)
     request_id = "scope"

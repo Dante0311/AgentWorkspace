@@ -240,11 +240,8 @@ class Backend:
             config = local["config"] if worker_id is not None else read_json(layout.local_path(root, "runtime.json"), {})
             if config.get("kind") != "desktop" or not all(config.get(key) for key in ("command", "pipe_path", "caller_thread")):
                 return {**result, "reason_code": "desktop_connection_missing", "reason": "The original Desktop control connection is not captured."}
-<<<<<<< HEAD
-        return {**result, **self.attach(workspace, agent_id, str(root), expected_binding=binding, worker_id=worker_id)}
-=======
             from .runtime import desktop_observe
-            native = desktop_observe(self.app, workspace, agent_id, str(root))
+            native = desktop_observe(self.app, workspace, agent_id, str(root), worker_id=worker_id)
             if not native["local_session_confirmed"]:
                 return {**result, "reason_code": native.get("unknown_reason", "native_session_unconfirmed"),
                         "reason": "The original Desktop session or working directory could not be confirmed."}
@@ -252,13 +249,12 @@ class Backend:
                 raise Conflict("The original Desktop entry changed during recovery observation.")
         # Native observation can take time. Honor a pause that arrived during
         # that read, before creating a new observer for the original entry.
-        with layout.lock(root, "files.lock"):
-            control = read_json(layout.local_path(root, "control.json"), {})
+        with layout.lock(root, "files.lock", worker_id=worker_id):
+            control = read_json(layout.local_path(root, "control.json", worker_id), {})
             if control.get("stop") == binding or control.get("handoff") == binding:
                 return {**result, "state": "recovery_paused", "reason_code": "user_paused",
                         "reason": "The original observation was paused during recovery."}
-            return {**result, **self.attach(workspace, agent_id, str(root), expected_binding=binding)}
->>>>>>> 75da7cf (Continue exited runner cleanup with original publication and session checks)
+            return {**result, **self.attach(workspace, agent_id, str(root), expected_binding=binding, worker_id=worker_id)}
 
     def attach(self, workspace, agent_id, directory=None, stop_binding=None, expected_binding=None, recovery=False, worker_id=None):
         from .runtime import Runner, _released_stop

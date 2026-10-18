@@ -428,9 +428,6 @@ def desktop_observe(app, workspace, agent_id, directory=None, worker_id=None):
     return {**result, "local_session_confirmed": True, "snapshot_revision": latest.revision}
 
 
-<<<<<<< HEAD
-def launch_show(app, workspace, agent_id, directory=None, worker_id=None):
-=======
 def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_controller,
                        expected_session, expected_revision, cleanup_commit, directory=None, worker_id=None):
     """Finish one exited runner's cleanup, never resume its work or old push."""
@@ -518,8 +515,7 @@ def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_c
                     "original_outcome": "diverged", "revision": revision}
 
 
-def launch_show(app, workspace, agent_id, directory=None):
->>>>>>> 75da7cf (Continue exited runner cleanup with original publication and session checks)
+def launch_show(app, workspace, agent_id, directory=None, worker_id=None):
     """Expose the original receipt's identifiers, without native probing or credentials."""
     from .maintenance import installation_id
     snap = app.store(workspace).snapshot()

@@ -38,13 +38,8 @@ def original_entry(app, monkeypatch, request):
     peer = {"reads": threading.Event(), "sent": threading.Event(), "attached": [], "closed": [], "inputs": [], "state": "idle"}
 
     class Native:
-<<<<<<< HEAD
         def __init__(self, directory, config, session, *, read_only=False, worker_id=None, title=None):
-            assert not read_only and directory == root and session == "original-chat"
-=======
-        def __init__(self, directory, config, session, *, read_only=False):
             assert directory == root and session == "original-chat"
->>>>>>> 75da7cf (Continue exited runner cleanup with original publication and session checks)
             assert config["pipe_path"] == "original-pipe"
             self.session = session
             self.read_only = read_only

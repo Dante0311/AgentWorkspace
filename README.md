@@ -72,6 +72,8 @@ aw backend start --open
 
 2026-10-16 开发候选已接入 [Worker 并行工作](docs/design.md#workers)：同一 Agent 可按需拥有多个独立接续的 Worker，共用身份和长期资料，分别保存入口、消息、配置采用值和过程材料。可选 worker Skill 向用户建议，用户决定是否创建。原生聊天标题请求使用“Workspace 简称 · Agent 名称 · Worker 名称”。新建空间默认启用，旧数据需显式映射；日常安装和 Agent 未迁移。命令见 [Worker 用法](docs/usage.md#workers)，真实多会话及跨 Harness 的验收状态见[实现范围](docs/implementation.md#worker-plan)。
 
+正式 Message、ACK、消息索引和通知记录使用独立的 `aw-messages` 分支，身份、Work 与共同资料继续放在 main。新空间默认采用；旧空间通过[显式消息迁移](docs/usage.md#21-正式消息的独立分支)切换，保留历史和原操作，不因安装升级自动搬迁。权限变化与消息分支标记必须原子发布，普通消息不再与共同资料争用 main。
+
 每次发送和回复先由 message Skill 判断路径：确认双方当前有效入口均为同机 Codex 时才原生直发；其他机器、跨 Harness、云端或事实不足时用正式 AW Message。原生发送已尝试但结果未知时只核对原发送，不能换路重发。直发的可选记录与回执独立保存，并标明 `codex` 等来源；保存失败不影响交流，也不触发正式索引、ACK 扫描或后台重投。工作台可合并历史，但必须标清来源。
 
 ## 运行边界

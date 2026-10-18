@@ -30,7 +30,7 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 
 产品合同集中在 [设计第 3.5 节](design.md#workers)，可选 worker Skill 的判断和用户决定见设计第 12 节。公共命令见 [Worker 用法](usage.md#workers)，此处记录已接入范围与验证状态。
 
-新建 Workspace 使用 Worker 数据版本 2，Agent 默认带一个 `default` Worker；旧版本 0/1 保持原入口规则，软件更新不自动迁移。Core 已接入 Worker 登记、独立 current / handoff、Binding 归属、固定创建请求与旧数据显式映射。实际调用者按 Session / Binding 确定 Worker，切换默认收件人不能改变调用身份。
+新建 Workspace 默认启用 Worker，Agent 带一个 `default` Worker；实例格式为 2，共享消息布局为下述版本 3。旧单入口数据保持原入口规则，软件更新不自动迁移。Core 已接入 Worker 登记、独立 current / handoff、Binding 归属、固定创建请求与旧数据显式映射。实际调用者按 Session / Binding 确定 Worker，切换默认收件人不能改变调用身份。
 
 Runtime、Backend、Message 与公共接口已采用同一 Worker 归属：
 
@@ -55,12 +55,21 @@ Runtime、Backend、Message 与公共接口已采用同一 Worker 归属：
 
 旧数据保留已通过公开接口的协议样本验证；真实旧会话连续迁移、第二种真实 Harness、模型实际采用元信息、Worker 自动压缩钩子及长期运行仍未验证，不计为本批实机通过。后续修复和最终提交的 CI 结果在 [PR #30](https://github.com/Dante0311/AgentWorkspace/pull/30) 中按具体版本记录，不能把前一固定包的结果称为新包全部重跑通过。
 
+## 消息独立分支（2026-10-18 开发候选）
+
+新空间使用共享布局版本 3，正式 Message、ACK、message-index 和 dispatch 保存在 `aw-messages`；其他共享记录仍在 main。`message_store.py` 提供独立的 main 权限快照与消息快照，二者保留各自版本；消息读取先于 main 读取，普通写入比较原权限标记。影响资格和路由的 main 更新，经公共存储入口同时推进两个真实 ref。Git 使用原子推送，GitHub API 使用 `updateRefs` 与 `beforeOid`；不支持时明确拒绝，不以两次单独写入代替。
+
+`message branch-plan` 只读显示当前格式和迁移范围；`message migrate` 是显式用户管理操作，保留原消息字节、旧路径前缀、历史与未完成请求。实例格式不随之变化，旧单入口 Agent 可以继续使用；后续 Worker 映射保留消息布局。已确认的发布拒绝与结果未知分别处理，未知结果只核对原提交，不重复发表。
+
+开发检查覆盖真实本地 Git 的两个 ref 竞争、版本迁移、旧格式写入门禁和不支持原子推送时的拒绝；GitHub API 的原子合同使用协议夹具验证。通信入口、独立脚本与固定安装包的实际结果以本轮确定版本的独立验收为准，不沿用旧 Worker 实机通过来证明这些新增行为。真实 GitHub 多 ref 发布及长期运行尚未实测，日常 Workspace 与安装未迁移或升级。
+
 ## 模块
 
 | 文件 | 当前职责 |
 | --- | --- |
 | `app.py`、`workers.py`、`gitstore.py` | 持久身份/资料、条件提交、可恢复创建、检查点、Binding 历史、本地副本观察、Work 和 Git 访问。 |
 | `layout.py`、`migration.py` | 按整体布局版本解析路径，显式迁移共享记录与副本，保留原请求和未知结果，并在复制期间持续互斥。 |
+| `message_store.py` | 分开的权限与消息快照、消息条件写入、权限标记的原子推进，以及消息分支初始化和显式迁移。 |
 | `software.py` | 统一检查和更新本机注册副本的内置材料；保护用户修改，继续原中断更新，不发布业务检查点。 |
 | `onboarding.py` | 只发现和引导的首次使用、只读 Git 检查、三份管家定义/实例和本机准备。 |
 | `harness_config.py` | Codex/Claude 原生模型选项查询、三种受管入口的实例独立模型配置；凭据只保存引用。 |

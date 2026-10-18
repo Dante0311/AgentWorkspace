@@ -41,6 +41,8 @@ checkpoint 可在继续工作时单独保存。完成重要阶段、形成关键
 
 每次发送与回复按 message Skill 判断路径：核对自己已获授 Binding 与双方的当次 `runtime.desktop-observe`；确认双方当前 active 且本机 Codex 会话可寻址，才原生直发。缺少读取能力、无法确认同机或其他入口时，首次发送走正式 AW Message；自己已失权时不产生副作用。原生发送已尝试而结果未知只核对原发送，不切换通路重发。`direct-message.record/list/show` 是可选的独立历史，不发送消息、不生成正式 ACK，也不参与投递重试。记录或回执缺失不能推断发送失败或业务未完成。
 
+新空间把正式 Message、ACK、索引和通知记录放在 `aw-messages`，其他共享事实仍在 main。公共工具负责读取两份快照和检查权限，不需要 Agent 手工切分支。旧空间先通过 `message branch-plan` 查看范围，再由用户管理入口显式迁移；软件升级不自动迁移，旧格式工具会拒写新布局。手动 Git 操作必须采用新版 message Skill 的完整协议，不能只替换分支名。发布结果未知只核对原操作，不重新生成消息或重复发表。
+
 先核对目标实例当前 Binding 与所需操作，不从模型名称或安装位置推断能力。仅停止不支持的动作，说明具体限制和可选路径；更换 Harness、投递方式或模型服务须依据用户明确选择，不因为发现限制就中断无关工作。
 
 `delivery_unsupported` / `insert_not_supported` 表示本版接入不支持 insert。队头和原记录保留，不改成 normal、不中断并重开轮次、不创建副本、不越过队头或伪造 ACK。需要时由用户决定主动接收原消息或在支持的入口交接后继续。普通 handoff 在 SDK 入口等待空闲，不是 insert。

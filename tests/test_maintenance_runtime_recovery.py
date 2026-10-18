@@ -115,6 +115,44 @@ def test_failed_recovery_verification_only_retries_observation(recovery_team, mo
     recover.assert_called_once()
 
 
+def test_interrupted_recovery_keeps_attempt_and_never_replays(recovery_team, monkeypatch):
+    app, actor, args = recovery_team
+    maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
+    recover = Mock(side_effect=KeyboardInterrupt)
+    monkeypatch.setattr(backend, "recover", recover)
+    with pytest.raises(KeyboardInterrupt):
+        commands.execute(app, "maintenance.repair", args, actor=actor)
+    path = maintenance.folder(app, "sea") / "repairs/original-recovery.json"
+    assert read_json(path)["state"] == "attempting"
+
+    receipt = commands.execute(app, "maintenance.repair", args, actor=actor)
+    assert receipt["state"] == "attempting" and "result" not in receipt
+    assert receipt["verification"]["runtime"]["binding"] == args["expected_binding"]
+    recover.assert_called_once()
+
+
+def test_existing_recovery_receipt_still_requires_current_grant(recovery_team, monkeypatch):
+    app, actor, args = recovery_team
+    maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
+    result = {"state": "starting_runner", "binding": args["expected_binding"]}
+    recover = Mock(return_value=result)
+    monkeypatch.setattr(backend, "recover", recover)
+    commands.execute(app, "maintenance.repair", args, actor=actor)
+    path = maintenance.folder(app, "sea") / "repairs/original-recovery.json"
+    original_receipt = path.read_bytes()
+
+    maintenance.grant(app, "sea", "maintainer", [], [])
+    with pytest.raises(Error):
+        commands.execute(app, "maintenance.repair", args, actor=actor)
+    assert path.read_bytes() == original_receipt
+    recover.assert_called_once()
+
+    maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
+    receipt = commands.execute(app, "maintenance.repair", args, actor=actor)
+    assert receipt["result"] == result
+    recover.assert_called_once()
+
+
 @pytest.mark.parametrize("condition", ["user_paused", "execution_source_missing"])
 def test_shared_runtime_recovery_preserves_pause_or_missing_source(recovery_team, condition):
     app, actor, args = recovery_team

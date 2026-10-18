@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-from . import layout, model_profiles
+from . import layout, model_profiles, workers
 from .util import Conflict, Error, digest, locked, now, read_json, slug, write_json
 
 
@@ -19,7 +19,20 @@ def _request_path(app, workspace, request_id):
 
 def _binding(app, workspace, agent_id):
     snap = app.store(workspace).snapshot()
-    agent = app.agent(workspace, agent_id, snap)
+    agent = workers.agent_record(snap, agent_id)
+    if workers.enabled(snap, agent):
+        # This request changes the Agent's common defaults. No default Worker
+        # selects its target; retain every Worker's entry for the review check.
+        bindings = {}
+        for worker in app.workers(workspace, agent_id, snapshot=snap):
+            binding = worker["current"]
+            if binding:
+                entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json"))
+                if (not isinstance(entry, dict) or entry.get("id") != binding or entry.get("agent") != agent_id
+                        or app.binding_worker(workspace, agent_id, entry, snap) != worker["id"]):
+                    raise Conflict(f"Current binding for {agent_id}/{worker['id']} is inconsistent.")
+            bindings[worker["id"]] = binding
+        return agent, bindings
     binding = agent.get("current")
     entry = snap.json(layout.shared_path(snap, f"bindings/{binding}.json")) if binding else None
     if binding and (not isinstance(entry, dict) or entry.get("id") != binding

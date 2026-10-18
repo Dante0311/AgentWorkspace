@@ -226,10 +226,11 @@ def parser():
     mt["grant"].add_argument("--command", dest="commands", action="append", default=[])
     mt["grant"].add_argument("--target", dest="targets", action="append", default=[])
     mt["repair"].add_argument("agent_id")
-    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover"], required=True)
+    mt["repair"].add_argument("--repair-action", dest="repair_action", choices=["publication-reconcile", "bridge-retry", "sync-idle", "continue-stop", "runtime-recover", "controller-cleanup"], required=True)
     mt["repair"].add_argument("--request-id", required=True)
     mt["repair"].add_argument("--worker", dest="worker_id")
-    for field in ("operation-id", "bridge", "expected-binding", "expected-generation", "expected-checkpoint"):
+    for field in ("operation-id", "bridge", "expected-binding", "expected-generation", "expected-checkpoint",
+                  "expected-controller", "expected-session", "expected-revision", "cleanup-commit"):
         mt["repair"].add_argument("--" + field)
 
     cp = actions("checkpoint", ["create", "list", "show"])

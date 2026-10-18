@@ -112,6 +112,15 @@ class Snapshot:
 
 
 class GitStore:
+    def message_snapshot(self):
+        from . import message_store
+        return message_store.read(self)
+
+    def message_change(self, state, changes, expected, message, *, permission_expected=None):
+        from . import message_store
+        return message_store.change(self, state, changes, expected, message,
+                                    permission_expected=permission_expected)
+
     def __init__(self, address: str, home: Path, *, root: Path | None = None):
         self.address = address
         self.root = root if root is not None else home / "git" / digest(address.encode())[:24]

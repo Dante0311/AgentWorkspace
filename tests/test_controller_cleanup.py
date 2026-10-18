@@ -134,7 +134,7 @@ def test_still_possible_original_push_remains_unknown(exited_runner, monkeypatch
 
 def test_binding_update_during_native_observation_is_preserved(exited_runner):
     app, root, store, path, args, native = exited_runner
-    def observe(*unused):
+    def observe(*unused, **kwargs):
         snap = store.snapshot()
         entry = {**snap.json(path), "controller": "new-controller"}
         store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Concurrent controller change")

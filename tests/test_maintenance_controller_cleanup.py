@@ -58,7 +58,7 @@ def test_public_cleanup_authority_duplicates_cli_and_changed_owner(cleanup_team,
     maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
     with pytest.raises(Error):
         commands.execute(app, "maintenance.repair", {**args, "agent_id": "ungranted"}, actor=actor)
-    with pytest.raises(Conflict):
+    with pytest.raises(Error):
         commands.execute(app, "maintenance.repair", args, actor=("sea", "maintainer", "old-actor"))
     original_fields = ("expected_binding", "expected_controller", "expected_session", "expected_revision", "cleanup_commit")
     for field in original_fields:

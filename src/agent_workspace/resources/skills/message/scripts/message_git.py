@@ -21,6 +21,11 @@ class ProtocolError(RuntimeError):
     pass
 
 
+MESSAGE_BRANCH = "aw-messages"
+MESSAGE_GUARD = ".agentworkspace/message-permissions.json"
+MESSAGE_ROOTS = ("messages", "acks", "message-index", "dispatch")
+
+
 def identifier(value):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", value):
         raise ProtocolError("IDs must contain 1-64 ASCII letters, digits, underscores or hyphens.")
@@ -66,6 +71,7 @@ class Repository:
         self.path = str(Path(path).resolve())
         self._layout_prefixes = {}
         self._layout_versions = {}
+        self._layout_documents = {}
 
     def git(self, *args, data=None, env=None, check=True):
         settings = dict(os.environ, GIT_TERMINAL_PROMPT="0")
@@ -78,13 +84,18 @@ class Repository:
             raise ProtocolError(f"Git {args[0]} failed ({result.returncode}); no publication is confirmed.")
         return result
 
-    def head(self):
-        rows = self.git("ls-remote", "--heads", "origin", "refs/heads/main").stdout.splitlines()
+    def ref(self, branch, *, required=True):
+        rows = self.git("ls-remote", "--heads", "origin", "refs/heads/" + branch).stdout.splitlines()
+        if not rows and not required:
+            return None
         if len(rows) != 1:
-            raise ProtocolError("Expected an existing Workspace main branch.")
+            raise ProtocolError("Expected the explicitly selected Workspace branch.")
         head = rows[0].split()[0].decode("ascii")
         self.git("fetch", "--quiet", "--no-tags", "origin", head)
         return head
+
+    def head(self):
+        return self.ref("main")
 
     def read(self, head, path):
         row = self.git("ls-tree", "-z", head, "--", path).stdout
@@ -109,14 +120,21 @@ class Repository:
                 version = 0
             else:
                 if (not isinstance(marker, dict) or marker.get("kind") != "workspace"
-                        or type(marker.get("version")) is not int or marker["version"] not in (1, 2)):
+                        or type(marker.get("version")) is not int or marker["version"] not in (1, 2, 3)):
                     raise ProtocolError("Unsupported or invalid Workspace layout; do not write protocol records.")
                 if marker.get("state", "ready") != "ready":
                     raise ProtocolError("Finish the original layout migration before accessing protocol records.")
-                prefix = ".agentworkspace/"
                 version = marker["version"]
+                prefix = marker.get("platform_prefix") if version == 3 else ".agentworkspace"
+                if prefix not in ("", ".agentworkspace"):
+                    raise ProtocolError("Unsupported platform data prefix.")
+                prefix = prefix + "/" if prefix else ""
             self._layout_prefixes[head] = prefix
             self._layout_versions[head] = version
+            self._layout_documents[head] = marker or {}
+        if (self._layout_versions[head] == 3 and name.split("/", 1)[0] in MESSAGE_ROOTS
+                and self._layout_documents[head].get("role") != "messages"):
+            raise ProtocolError("Read Message/ACK/index/dispatch from the dedicated message snapshot.")
         return self._layout_prefixes[head] + name
 
     def commit(self, parent, records):
@@ -135,10 +153,33 @@ class Repository:
             return self.git("commit-tree", tree, "-p", parent,
                             data=b"Publish original Message protocol records\n", env=env).stdout.strip().decode()
 
-    def push(self, commit, parent):
+    def push(self, commit, parent, *, branch="main"):
         # commit is a direct child of parent: exact lease, never history rewriting.
-        return self.git("push", "--porcelain", f"--force-with-lease=refs/heads/main:{parent}",
-                        "origin", f"{commit}:refs/heads/main", check=False)
+        return self.git("push", "--porcelain", f"--force-with-lease=refs/heads/{branch}:{parent}",
+                        "origin", f"{commit}:refs/heads/{branch}", check=False)
+
+
+def message_snapshots(repo):
+    messages = repo.ref(MESSAGE_BRANCH, required=False)
+    main = repo.head()
+    repo.protocol_path(main, "workspace.json")
+    if repo._layout_versions[main] != 3:
+        return {"main": main, "messages": main, "branch": "main"}
+    document = repo._layout_documents[main]
+    if document.get("messages_branch") != MESSAGE_BRANCH or document.get("role") == "messages":
+        raise ProtocolError("The main layout does not identify its dedicated message branch.")
+    if messages is None:
+        raise ProtocolError("The dedicated message branch is missing; do not fall back to main.")
+    repo.protocol_path(messages, "messages/")
+    if repo._layout_versions[messages] != 3 or repo._layout_documents[messages].get("role") != "messages":
+        raise ProtocolError("The dedicated message branch has a different layout.")
+    guard = repo.json(messages, MESSAGE_GUARD)
+    if not isinstance(guard, dict) or not guard.get("main_revision"):
+        raise ProtocolError("The message permission marker is missing.")
+    ancestry = repo.git("merge-base", "--is-ancestor", guard["main_revision"], main, check=False)
+    if ancestry.returncode != 0:
+        raise ProtocolError("The main read does not include the sampled message permission version.")
+    return {"main": main, "messages": messages, "branch": MESSAGE_BRANCH}
 
 
 def legacy_worker_at(repo, head, agent, kind, identifier_value):
@@ -151,7 +192,8 @@ def legacy_worker_at(repo, head, agent, kind, identifier_value):
 
 def worker_at(repo, head, agent, worker):
     path = repo.protocol_path(head, f"workers/{identifier(agent)}/{identifier(worker)}.json")
-    if repo._layout_versions[head] != 2:
+    version = repo._layout_versions[head]
+    if not (version == 2 or version == 3 and repo._layout_documents[head].get("worker_support") is True):
         raise ProtocolError("Worker records require the Worker data version gate.")
     record = repo.json(head, path)
     if not record or record.get("agent") != agent or record.get("id") != worker:
@@ -198,12 +240,12 @@ def actor_at(repo, head, agent, binding):
     return meta
 
 
-def notification_at(repo, head, meta, agent, message_id, worker=None):
-    index = repo.json(head, repo.protocol_path(head, f"message-index/{identifier(message_id)}.json"))
+def notification_at(repo, main, messages, meta, agent, message_id, worker=None):
+    index = repo.json(messages, repo.protocol_path(messages, f"message-index/{identifier(message_id)}.json"))
     if (not index or index.get("id") != message_id or index.get("to", {}).get("workspace") != meta["locator"]
             or index["to"].get("agent") != agent):
         raise ProtocolError("The trusted notification index does not target this instance.")
-    target = endpoint_at(repo, head, index["to"], message_id)
+    target = endpoint_at(repo, main, index["to"], message_id)
     if target.get("worker") != worker:
         raise ProtocolError("Only the addressed Worker's current Binding may receive this notification.")
     return index
@@ -222,20 +264,20 @@ def targets_for(own, meta, peer_path, locator):
     return [{"repo": own.path, "locator": meta["locator"]}, {"repo": peer.path, "locator": locator}]
 
 
-def prepare(args, own, head, meta, index):
+def prepare(args, own, head, messages, meta, index):
     entry = own.json(head, own.protocol_path(head, f"bindings/{args.binding}.json"))
     worker = binding_worker_at(own, head, args.agent, entry)
     actor_address = {"workspace": meta["locator"], "agent": args.agent}
     if worker is not None:
         actor_address["worker"] = worker
     if args.action == "receive":
-        existing = own.read(head, own.protocol_path(head, f"acks/{args.id}.json"))
+        existing = own.read(messages, own.protocol_path(messages, f"acks/{args.id}.json"))
         if existing is not None:
             if json.loads(existing) != {"message_id": args.id}:
                 raise ProtocolError("Existing ACK is damaged or has different fields; do not replace it.")
             return {"message_id": args.id, "already_acknowledged": True,
                     "instruction": "Do not repeat business. Continue an incomplete original operation file separately."}
-    raw = own.read(head, own.protocol_path(head, f"messages/{args.id}.json"))
+    raw = own.read(messages, own.protocol_path(messages, f"messages/{args.id}.json"))
     result = {"message_id": args.id}
     try:
         if raw is None:
@@ -250,7 +292,7 @@ def prepare(args, own, head, meta, index):
     except ValueError as exc:
         result["read_error"] = str(exc)
     if args.action == "show":
-        return {**result, "index": index, "ack": own.json(head, own.protocol_path(head, f"acks/{args.id}.json"))}
+        return {**result, "index": index, "ack": own.json(messages, own.protocol_path(messages, f"acks/{args.id}.json"))}
     if args.action == "receive":
         payload = {"message_id": args.id}
         records = {f"acks/{args.id}.json": encode(payload)}
@@ -280,7 +322,7 @@ def prepare(args, own, head, meta, index):
     operation = {"format": "message-git-operation-v2" if worker is not None else "message-git-operation-v1",
             "kind": "ack" if args.action == "receive" else "message",
             "actor": {**actor_address, "binding": args.binding},
-            "source_id": args.id, "source_index": base64.b64encode(own.read(head, own.protocol_path(head, f"message-index/{args.id}.json"))).decode(),
+            "source_id": args.id, "source_index": base64.b64encode(own.read(messages, own.protocol_path(messages, f"message-index/{args.id}.json"))).decode(),
             "records": {path: base64.b64encode(value).decode() for path, value in records.items()},
             "read_result": result, "targets": targets_for(own, meta, args.peer, locator), "state": "prepared"}
     if worker is not None and args.action == "reply":
@@ -345,27 +387,36 @@ def publish(path, operation):
     own = Repository(operation["targets"][0]["repo"])
     actor = operation["actor"]
     for target in operation["targets"]:
-        head = own.head()
+        own_state = message_snapshots(own)
+        head, messages = own_state["main"], own_state["messages"]
         meta = actor_at(own, head, actor["agent"], actor["binding"])
-        if meta["locator"] != actor["workspace"] or own.read(head, own.protocol_path(head, f"message-index/{operation['source_id']}.json")) != base64.b64decode(operation["source_index"]):
+        if meta["locator"] != actor["workspace"] or own.read(messages, own.protocol_path(messages, f"message-index/{operation['source_id']}.json")) != base64.b64decode(operation["source_index"]):
             raise ProtocolError("The original Workspace or notification index changed.")
         entry = own.json(head, own.protocol_path(head, f"bindings/{actor['binding']}.json"))
         worker = binding_worker_at(own, head, actor["agent"], entry)
         if actor.get("worker", worker) != worker:
             raise ProtocolError("The original operation belongs to another Worker.")
-        notification_at(own, head, meta, actor["agent"], operation["source_id"], worker)
+        notification_at(own, head, messages, meta, actor["agent"], operation["source_id"], worker)
         repo = own if target["repo"] == own.path else Repository(target["repo"])
         if repo is not own and not any(friend.get("locator") == target["locator"] for friend in meta.get("friends", {}).values()):
             raise ProtocolError("The original friend route was removed; no peer write is authorized.")
-        parent = head if repo is own else repo.head()
-        if repo.json(parent, repo.protocol_path(parent, "workspace.json"))["locator"] != target["locator"]:
+        target_state = own_state if repo is own else message_snapshots(repo)
+        parent, branch = target_state["messages"], target_state["branch"]
+        target_main = target_state["main"]
+        if repo.json(target_main, repo.protocol_path(target_main, "workspace.json"))["locator"] != target["locator"]:
             raise ProtocolError("Target Workspace changed.")
         if operation["kind"] == "message":
             body = json.loads(next(content for record, content in records.items() if record.startswith("messages/")))
             source = json.loads(base64.b64decode(operation["source_index"]))
             destination = next(row for row in operation["targets"] if row["locator"] == body["to"]["workspace"])
-            destination_repo = own if destination["repo"] == own.path else Repository(destination["repo"])
-            destination_head = head if destination_repo is own else destination_repo.head()
+            if destination["repo"] == own.path:
+                destination_repo, destination_state = own, own_state
+            elif destination["repo"] == repo.path:
+                destination_repo, destination_state = repo, target_state
+            else:
+                destination_repo = Repository(destination["repo"])
+                destination_state = message_snapshots(destination_repo)
+            destination_head = destination_state["main"]
             expected_target = endpoint_at(destination_repo, destination_head, source["from"], operation["source_id"])
             actual_target = endpoint_at(destination_repo, destination_head, body["to"], body["id"])
             source_endpoint = endpoint_at(own, head, body["from"], body["id"])
@@ -390,23 +441,23 @@ def publish(path, operation):
         if operation["kind"] == "message":
             body = json.loads(next(content for record, content in records.items() if record.startswith("messages/")))
             if target["locator"] == body["to"]["workspace"]:
-                receiver = repo.json(parent, repo.protocol_path(parent, f"agents/{identifier(body['to']['agent'])}.json"))
+                receiver = repo.json(target_main, repo.protocol_path(target_main, f"agents/{identifier(body['to']['agent'])}.json"))
                 if not receiver or receiver.get("archived"):
                     raise ProtocolError("Reply target is missing or archived.")
-                endpoint = endpoint_at(repo, parent, body["to"], body["id"])
-                if endpoint.get("worker") is not None and worker_at(repo, parent, endpoint["agent"], endpoint["worker"]).get("archived"):
+                endpoint = endpoint_at(repo, target_main, body["to"], body["id"])
+                if endpoint.get("worker") is not None and worker_at(repo, target_main, endpoint["agent"], endpoint["worker"]).get("archived"):
                     raise ProtocolError("Reply target Worker is archived; do not choose another Worker.")
         commit = repo.commit(parent, missing)
-        target.setdefault("attempts", []).append({"parent": parent, "commit": commit})
-        target.update(parent=parent, commit=commit, state="outcome_unknown")
+        target.setdefault("attempts", []).append({"parent": parent, "commit": commit, "branch": branch})
+        target.update(parent=parent, commit=commit, branch=branch, state="outcome_unknown")
         operation["state"] = "outcome_unknown"
         save(path, operation)  # Preserve the original commit before the possibly ambiguous write.
         try:
-            pushed = repo.push(commit, parent)
+            pushed = repo.push(commit, parent) if branch == "main" else repo.push(commit, parent, branch=branch)
         except (subprocess.TimeoutExpired, OSError):
             pushed = None
         try:
-            current = repo.head()
+            current = repo.head() if branch == "main" else repo.ref(branch)
             confirmed = all(repo.read(current, repo.protocol_path(current, record)) == content
                             for record, content in records.items())
         except (ProtocolError, subprocess.TimeoutExpired, OSError):
@@ -454,19 +505,20 @@ def main(argv=None):
             result = publish(path, operation)
     else:
         own = Repository(args.repo)
-        head = own.head()
+        state = message_snapshots(own)
+        head, messages = state["main"], state["messages"]
         meta = actor_at(own, head, args.agent, args.binding)
         entry = own.json(head, own.protocol_path(head, f"bindings/{args.binding}.json"))
         worker = binding_worker_at(own, head, args.agent, entry)
-        index = notification_at(own, head, meta, args.agent, args.id, worker)
+        index = notification_at(own, head, messages, meta, args.agent, args.id, worker)
         if args.action == "show":
-            result = prepare(args, own, head, meta, index)
+            result = prepare(args, own, head, messages, meta, index)
         else:
             path = Path(args.record).resolve()
             with operation_lock(path):
                 if path.exists():
                     raise ProtocolError("Original operation already saved. Inspect it and use continue; do not prepare another request.")
-                result = prepare(args, own, head, meta, index)
+                result = prepare(args, own, head, messages, meta, index)
                 if not result.get("already_acknowledged"):
                     save(path, result)
                     if args.publish:

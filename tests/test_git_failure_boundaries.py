@@ -387,5 +387,5 @@ def test_github_write_reconciliation_cannot_become_retryable(tmp_path, monkeypat
         raise RetryableRead("read unavailable")
     monkeypatch.setattr(store, "request", unavailable)
     with pytest.raises(Uncertain):
-        store.publish("main", "original-commit", "parent")
+        store._publish_ref("main", "original-commit", "parent")
     assert writes == [{"sha": "original-commit", "force": False}]

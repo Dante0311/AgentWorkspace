@@ -104,8 +104,15 @@ def workers_migrate(app, workspace, agent_id, worker_id, request_id, *, director
                     elif path.startswith(layout.shared_path(snap, f'checkpoints/{agent_id}/')):
                         point = snap.json(path)
                         mapping['checkpoints'][point['id']] = worker_id
-                    elif path.startswith(layout.shared_path(snap, 'message-index/')) or path.startswith(layout.shared_path(snap, 'direct-messages/')):
+                    elif path.startswith(layout.shared_path(snap, 'direct-messages/')):
                         message = snap.json(path)
+                        if any(message.get(side, {}).get('agent') == agent_id and
+                               message[side].get('workspace') == locator for side in ('from', 'to')):
+                            mapping['messages'][message['id']] = worker_id
+                message_snapshot = store.message_snapshot().messages
+                for path in message_snapshot.entries:
+                    if path.startswith(layout.shared_path(message_snapshot, 'message-index/')):
+                        message = message_snapshot.json(path)
                         if any(message.get(side, {}).get('agent') == agent_id and
                                message[side].get('workspace') == locator for side in ('from', 'to')):
                             mapping['messages'][message['id']] = worker_id
@@ -179,8 +186,11 @@ def workers_migrate(app, workspace, agent_id, worker_id, request_id, *, director
                     if snap.json(ap) != receipt['legacy_agent_record']:
                         raise Conflict('The legacy Agent changed during migration; preserve the original request.')
                     wp = workers.path(snap, agent_id, worker_id)
+                    marker = (encode({**snap.json(layout.MARKER), 'worker_support': True})
+                              if layout.version(snap, 'workspace') == layout.MESSAGE_VERSION
+                              else layout.marker('workspace', version=layout.WORKER_VERSION))
                     changes = {ap: encode(receipt['agent_record']), wp: encode(receipt['worker_record']),
-                               mp: encode(receipt['mapping']), layout.MARKER: layout.marker('workspace', version=layout.WORKER_VERSION)}
+                               mp: encode(receipt['mapping']), layout.MARKER: marker}
                     receipt['phase'] = 'shared_publishing'
                     write_json(operation_path, receipt)
                     try:

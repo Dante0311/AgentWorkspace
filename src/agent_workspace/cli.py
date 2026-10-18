@@ -261,7 +261,9 @@ def parser():
     wk["update"].add_argument("--parent", dest="parent_id")
     wk["deliver"].add_argument("--ref", dest="refs", action="append", required=True)
 
-    msg = actions("message", ["send", "list", "show", "receive", "poll", "watch", "reconcile"])
+    msg = actions("message", ["send", "list", "show", "receive", "poll", "watch", "reconcile", "branch-plan", "migrate"])
+    msg['migrate'].add_argument('--request-id', required=True)
+    msg['migrate'].add_argument('--compatible-writer', dest='compatible_writers', action='append', required=True)
     for key in ("send", "receive", "poll", "watch"):
         msg[key].add_argument("agent_id")
     for key in ("send", "receive", "poll"):

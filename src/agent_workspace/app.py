@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 
-from . import instance_worktrees, migration, skills as shared_skills, software, workers
+from . import instance_worktrees, message_store, migration, skills as shared_skills, software, workers
 from .gitstore import GitStore, GitHubStore, open_store
 from . import model_profiles
 from . import layout
@@ -50,8 +50,7 @@ class App:
         GitStore.initialize(path)
         store = open_store(str(path), self.home)
         meta = {"schema": 1, "name": name, "locator": "local:" + name, "friends": {}, "projects": {}}
-        store.branch("main", {layout.MARKER: layout.marker('workspace', version=layout.WORKER_VERSION if worker_support else layout.VERSION),
-                              '.agentworkspace/workspace.json': encode(meta)})
+        message_store.initialize(store, meta, worker_support)
         return self.workspace_connect(name, str(path))
 
     def workspace_connect(self, name, address):
@@ -83,8 +82,7 @@ class App:
         if isinstance(store, GitHubStore):
             store.bootstrap(meta, layout_version=layout.WORKER_VERSION if worker_support else layout.VERSION)
         else:
-            store.branch("main", {layout.MARKER: layout.marker('workspace', version=layout.WORKER_VERSION if worker_support else layout.VERSION),
-                                  '.agentworkspace/workspace.json': encode(meta)})
+            message_store.initialize(store, meta, worker_support)
         return self.workspace_connect(name, address)
 
     def workspace_list(self):
@@ -97,6 +95,12 @@ class App:
 
     def layout_plan(self, workspace, agent_ids=None):
         return migration.plan(self, workspace, agent_ids)
+
+    def message_branch_plan(self, workspace):
+        return message_store.plan(self.store(workspace))
+
+    def message_branch_migrate(self, workspace, request_id, *, compatible_writers=None):
+        return message_store.migrate(self, workspace, request_id, compatible_writers=compatible_writers)
 
     def layout_migrate(self, workspace, request_id, *, agent_ids=None, migrate_shared=False, compatible_writers=None):
         return migration.migrate(self, workspace, request_id, agent_ids=agent_ids,
@@ -323,7 +327,7 @@ class App:
         item = {"id": agent_id, "name": name, "description": description, "branch": branch,
                 "archived": False, "current": None, "has_run": False, "handoff": None,
                 "created_at": now()}
-        if layout.version(snap, 'workspace') == layout.WORKER_VERSION:
+        if layout.worker_support(snap):
             item.update(worker_schema=1, default_worker='default')
             for key in ('current', 'has_run', 'handoff'):
                 item.pop(key)
@@ -711,7 +715,7 @@ class App:
                 item = {"id": target, "name": name, "description": "", "branch": branch,
                         "archived": False, "current": None, "has_run": False, "handoff": None,
                         "created_at": now(), "forked_from": origin}
-                if layout.version(snap, 'workspace') == layout.WORKER_VERSION:
+                if layout.worker_support(snap):
                     item.update(worker_schema=1, default_worker=source_worker or 'default')
                     for key in ('current', 'has_run', 'handoff'):
                         item.pop(key)

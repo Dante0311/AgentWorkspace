@@ -16,7 +16,7 @@ READ_ONLY = {"agent.desktop-discover", "workspace.read", "workspace.skills", "ag
              "checkpoint.list", "checkpoint.show", "work.list", "work.show", "message.list", "message.show", "message.operation",
              "direct-message.list", "direct-message.show",
              "asset.list", "asset.read", "runtime.status", "runtime.desktop-observe", "runtime.launch-show", "bridge.status",
-             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status", "layout.plan", "web-courier.status",
+             "agent.transfer-status", "maintenance.status", "workspace.doctor", "agent.desktop-project", "backend.status", "backend.log", "software.status", "layout.plan", "message.branch-plan", "web-courier.status",
              "agent.model-change-show"}
 
 SOFTWARE_OPERATIONS = {"backend.start", "backend.stop", "backend.restart", "backend.status", "backend.log", "backend.run",
@@ -189,6 +189,7 @@ def command_map(app, *, actor=None):
         "web-courier.status": partial(web_courier.status, app),
         "web-courier.revoke": partial(web_courier.revoke, app),
         "layout.plan": app.layout_plan, "layout.migrate": app.layout_migrate,
+        "message.branch-plan": app.message_branch_plan, "message.migrate": app.message_branch_migrate,
         "session.prepare": partial(sessions.prepare, app), "session.open": partial(sessions.open_terminal, app),
         "session.show": partial(sessions.show, app),
         "agent.desktop-project": partial(desktop_projects.plan, app),
@@ -284,7 +285,7 @@ def execute(app, command, arguments, *, actor=None):
         workspace, aid, binding = actor
         if command == "agent.takeover":
             raise Error("Force takeover is an explicit user operation, not an Agent or caretaker operation.")
-        if command in ("layout.migrate", "worker.migrate"):
+        if command in ("layout.migrate", "worker.migrate", "message.migrate"):
             raise Error("Layout migration is an explicit user operation; run it from the user management terminal.")
         if command in ("web-courier.connect", "web-courier.status", "web-courier.revoke"):
             raise Error("Web Courier connections are explicit user operations; use the user management terminal.")

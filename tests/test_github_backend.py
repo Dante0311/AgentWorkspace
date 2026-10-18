@@ -17,6 +17,25 @@ class MemoryGitHub:
         sha=hashlib.sha1(encode(value)).hexdigest();self.objects[sha]=value;return sha
     def request(self,method,path,value=None):
         self.calls.append((method,path))
+        if path == '/graphql':
+            if value['query'].startswith('query'):
+                return {'data': {'repository': {'id': 'fixture-id'}, '__type': {'fields': [{'name': 'updateRefs'}]}}}
+            updates = value['variables']['input']['refUpdates']
+            for update in updates:
+                current = self.refs.get(update['name'].removeprefix('refs/heads/'), '0' * 40)
+                if current != update['beforeOid']:
+                    raise Conflict('atomic beforeOid mismatch')
+            self.refs.update({item['name'].removeprefix('refs/heads/'): item['afterOid'] for item in updates})
+            return {'data': {'updateRefs': {'clientMutationId': value['variables']['input']['clientMutationId']}}}
+        if method == 'GET' and path.startswith('/compare/'):
+            before, after = path.removeprefix('/compare/').split('...')
+            pending = [after]
+            while pending:
+                candidate = pending.pop()
+                if candidate == before:
+                    return {'status': 'identical' if before == after else 'ahead'}
+                pending.extend(self.objects[candidate].get('parents', []))
+            return {'status': 'diverged'}
         if method == 'PUT' and path.startswith('/contents/'):
             name = value['branch']
             parent = self.refs.get(name)
@@ -85,12 +104,12 @@ def test_empty_github_bootstrap_uses_contents(tmp_path, monkeypatch):
     monkeypatch.setattr(store, 'request', request)
     metadata = {'name': 'sea'}
     store.bootstrap(metadata)
-    method, path, body = calls[0]
+    method, path, body = next(call for call in calls if call[0] == 'PUT')
     assert (method, path) == ('PUT', '/contents/workspace.json')
     assert 'sha' not in body and body['branch'] == 'main'
     assert json.loads(base64.b64decode(body['content'])) == metadata
     snap = store.snapshot()
-    assert layout.version(snap, 'workspace') == 1
+    assert layout.version(snap, 'workspace') == layout.MESSAGE_VERSION
     assert snap.json('.agentworkspace/workspace.json') == metadata
     assert 'workspace.json' not in snap.entries
     # The second commit must preserve and consume the exact first Contents commit.
@@ -98,7 +117,7 @@ def test_empty_github_bootstrap_uses_contents(tmp_path, monkeypatch):
     initial = store.snapshot(revision=parent)
     assert initial.json('workspace.json') == metadata
     assert layout.MARKER not in initial.entries
-    assert not list(tmp_path.iterdir())
+    assert not (tmp_path / 'git').exists()
 
 
 def test_contents_bootstrap_does_not_replace_an_existing_workspace(tmp_path, monkeypatch):

@@ -11,6 +11,10 @@ from .util import Conflict, Error, digest, encode, locked, read_json
 
 VERSION = 1
 WORKER_VERSION = 2
+MESSAGE_VERSION = 3
+MESSAGE_BRANCH = 'aw-messages'
+MESSAGE_ROOTS = frozenset(('messages', 'acks', 'message-index', 'dispatch'))
+MESSAGE_GUARD = '.agentworkspace/message-permissions.json'
 MARKER = '.agentworkspace/layout.json'
 SHARED_ROOTS = frozenset(('agents', 'bindings', 'sessions', 'handoffs', 'checkpoints',
                          'messages', 'acks', 'message-index', 'dispatch', 'direct-messages',
@@ -40,7 +44,7 @@ def _relative(name):
 def marker(kind, *, version=VERSION, **facts):
     if kind not in ('workspace', 'instance'):
         raise Error('Unknown layout kind.')
-    if version not in (VERSION, WORKER_VERSION):
+    if version not in (VERSION, WORKER_VERSION, MESSAGE_VERSION) or (kind == 'instance' and version == MESSAGE_VERSION):
         raise Error('Unsupported data layout version.')
     return encode({**facts, 'version': version, 'kind': kind})
 
@@ -60,10 +64,16 @@ def version(source, kind):
         return 0
     if not isinstance(value, dict) or value.get('kind') != kind or type(value.get('version')) is not int:
         raise Error('Invalid data layout marker.')
-    if value['version'] not in (VERSION, WORKER_VERSION):
+    if value['version'] not in (VERSION, WORKER_VERSION, MESSAGE_VERSION) or (kind == 'instance' and value['version'] == MESSAGE_VERSION):
         raise Error(f"Unsupported {kind} layout version: {value['version']}")
     if value.get('state', 'ready') != 'ready':
         raise MigrationRequired('Finish the original layout migration before accessing this copy.')
+    if value['version'] == MESSAGE_VERSION:
+        if value.get('platform_prefix') not in ('', '.agentworkspace'):
+            raise Error('Invalid message-layout platform prefix.')
+        if value.get('role') != 'messages' and (value.get('messages_branch') != MESSAGE_BRANCH or
+                                               type(value.get('worker_support')) is not bool):
+            raise Error('Invalid message-layout branch or Worker support declaration.')
     return value['version']
 
 
@@ -71,7 +81,24 @@ def shared_path(snapshot, name):
     name = _relative(name)
     if name != 'workspace.json' and name.split('/')[0] not in SHARED_ROOTS:
         raise Error('Use the shared path resolver only for AW platform records.')
-    return f'.agentworkspace/{name}' if version(snapshot, 'workspace') else name
+    current = version(snapshot, 'workspace')
+    if current == MESSAGE_VERSION:
+        document = snapshot.get(MARKER) if isinstance(snapshot, Mapping) else snapshot.bytes(MARKER)
+        document = json.loads(document)
+        prefix = document['platform_prefix']
+        if prefix not in ('', '.agentworkspace'):
+            raise Error('Unsupported platform data prefix.')
+        if name.split('/')[0] in MESSAGE_ROOTS and document.get('role') != 'messages':
+            raise Error('Read Message/ACK/index/dispatch through the explicit message snapshot.')
+        return f'{prefix}/{name}' if prefix else name
+    return f'.agentworkspace/{name}' if current else name
+
+
+def worker_support(snapshot):
+    current = version(snapshot, 'workspace')
+    if current == MESSAGE_VERSION:
+        return snapshot.json(MARKER).get('worker_support') is True
+    return current == WORKER_VERSION
 
 
 def expected(snapshot, objects):

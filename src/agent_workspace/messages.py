@@ -197,6 +197,10 @@ class Messages:
                     raise Error("An explicit publication Worker requires its real caller Binding.")
                 self._source(workspace, agent_id, binding, self.app.store(workspace).snapshot(), worker_id)
             payload = receipt["payload"]
+            uncertain_destination = receipt.get("uncertain_destination")
+            if uncertain_destination is None and receipt.get("state") == "outcome_unknown":
+                uncertain_destination = next((address for address in receipt["destinations"]
+                                              if address not in receipt["completed"]), None)
             for address in receipt["destinations"]:
                 if address in receipt["completed"]:
                     continue
@@ -210,6 +214,8 @@ class Messages:
                         if existing != encode(payload):
                             raise Conflict("Existing protocol record has different bytes; refusing overwrite.")
                     else:
+                        if address == uncertain_destination:
+                            return receipt
                         expected = {target: None}
                         changes = {target: encode(payload)}
                         own_address = self.app.store(receipt["workspace"]).address
@@ -241,11 +247,17 @@ class Messages:
                                     expected[worker_path] = snap.entries[worker_path]
                         store.change("main", changes, expected_layout(snap, expected), f"Publish {receipt['type']} {mid}")
                     receipt["completed"].append(address)
+                    if address == uncertain_destination:
+                        receipt.pop("uncertain_destination", None)
                     receipt.pop("error", None)
                     write_json(path, receipt)
                 except (Error, OSError, TimeoutError) as exc:
                     receipt["error"] = str(exc)
-                    receipt["state"] = "outcome_unknown" if isinstance(exc, Uncertain) else "pending"
+                    if isinstance(exc, Uncertain) or address == uncertain_destination:
+                        receipt["state"] = "outcome_unknown"
+                        receipt["uncertain_destination"] = address
+                    else:
+                        receipt["state"] = "pending"
                     write_json(path, receipt)
                     return receipt
             receipt["state"] = "published"

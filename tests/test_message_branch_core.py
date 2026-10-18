@@ -1,5 +1,7 @@
 """Message/permission races use real isolated Git; GraphQL checks do not use an account."""
 from pathlib import Path
+import hashlib
+import json
 import subprocess
 import types
 
@@ -123,10 +125,19 @@ def test_explicit_migration_preserves_legacy_identity_protocol_and_old_writer_ga
     assert app.message_branch_migrate('old', 'move', compatible_writers=['message-v3']) == result
     assert layout.worker_support(state.main) is (old_version == 2)
     # Run the actual previous writer's parser and commit validator, not a fake version check.
+    fixture = Path(__file__).parent / 'fixtures' / 'legacy_writer_9e1bf44'
+    provenance = json.loads((fixture / 'provenance.json').read_text(encoding='utf-8'))
+
+    def previous_source(name):
+        path = fixture / name
+        content = path.read_bytes()
+        assert hashlib.sha256(content).hexdigest() == provenance['files'][name]['sha256']
+        return compile(content, str(path), 'exec')
+
     old_layout = types.ModuleType('agent_workspace.previous_layout')
-    exec(subprocess.run(['git', 'show', '9e1bf44:src/agent_workspace/layout.py'], capture_output=True, check=True).stdout, old_layout.__dict__)
+    exec(previous_source('layout.py'), old_layout.__dict__)
     old_store_module = types.ModuleType('agent_workspace.previous_gitstore')
-    exec(subprocess.run(['git', 'show', '9e1bf44:src/agent_workspace/gitstore.py'], capture_output=True, check=True).stdout, old_store_module.__dict__)
+    exec(previous_source('gitstore.py'), old_store_module.__dict__)
     old_store_module.layout = old_layout
     old_store = old_store_module.GitStore(str(remote), tmp_path / 'old-writer')
     with pytest.raises(Error, match='Unsupported workspace layout version'):

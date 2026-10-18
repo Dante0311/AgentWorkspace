@@ -19,7 +19,7 @@ def agent_record(snapshot, agent_id):
 def enabled(snapshot, item):
     if item.get('worker_schema') != 1:
         return False
-    if layout.version(snapshot, 'workspace') != layout.WORKER_VERSION:
+    if not layout.worker_support(snapshot):
         raise Error('Worker registration requires the Worker data version gate.')
     return True
 

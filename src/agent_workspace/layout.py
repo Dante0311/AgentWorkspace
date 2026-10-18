@@ -68,6 +68,12 @@ def version(source, kind):
         raise Error(f"Unsupported {kind} layout version: {value['version']}")
     if value.get('state', 'ready') != 'ready':
         raise MigrationRequired('Finish the original layout migration before accessing this copy.')
+    if value['version'] == MESSAGE_VERSION:
+        if value.get('platform_prefix') not in ('', '.agentworkspace'):
+            raise Error('Invalid message-layout platform prefix.')
+        if value.get('role') != 'messages' and (value.get('messages_branch') != MESSAGE_BRANCH or
+                                               type(value.get('worker_support')) is not bool):
+            raise Error('Invalid message-layout branch or Worker support declaration.')
     return value['version']
 
 

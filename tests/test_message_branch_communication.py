@@ -396,3 +396,55 @@ def test_standalone_script_unknown_message_branch_write_is_only_observed(branch_
         assert helper["publish"](record, operation)["state"] == ("published" if landed else "outcome_unknown")
     after = store.message_snapshot()
     assert after.main.revision == before.main.revision and after.messages.revision == before.messages.revision
+
+
+@pytest.mark.parametrize("landed", [False, True])
+def test_old_unknown_script_operation_only_observes_after_message_migration(tmp_path, monkeypatch, landed):
+    app = App(tmp_path / "home")
+    legacy_workspace(app, "sea", tmp_path / "old-root.git", 0)
+    app.create("sea", "team")
+    binding = app.reserve("sea", "team")["binding"]
+    app.bind("sea", "team", binding, "original-manual-session")
+    Messages(app).send("sea", "team", binding, "team", "original", request_id="original")
+    repo = clone_repo(tmp_path, app, "sea", "old-unknown-cache")
+    record = tmp_path / "old-unknown.json"
+    operation = script(tmp_path, "receive", "--repo", repo, "--agent", "team", "--binding", binding,
+                       "--id", "original", "--record", record)
+    assert operation["format"] == "message-git-operation-v1"
+    original_records = dict(operation["records"])
+    helper = runpy.run_path(str(SCRIPT))
+    repository = helper["Repository"]
+    push, ref = repository.push, repository.ref
+    attempts = []
+
+    def lost(repo, revision, parent, **kwargs):
+        attempts.append(revision)
+        if landed:
+            push(repo, revision, parent, **kwargs)
+        raise subprocess.TimeoutExpired("isolated old-main publication", 1)
+
+    def unreadable(repo, branch, **kwargs):
+        if attempts and branch == "main":
+            raise helper["ProtocolError"]("Isolated old-main readback unavailable")
+        return ref(repo, branch, **kwargs)
+
+    with monkeypatch.context() as fault:
+        fault.setattr(repository, "push", lost)
+        fault.setattr(repository, "ref", unreadable)
+        assert helper["publish"](record, operation)["state"] == "outcome_unknown"
+    assert len(attempts) == 1 and operation["targets"][0]["branch"] == "main"
+    message_store.migrate(app, "sea", "old-unknown-migration", compatible_writers=["message-v3"])
+    before = app.store("sea").message_snapshot()
+
+    def no_replay(*args, **kwargs):
+        raise AssertionError("Migration cannot replay an unknown original operation")
+
+    monkeypatch.setattr(repository, "push", no_replay)
+    result = helper["publish"](record, json.loads(record.read_bytes()))
+    assert result["state"] == ("published" if landed else "outcome_unknown")
+    assert result["records"] == original_records and result["format"] == "message-git-operation-v1"
+    assert result["targets"][0]["branch"] == "main"
+    after = app.store("sea").message_snapshot()
+    assert after.branch == "aw-messages" and after.main.revision == before.main.revision
+    assert after.messages.revision == before.messages.revision
+    assert after.messages.json("acks/original.json") == ({"message_id": "original"} if landed else None)

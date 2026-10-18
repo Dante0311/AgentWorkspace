@@ -28,6 +28,8 @@ description: 每次发送或回复前核对当前入口，选择同机 Codex 原
 
 ## 正式 Message 的可用入口
 
+正式 Message、ACK、索引和投递尝试按 Workspace 的明确消息布局读取：新消息布局使用长期 `aw-messages` 分支，身份、Worker、Binding 和原生直发记录仍在 `main`。旧布局继续从 `main` 读取；新版缺文件或缺分支时停止，不回 `main` 找同名消息。AW 工具通过公共入口处理布局和权限标记；只有仓库工具时须按下面协议分别取得消息快照与随后读取的 main 资格快照，不能用一次普通推送代替撤权保护，也不能手动编辑权限标记或搬动日常数据。
+
 - 有 AW MCP/CLI 时优先使用它；具体例子见下文。
 - 只有 GitHub 等仓库工具时，先读 [精确协议](references/protocol.md)，再按 [手动仓库操作](references/manual.md) 使用同一提交的资格/索引、条件提交和读回；没有原通知也可按其中步骤主动发起新 Message。没有 Python 或完整 AW 也可操作；工具不能安全比较预期分支版本时，只准备对象并明确未发布。
 - 有 Python 3.11+ 与 Git 时可选用 [独立辅助脚本](scripts/message_git.py)。它不导入 AW；需要已配置 origin 的独立 bare clone、实际网络/认证与仓库权限。先读 [手动说明中的脚本用法](references/manual.md#独立辅助脚本)，本地操作文件不是 AW receipt。没有写权限只能读取或准备。

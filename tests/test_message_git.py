@@ -230,7 +230,7 @@ def test_script_layout_preserves_original_bytes_and_publishes_only_protocol_reco
     assert set(after.entries) - set(before.entries) == {ack}
     assert after.bytes(path) == raw and before.all() == store.snapshot(revision=before.revision).all()
     assert messages.show("sea", "original")["message"]["future"] == {"keep": True}
-    assert messages._list(before, "bob", unacked=True)[0]["id"] == "original"
+    assert messages._list(before, main=before, agent_id="bob", unacked=True)[0]["id"] == "original"
     assert messages.list("sea", "bob", unacked=True) == []
 
 
@@ -375,7 +375,7 @@ def test_aw_layout_keeps_original_ack_receipt_and_pinned_message_history(pair, m
     assert before.bytes(".agentworkspace/messages/original.json") == legacy.bytes("messages/original.json")
     assert before.bytes(".agentworkspace/acks/original.json") == legacy.bytes("acks/original.json")
     assert messages.show("sea", "original")["ack"] == {"message_id": "original"}
-    assert messages._list(legacy, "bob") == messages.list("sea", "bob")
+    assert messages._list(legacy, main=legacy, agent_id="bob") == messages.list("sea", "bob")
     assert messages._notification(legacy, legacy.json("message-index/original.json")) == messages._notification(
         before, before.json(".agentworkspace/message-index/original.json"))
 

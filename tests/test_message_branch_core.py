@@ -5,7 +5,7 @@ import types
 
 import pytest
 
-from agent_workspace import commands, layout
+from agent_workspace import commands, layout, message_store
 from agent_workspace.app import App
 from agent_workspace.gitstore import GitHubStore, GitStore
 from agent_workspace.util import Conflict, Error, Uncertain, encode, read_json, write_json
@@ -158,6 +158,8 @@ def test_unknown_migration_reconciles_original_two_refs_without_replay(app, monk
     else:
         with pytest.raises(Uncertain):
             app.message_branch_migrate('sea', 'unknown', compatible_writers=['message-v3'])
+        with pytest.raises(Uncertain):
+            app.message_branch_migrate('sea', 'another-id', compatible_writers=['message-v3'])
     assert len(attempts) == 1
 
 
@@ -187,6 +189,34 @@ def test_unknown_permission_publication_keeps_original_pair_and_does_not_replay(
     else:
         with pytest.raises(Uncertain):
             store.publish('main', commit, state.main.revision)
+    assert len(attempts) == 1
+
+
+@pytest.mark.parametrize('accepted', [False, True])
+def test_initialization_reuses_original_pair_after_unknown_result(tmp_path, monkeypatch, accepted):
+    remote = tmp_path / 'remote.git'
+    GitStore.initialize(remote)
+    store = GitStore(str(remote), tmp_path / 'home')
+    original = store._publish_atomic
+    attempts = []
+    def lost(updates):
+        attempts.append(updates)
+        if accepted:
+            original(updates)
+        raise Uncertain('fixture lost initialization response')
+    metadata = {'schema': 1, 'name': 'isolated', 'locator': 'local:isolated', 'friends': {}, 'projects': {}}
+    with monkeypatch.context() as fault:
+        fault.setattr(store, '_publish_atomic', lost)
+        if accepted:
+            message_store.initialize(store, metadata)
+        else:
+            with pytest.raises(Uncertain):
+                message_store.initialize(store, metadata)
+    if accepted:
+        assert message_store.initialize(store, metadata) == attempts[0]
+    else:
+        with pytest.raises(Uncertain):
+            message_store.initialize(store, metadata)
     assert len(attempts) == 1
 
 

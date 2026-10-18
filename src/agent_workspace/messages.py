@@ -67,12 +67,12 @@ class Messages:
         suffix = f"{agent_id}/{worker_id}" if worker_id is not None else agent_id
         return shared_path(snap, f"dispatch/{suffix}.json")
 
-    def _previous_dispatch(self, snap, workspace, agent_id, worker_id):
+    def _previous_dispatch(self, snap, main, workspace, agent_id, worker_id):
         previous = snap.json(self._dispatch_path(snap, agent_id, worker_id))
         if previous is not None or worker_id is None:
             return previous or {}
         old = snap.json(shared_path(snap, f"dispatch/{agent_id}.json"), {})
-        if old and self.app.legacy_worker(workspace, agent_id, "bindings", old["binding"], snapshot=snap) == worker_id:
+        if old and self.app.legacy_worker(workspace, agent_id, "bindings", old["binding"], snapshot=main) == worker_id:
             return old
         return {}
 
@@ -87,8 +87,10 @@ class Messages:
              request_id=None, *, worker_id=None, to_worker=None, reply_to=None):
         if not isinstance(content, str) or not content.strip() or delivery not in ("normal", "insert"):
             raise Error("Message needs non-empty content and delivery=normal or insert.")
-        own, meta = self._own(workspace)
-        snap = own.snapshot()
+        own = self.app.store(workspace)
+        state = own.message_snapshot()
+        snap = state.main
+        meta = snap.json(shared_path(snap, "workspace.json"))
         source_worker = self._source(workspace, agent_id, binding, snap, worker_id)
         mid = slug(request_id or uid("m"))
         receipt_path = self.app.home / "operations" / f"{mid}.json"
@@ -122,7 +124,7 @@ class Messages:
                         raise Conflict("Request ID was used for a different message.")
             else:
                 if reply_to is not None:
-                    original = snap.json(shared_path(snap, f"messages/{slug(reply_to)}.json"))
+                    original = state.messages.json(shared_path(state.messages, f"messages/{slug(reply_to)}.json"))
                     if original is None:
                         raise Error("The explicitly selected reply message is unavailable.")
                     target, other = self._peer(workspace, original["from"]["workspace"])
@@ -197,6 +199,10 @@ class Messages:
                     raise Error("An explicit publication Worker requires its real caller Binding.")
                 self._source(workspace, agent_id, binding, self.app.store(workspace).snapshot(), worker_id)
             payload = receipt["payload"]
+            mid = payload["id"] if receipt["type"] == "message" else payload["message_id"]
+            records = {f"messages/{mid}.json" if receipt["type"] == "message" else f"acks/{mid}.json": encode(payload)}
+            if receipt["type"] == "message":
+                records[f"message-index/{mid}.json"] = encode({k: payload[k] for k in ("id", "from", "to", "created_at", "delivery")})
             uncertain_destination = receipt.get("uncertain_destination")
             if uncertain_destination is None and receipt.get("state") == "outcome_unknown":
                 uncertain_destination = next((address for address in receipt["destinations"]
@@ -206,46 +212,62 @@ class Messages:
                     continue
                 try:
                     store = open_store(address, self.app.home)
-                    snap = store.snapshot()
-                    mid = payload["id"] if receipt["type"] == "message" else payload["message_id"]
-                    target = shared_path(snap, f"messages/{mid}.json" if receipt["type"] == "message" else f"acks/{mid}.json")
-                    existing = snap.bytes(target)
-                    if existing is not None:
-                        if existing != encode(payload):
+                    state = store.message_snapshot()
+                    snap, main = state.messages, state.main
+                    expected, changes = {}, {}
+                    for logical, raw in records.items():
+                        target = shared_path(snap, logical)
+                        existing = snap.bytes(target)
+                        if existing is not None and existing != raw:
                             raise Conflict("Existing protocol record has different bytes; refusing overwrite.")
-                    else:
+                        expected[target] = snap.entries.get(target)
+                        if existing is None:
+                            changes[target] = raw
+                    if changes:
                         if address == uncertain_destination:
                             return receipt
-                        expected = {target: None}
-                        changes = {target: encode(payload)}
+                        permission_expected = {}
+                        meta_path = shared_path(main, "workspace.json")
+                        meta = main.json(meta_path)
+                        permission_expected[meta_path] = main.entries[meta_path]
                         own_address = self.app.store(receipt["workspace"]).address
                         if address == own_address:
                             actor_id = receipt.get("sender") or receipt.get("receiver")
-                            source_worker = self._source(receipt["workspace"], actor_id, receipt["binding"], snap)
+                            source_worker = self._source(receipt["workspace"], actor_id, receipt["binding"], main)
                             recorded_worker = receipt.get("sender_worker") if receipt["type"] == "message" else receipt.get("receiver_worker")
                             if recorded_worker is not None and source_worker != recorded_worker:
                                 raise Conflict("The original publication belongs to another Worker.")
-                            expected.update(self._entry_expected(receipt["workspace"], snap, actor_id,
-                                                                 receipt["binding"], source_worker))
+                            permission_expected.update(self._entry_expected(receipt["workspace"], main, actor_id,
+                                                                            receipt["binding"], source_worker))
+                            if receipt["type"] == "ack":
+                                index_path = shared_path(snap, f"message-index/{mid}.json")
+                                index = snap.json(index_path)
+                                if (index is None or index["to"]["workspace"] != meta["locator"]
+                                        or index["to"]["agent"] != actor_id):
+                                    raise Conflict("The original ACK notification no longer targets this receiver.")
+                                endpoint = self._address(receipt["workspace"], main, index["to"], mid)
+                                if endpoint.get("worker") != source_worker:
+                                    raise Conflict("The original ACK notification belongs to another Worker.")
+                                expected[index_path] = snap.entries[index_path]
                         if receipt["type"] == "message":
-                            index = shared_path(snap, f"message-index/{mid}.json")
-                            changes[index] = encode({k: payload[k] for k in ("id", "from", "to", "created_at", "delivery")})
-                            expected[index] = None
-                            meta = snap.json(shared_path(snap, "workspace.json"))
+                            locator = payload["from"]["workspace"] if address == own_address else payload["to"]["workspace"]
+                            if meta["locator"] != locator:
+                                raise Conflict("The original publication destination has a different Workspace.")
                             if meta["locator"] == payload["to"]["workspace"]:
-                                agent_path = shared_path(snap, f"agents/{payload['to']['agent']}.json")
-                                agent = snap.json(agent_path)
+                                agent_path = shared_path(main, f"agents/{payload['to']['agent']}.json")
+                                agent = main.json(agent_path)
                                 if agent is None or agent["archived"]:
                                     raise Error("Target is archived or missing; publication remains incomplete.")
-                                expected[agent_path] = snap.entries[agent_path]
-                                endpoint = self._address(receipt["workspace"], snap, payload["to"], mid)
+                                permission_expected[agent_path] = main.entries[agent_path]
+                                endpoint = self._address(receipt["workspace"], main, payload["to"], mid)
                                 if endpoint.get("worker") is not None:
                                     worker_path, selected, _ = workers.execution_record(self.app, receipt["workspace"],
-                                        endpoint["agent"], snap, endpoint["worker"])
+                                        endpoint["agent"], main, endpoint["worker"])
                                     if selected["archived"]:
                                         raise Error("Target Worker is archived; publication remains incomplete.")
-                                    expected[worker_path] = snap.entries[worker_path]
-                        store.change("main", changes, expected_layout(snap, expected), f"Publish {receipt['type']} {mid}")
+                                    permission_expected[worker_path] = main.entries[worker_path]
+                        store.message_change(state, changes, expected_layout(snap, expected),
+                            f"Publish {receipt['type']} {mid}", permission_expected=permission_expected)
                     receipt["completed"].append(address)
                     if address == uncertain_destination:
                         receipt.pop("uncertain_destination", None)
@@ -265,13 +287,14 @@ class Messages:
             return receipt
 
     def list(self, workspace, agent_id=None, direction="in", unacked=False, worker_id=None):
-        return self._list(self.app.store(workspace).snapshot(), agent_id, direction, unacked,
+        state = self.app.store(workspace).message_snapshot()
+        return self._list(state.messages, state.main, agent_id, direction, unacked,
                           workspace=workspace, worker_id=worker_id)
 
-    def _list(self, snap, agent_id=None, direction="in", unacked=False, *, workspace=None, worker_id=None):
+    def _list(self, snap, main, agent_id=None, direction="in", unacked=False, *, workspace=None, worker_id=None):
         if worker_id is not None and agent_id is None:
             raise Error("A Worker filter requires its Agent.")
-        meta = snap.json(shared_path(snap, "workspace.json"))
+        meta = main.json(shared_path(main, "workspace.json"))
         prefix = shared_path(snap, "message-index") + "/"
         result = []
         for path in snap.entries:
@@ -283,7 +306,7 @@ class Messages:
                 if side.get("workspace") != meta["locator"] or side.get("agent") != agent_id:
                     continue
                 if worker_id is not None:
-                    endpoint = self._address(workspace, snap, side, item["id"])
+                    endpoint = self._address(workspace, main, side, item["id"])
                     if endpoint.get("worker") != worker_id:
                         continue
             acked = shared_path(snap, f"acks/{item['id']}.json") in snap.entries
@@ -293,22 +316,24 @@ class Messages:
         return sorted(result, key=lambda m: (m["created_at"], m["id"]))
 
     def show(self, workspace, message_id):
-        snap = self.app.store(workspace).snapshot()
+        snap = self.app.store(workspace).message_snapshot().messages
         item = snap.json(shared_path(snap, f"messages/{slug(message_id)}.json"))
         if item is None:
             raise Error("Message not found.")
         return {"message": item, "ack": snap.json(shared_path(snap, f"acks/{message_id}.json"))}
 
     def receive(self, workspace, agent_id, binding, message_id, directory=None, worker_id=None):
-        own, meta = self._own(workspace)
-        snap = own.snapshot()
-        actual_worker = self._source(workspace, agent_id, binding, snap, worker_id)
+        own = self.app.store(workspace)
+        state = own.message_snapshot()
+        snap, main = state.messages, state.main
+        meta = main.json(shared_path(main, "workspace.json"))
+        actual_worker = self._source(workspace, agent_id, binding, main, worker_id)
         mid = slug(message_id)
         envelope = snap.json(shared_path(snap, f"message-index/{mid}.json"))
         if (not envelope or envelope["to"].get("workspace") != meta["locator"]
                 or envelope["to"].get("agent") != agent_id):
             raise Error("The notification does not target this instance.")
-        endpoint = self._address(workspace, snap, envelope["to"], mid)
+        endpoint = self._address(workspace, main, envelope["to"], mid)
         if endpoint.get("worker") != actual_worker:
             raise Conflict("Only the addressed Worker's current Binding may acknowledge this notification.")
         if snap.bytes(shared_path(snap, f"acks/{mid}.json")):
@@ -368,13 +393,14 @@ class Messages:
             return template["instruction"] + template["unavailable"].format(record=text)
         return template["instruction"] + template["message"].format(record=text)
 
-    def _head(self, snap, workspace, agent_id, binding):
-        actual_worker = self._source(workspace, agent_id, binding, snap)
-        messages = self._list(snap, agent_id, unacked=True, workspace=workspace, worker_id=actual_worker)
+    def _head(self, snap, main, workspace, agent_id, binding):
+        actual_worker = self._source(workspace, agent_id, binding, main)
+        messages = self._list(snap, main, agent_id, unacked=True, workspace=workspace, worker_id=actual_worker)
         return messages[0] if messages else None
 
-    def _dispatch(self, snap, workspace, agent_id, binding, message, attempts, *, manual_attempt_id=None):
-        worker_id = self._source(workspace, agent_id, binding, snap)
+    def _dispatch(self, state, workspace, agent_id, binding, message, attempts, *, manual_attempt_id=None):
+        snap, main = state.messages, state.main
+        worker_id = self._source(workspace, agent_id, binding, main)
         path = self._dispatch_path(snap, agent_id, worker_id)
         record = {"message_id": message["id"], "workspace": workspace, "agent": agent_id,
                   "binding": binding, "delivery": message["delivery"],
@@ -383,28 +409,29 @@ class Messages:
             record["manual_attempt_id"] = manual_attempt_id
         if worker_id is not None:
             record["worker"] = worker_id
-        expected = {path: snap.entries.get(path), shared_path(snap, f"acks/{message['id']}.json"): None,
-                    **self._entry_expected(workspace, snap, agent_id, binding, worker_id)}
+        expected = {path: snap.entries.get(path), shared_path(snap, f"acks/{message['id']}.json"): None}
         if worker_id is not None:
             legacy_path = shared_path(snap, f"dispatch/{agent_id}.json")
             expected[legacy_path] = snap.entries.get(legacy_path)
         for original in (f"messages/{message['id']}.json", f"message-index/{message['id']}.json"):
             original_path = shared_path(snap, original)
             expected[original_path] = snap.entries.get(original_path)
-        self.app.store(workspace).change("main", {path: encode(record)},
-                                         expected_layout(snap, expected), "Claim notification attempt")
+        self.app.store(workspace).message_change(state, {path: encode(record)},
+            expected_layout(snap, expected), "Claim notification attempt",
+            permission_expected=self._entry_expected(workspace, main, agent_id, binding, worker_id))
         return record
 
     def preview_manual(self, workspace, agent_id, binding, worker_id=None):
-        snap = self.app.store(workspace).snapshot()
-        worker_id = self._source(workspace, agent_id, binding, snap, worker_id)
-        message = self._head(snap, workspace, agent_id, binding)
+        state = self.app.store(workspace).message_snapshot()
+        snap, main = state.messages, state.main
+        worker_id = self._source(workspace, agent_id, binding, main, worker_id)
+        message = self._head(snap, main, workspace, agent_id, binding)
         if message is None:
             return {"state": "empty"}
         if message["delivery"] != "normal":
             return {"state": "delivery_unsupported", "message_id": message["id"],
                     "delivery": message["delivery"]}
-        previous = self._previous_dispatch(snap, workspace, agent_id, worker_id)
+        previous = self._previous_dispatch(snap, main, workspace, agent_id, worker_id)
         if previous.get("message_id") == message["id"]:
             return {"state": "waiting_ack", "message_id": message["id"]}
         prompt = self._notification(snap, message, require_body=True)
@@ -419,28 +446,30 @@ class Messages:
     def claim_manual(self, workspace, agent_id, binding, message_id, attempt_id, expected_prompt_digest, worker_id=None):
         """Share poll's FIFO and dispatch claim; a manual outcome is never retried."""
         mid, attempt = slug(message_id), slug(attempt_id)
-        snap = self.app.store(workspace).snapshot()
-        worker_id = self._source(workspace, agent_id, binding, snap, worker_id)
-        message = self._head(snap, workspace, agent_id, binding)
+        state = self.app.store(workspace).message_snapshot()
+        snap, main = state.messages, state.main
+        worker_id = self._source(workspace, agent_id, binding, main, worker_id)
+        message = self._head(snap, main, workspace, agent_id, binding)
         if message is None or message["id"] != mid:
             raise Conflict("The original message is no longer the unacknowledged FIFO head.")
         if message["delivery"] != "normal":
             raise Error("This manual Web route does not support insert delivery.")
-        previous = self._previous_dispatch(snap, workspace, agent_id, worker_id)
+        previous = self._previous_dispatch(snap, main, workspace, agent_id, worker_id)
         if previous.get("message_id") == mid:
             raise Conflict("The original message already has a notification attempt; inspect it without claiming again.")
         prompt = self._notification(snap, message, require_body=True)
         if digest(prompt.encode()) != expected_prompt_digest:
             raise Conflict("The original notification changed before this attempt.")
-        self._dispatch(snap, workspace, agent_id, binding, message, 1, manual_attempt_id=attempt)
+        self._dispatch(state, workspace, agent_id, binding, message, 1, manual_attempt_id=attempt)
         return {"state": "claimed", "message_id": mid, "attempt_id": attempt}
 
     def poll(self, workspace, agent_id, binding, *, adapter=None, directory=None,
              retry_seconds=60, max_attempts=3, worker_id=None):
         store = self.app.store(workspace)
-        snap = store.snapshot()
-        worker_id = self._source(workspace, agent_id, binding, snap, worker_id)
-        message = self._head(snap, workspace, agent_id, binding)
+        state = store.message_snapshot()
+        snap, main = state.messages, state.main
+        worker_id = self._source(workspace, agent_id, binding, main, worker_id)
+        message = self._head(snap, main, workspace, agent_id, binding)
         if message is None:
             return {"state": "empty"}
         notification = {"message_id": message["id"], "workspace": workspace, "agent": agent_id,
@@ -457,9 +486,10 @@ class Messages:
             return {"state": "entry_state_unknown"}
         if state == "busy" and message["delivery"] == "normal":
             return {"state": "waiting_idle", "message_id": message["id"]}
-        snap = store.snapshot()
-        self.app.require_binding(workspace, agent_id, binding, snapshot=snap)
-        previous = self._previous_dispatch(snap, workspace, agent_id, worker_id)
+        state = store.message_snapshot()
+        snap, main = state.messages, state.main
+        self.app.require_binding(workspace, agent_id, binding, snapshot=main)
+        previous = self._previous_dispatch(snap, main, workspace, agent_id, worker_id)
         if previous.get("message_id") == message["id"] and previous.get("manual_attempt_id"):
             return {"state": "waiting_ack", "message_id": message["id"]}
         attempts = 0
@@ -471,7 +501,7 @@ class Messages:
                 return {"state": "notification_retry_exhausted", "message_id": message["id"]}
         prompt = self._notification(snap, message)
         # A shared attempt record arbitrates separate local copies, not just one process's lock.
-        self._dispatch(snap, workspace, agent_id, binding, message, attempts + 1)
+        self._dispatch(state, workspace, agent_id, binding, message, attempts + 1)
         self.app.require_binding(workspace, agent_id, binding)
         try:
             adapter.notify(prompt, message["delivery"])

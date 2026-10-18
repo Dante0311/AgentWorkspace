@@ -95,8 +95,15 @@ def doctor(app, workspace):
     observed = now()
     issues, local_agents, remote_agents = [], [], []
     observations = {}
+    message_state = None
+    message_error = None
     try:
-        snap = app.store(workspace).snapshot()
+        store = app.store(workspace)
+        try:
+            message_state = store.message_snapshot()
+        except (Error, OSError, ValueError, KeyError) as exc:
+            message_error = type(exc).__name__
+        snap = message_state.main if message_state is not None else store.snapshot()
         meta = snap.json(shared_path(snap, "workspace.json"))
         agents_prefix = shared_path(snap, "agents") + "/"
     except (Error, OSError, ValueError, KeyError) as exc:
@@ -230,15 +237,24 @@ def doctor(app, workspace):
             issue("publication_record_unreadable", operation=p.stem,
                   scope="installation; workspace ownership unconfirmed", error_type=type(exc).__name__)
     waiting = {}
-    index_prefix = shared_path(snap, "message-index") + "/"
-    for path in snap.entries:
-        if path.startswith(index_prefix):
-            item = snap.json(path)
-            if shared_path(snap, f"acks/{item['id']}.json") not in snap.entries and item["to"]["workspace"] == meta["locator"]:
-                from .messages import Messages
-                endpoint = Messages(app)._address(workspace, snap, item["to"], item["id"])
-                key = f"{endpoint['agent']}#{endpoint['worker']}" if endpoint.get("worker") is not None else endpoint["agent"]
-                waiting[key] = waiting.get(key, 0) + 1
+    if message_state is None:
+        waiting = None
+        issue("message_observation_failed", error_type=message_error)
+    else:
+        try:
+            messages = message_state.messages
+            index_prefix = shared_path(messages, "message-index") + "/"
+            for path in messages.entries:
+                if path.startswith(index_prefix):
+                    item = messages.json(path)
+                    if shared_path(messages, f"acks/{item['id']}.json") not in messages.entries and item["to"]["workspace"] == meta["locator"]:
+                        from .messages import Messages
+                        endpoint = Messages(app)._address(workspace, snap, item["to"], item["id"])
+                        key = f"{endpoint['agent']}#{endpoint['worker']}" if endpoint.get("worker") is not None else endpoint["agent"]
+                        waiting[key] = waiting.get(key, 0) + 1
+        except (Error, OSError, ValueError, KeyError) as exc:
+            waiting = None
+            issue("message_observation_failed", error_type=type(exc).__name__)
     monitoring = _schedule_observation(app, workspace, snap.json(shared_path(snap, "maintenance/schedule.json")))
     if monitoring["state"] == "worker_not_observed":
         issue("maintenance_worker_not_observed")
@@ -251,7 +267,10 @@ def doctor(app, workspace):
     partial = (bool(remote_agents) or monitoring["state"] == "not_owned"
                or ownership_unconfirmed)
     return {"state": "degraded" if issues else "partial" if partial else "healthy", "observed_at": observed,
-            "revision": snap.revision, "issues": issues, "unacknowledged_notifications": waiting,
+            "revision": snap.revision,
+            "message_revision": message_state.messages.revision if message_state is not None else None,
+            "message_branch": message_state.branch if message_state is not None else None,
+            "issues": issues, "unacknowledged_notifications": waiting,
             "coverage": coverage,
             "local_observations": observations, "maintenance": monitoring}
 

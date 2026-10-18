@@ -74,14 +74,25 @@ def test_worker_overrides_and_adopted_configuration_remain_independent(team):
 
 def test_two_controllers_pause_and_recover_only_the_original_worker(team, monkeypatch):
     app, root, bindings = team
-    sent, connected = [], []
+    sent, connected, probed = [], [], []
 
     class DesktopPeer:
         supports_insert = True
 
         def __init__(self, root, config, session, *, read_only=False, worker_id=None, title=None):
             self.root, self.config, self.session, self.worker_id = root, config, session, worker_id
-            connected.append((worker_id, session, config["kind"]))
+            self.read_only = read_only
+            self.tools = {"send_message_to_thread": {}}
+            assert session == "session-" + worker_id
+            assert config == read_json(layout.local_path(root, "entry.json", worker_id))["config"]
+            if not read_only:
+                connected.append((worker_id, session, config["kind"]))
+
+        def read(self):
+            assert self.read_only
+            probed.append((self.worker_id, self.session))
+            return {"thread": {"id": self.session, "hostId": "local", "cwd": str(self.root),
+                               "status": {"type": "idle"}}}
 
         def status(self):
             return "idle"
@@ -93,6 +104,7 @@ def test_two_controllers_pause_and_recover_only_the_original_worker(team, monkey
             return model_profiles.adopted(self.root, binding, worker_id=self.worker_id), {"effective": "unconfirmed"}
 
         def notify(self, text, delivery):
+            assert not self.read_only
             sent.append((self.worker_id, text))
             return {"turn": {"id": self.worker_id + "-turn"}}
 
@@ -109,7 +121,7 @@ def test_two_controllers_pause_and_recover_only_the_original_worker(team, monkey
         runtime.queue_input(app, "team", "owner", worker, request_id="one", expected_binding=binding)
     try:
         for worker, binding in bindings.items():
-            service.recover("team", "owner", expected_binding=binding)
+            assert service.recover("team", "owner", expected_binding=binding)["state"] == "starting_runner"
         until(lambda: all(read_json(layout.local_path(root, "inputs/one.json", worker))["state"] == "submitted"
                           for worker in bindings))
         assert len(service.runners) == 2
@@ -119,9 +131,11 @@ def test_two_controllers_pause_and_recover_only_the_original_worker(team, monkey
         assert service.runners[(root, "topic")]["thread"].is_alive()
         # A submitted result belongs to the original turn. Restarting observation
         # must not reset it to queued, even when current Agent defaults changed.
-        service.recover("team", "owner", expected_binding=bindings["default"])
+        assert service.recover("team", "owner", expected_binding=bindings["default"])["state"] == "starting_runner"
         runtime.queue_input(app, "team", "owner", "topic continues", request_id="two", expected_binding=bindings["topic"])
         until(lambda: read_json(layout.local_path(root, "inputs/two.json", "topic"))["state"] == "submitted")
+        until(lambda: [worker for worker, _, _ in connected].count("default") == 2)
+        assert probed == [("default", "session-default"), ("topic", "session-topic"), ("default", "session-default")]
         assert [worker for worker, _ in sent].count("default") == 1
         assert [worker for worker, _ in sent].count("topic") == 2
         assert all(kind == "desktop" for _, _, kind in connected)

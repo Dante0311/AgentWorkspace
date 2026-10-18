@@ -117,16 +117,43 @@ def initial_files(worker_support=True):
                          worker_support=worker_support, messages_branch=layout.MESSAGE_BRANCH)
 
 
-def initialize(store, metadata, worker_support=True, *, parent=''):
-    main = store.commit(parent, {layout.MARKER: initial_files(worker_support),
-                                'workspace.json': None, '.agentworkspace/workspace.json': encode(metadata)},
-                        'Initialize independent message layout')
-    marker = layout.marker('workspace', version=layout.MESSAGE_VERSION, role='messages', platform_prefix='.agentworkspace')
-    messages = store.commit('', {layout.MARKER: marker,
-                                layout.MESSAGE_GUARD: encode({'main_revision': main, 'nonce': uid('p')})},
-                            'Initialize message branch')
-    store.publish_atomic({'main': {'before': parent, 'after': main},
-                          layout.MESSAGE_BRANCH: {'before': '', 'after': messages}})
+def initialize(store, metadata, worker_support=True, *, parent='', shared_files=None):
+    changes = {**(shared_files or {}), layout.MARKER: initial_files(worker_support),
+               'workspace.json': None, '.agentworkspace/workspace.json': encode(metadata)}
+    request = digest(encode({'parent': parent, 'files': {p: digest(raw) if raw is not None else None
+                                                       for p, raw in changes.items()}}))
+    path = store.operations / 'initialization.json'
+    with locked(path.with_suffix('.lock')):
+        receipt = read_json(path)
+        if receipt and receipt['request'] != request:
+            raise Conflict('Another Workspace initialization already owns this address; preserve its original publication.')
+        if receipt is None:
+            main = store.commit(parent, changes, 'Initialize independent message layout')
+            marker = layout.marker('workspace', version=layout.MESSAGE_VERSION, role='messages', platform_prefix='.agentworkspace')
+            messages = store.commit('', {layout.MARKER: marker,
+                layout.MESSAGE_GUARD: encode({'main_revision': main, 'nonce': uid('p')})}, 'Initialize message branch')
+            receipt = {'request': request, 'phase': 'prepared', 'updates': {
+                'main': {'before': parent, 'after': main}, layout.MESSAGE_BRANCH: {'before': '', 'after': messages}}}
+            write_json(path, receipt)
+        if receipt['phase'] != 'prepared':
+            if store.publication_status(receipt['updates']):
+                return receipt['updates']
+            if receipt['phase'] == 'rejected':
+                raise Conflict('The original initialization was rejected; inspect its original ref preconditions.')
+            raise Uncertain('The original initialization is not confirmed; it was not repeated.')
+        receipt['phase'] = 'publishing'
+        write_json(path, receipt)
+        try:
+            store.publish_atomic(receipt['updates'])
+        except Uncertain:
+            raise
+        except Error:
+            receipt['phase'] = 'rejected'
+            write_json(path, receipt)
+            raise
+        receipt['phase'] = 'published'
+        write_json(path, receipt)
+        return receipt['updates']
 
 
 def plan(store):
@@ -153,7 +180,18 @@ def migrate(app, workspace, request_id, *, compatible_writers=None):
     request_id = slug(request_id)
     store = app.store(workspace)
     path = store.operations / 'migrations' / (request_id + '.json')
-    with locked(path.with_suffix('.lock')):
+    with locked(store.operations / 'message-migration.lock'):
+        for other_path in (store.operations / 'migrations').glob('*.json'):
+            if other_path == path:
+                continue
+            previous = read_json(other_path)
+            if previous['phase'] == 'prepared':
+                raise Conflict(f"Resume the original prepared migration {previous['request_id']}; a new ID cannot replace it.")
+            if previous['phase'] == 'publishing':
+                if not store.publication_status(previous['updates']):
+                    raise Uncertain(f"Inspect the original migration {previous['request_id']}; a new ID cannot repeat its unknown publication.")
+                previous['phase'] = 'published'
+                write_json(other_path, previous)
         receipt = read_json(path)
         if receipt is None:
             snap = store.snapshot()

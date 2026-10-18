@@ -9,7 +9,7 @@ from agent_workspace.util import encode
 def app(tmp_path):
     instance = App(tmp_path / 'home')
     # Historical protocol/layout tests deliberately keep their single-entry v1 fixtures.
-    # New user-facing Workspace creation defaults to the Worker version.
+    # New user-facing Workspaces use the message branch layout with Workers enabled.
     remote = tmp_path / 'sea.git'
     GitStore.initialize(remote)
     store = GitStore(str(remote), instance.home)

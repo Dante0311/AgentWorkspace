@@ -232,7 +232,7 @@ def test_new_workspace_defaults_to_workers_and_fork_selects_nondefault_source(te
     fresh.workspace_init('fresh', str(tmp_path / 'fresh.git'))
     fresh.create('fresh', 'ordinary')
     assert fresh.worker('fresh', 'ordinary')['id'] == 'default'
-    assert layout.version(fresh.store('fresh').snapshot(), 'workspace') == layout.WORKER_VERSION
+    assert layout.version(fresh.store('fresh').snapshot(), 'workspace') == layout.MESSAGE_VERSION
     write_bytes(root / 'workers/default/not-in-fork.md', b'peer scope')
     app.checkpoint('team', 'owner', 'default materials', binding=bindings['default'], worker_id='default', checkpoint_id='default-point')
     write_bytes(root / 'workers/topic/investigation.md', b'only the selected Worker')

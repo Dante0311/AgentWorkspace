@@ -41,7 +41,8 @@
 
 ```text
 Sea-Workspace Repo
-├─ main                    --- 共享登记、公共资产来源、消息和可选工单。
+├─ main                    --- 共享登记、公共资产来源和可选工单。
+├─ aw-messages             --- 正式消息、接收确认和通知记录。
 ├─ instance/A              --- Sea/A 的完整持久工作空间。
 └─ instance/B              --- Sea/B 的完整持久工作空间。
 ```
@@ -188,7 +189,8 @@ AgentRoot/
 | --- | --- |
 | 统一安装目录 | AW 程序、依赖，以及内置 Skills 和提示材料的发布源。 |
 | `AW_HOME` | 本机安装标识、Workspace 与实例路径索引、应用偏好，以及统一后台的控制和调度记录。 |
-| Workspace `main` 的 `.agentworkspace/` | 共享成员登记、当前入口、正式 Message/ACK 和其他需要共同确认的事实。 |
+| Workspace `main` 的 `.agentworkspace/` | 共享成员登记、当前入口、Work、原生直发留档和其他低频共享事实。 |
+| Workspace `aw-messages` 的 `.agentworkspace/` | 正式 Message、ACK、消息索引和通知尝试记录；分支中的权限版本标记只用于并发检查。 |
 | 实例工作根及其 `.agentworkspace/` | 实例实际使用的 Skills、提示材料、配置、来源、检查点和保存的历史；其中 `local/` 保存该副本的本机连接、原操作回执和运行观察。 |
 
 `AW_HOME` 本身是应用专用数据目录，不额外套一层 `.agentworkspace/`。新增资料 worktree 默认在所选 Workspace 的本机目录内准备；既有实例目录可以保留在 AW_HOME 下或原登记位置。索引只指向实际目录，不再复制一份实例资料。实例配置只在实例目录维护，当前执行资格只以共享登记为准，本机观察记录实际看到的状态，三者不能互相覆盖。
@@ -497,7 +499,7 @@ Message 按目标实例的当前 Binding 调用 Harness 接入能力，持续投
 
 进入对方仓库不等于已确认通知。需要真实权限和目标分支允许的提交方式，好友配置不绕过它们。不可直达时 Bridge 可选，不是必需通信基础设施。
 
-新布局的共享记录路径为 `.agentworkspace/messages/<id>.json`、`.agentworkspace/message-index/<id>.json` 与 `.agentworkspace/acks/<id>.json`。索引包含 `id/from/to/created_at/delivery`，独立于正文定位通知。地址中的 Workspace 使用 `.agentworkspace/workspace.json` 的 locator，不以本机别名、仓库地址或目录替代。Message 与索引的原字节首次保存后固定；跨仓库补齐不重新生成时间或序列化正文。程序按布局版本选择整套路径，旧仓在显式迁移前继续使用旧路径；迁移与手动协议的同步更新按第 9.3 节处理。
+新消息布局在 `aw-messages` 分支保存 `.agentworkspace/messages/<id>.json`、`.agentworkspace/message-index/<id>.json`、`.agentworkspace/acks/<id>.json` 与 `.agentworkspace/dispatch/`。索引包含 `id/from/to/created_at/delivery`，独立于正文定位通知。地址中的 Workspace 使用 main 上 `.agentworkspace/workspace.json` 的 locator，不以本机别名、仓库地址或目录替代。Message 与索引的原字节首次保存后固定；跨仓库补齐不重新生成时间或序列化正文。程序按共享布局版本选择完整的分支和路径，旧仓在显式迁移前继续使用 main；迁移后不逐文件回退读取旧副本。分支间的权限检查见第 9.1.1 节。
 
 ### 6.4 队列与有效入口
 
@@ -524,7 +526,7 @@ watch 是统一后台中该入口的定时任务，不另起一份消息后台�
 
 自动的是发现和通知，不是接活、回复或完成判断。桥接故障看护见第 10 节，不再发明一套消息流程。
 
-AW MCP/CLI 是优先入口，不是实施协议的必要条件。随包 message Skill 提供精确字段、路径和仅有仓库工具时的操作说明，也附可选的标准库 Python/Git 辅助脚本；无 AW 或无 Python 的环境仍可按协议读取、确认和回复。手动写入只使用本会话已明确获授的实例和 Binding，在同一 HEAD 核对实例 current、Binding 归属/phase、索引目标及已有 ACK；写前重新核对，用预期 HEAD 的原子比较保护提交并读回。不得复制其他入口、修改身份记录或伪造 AW receipt。工具不能安全比较预期版本或没有写权限时只准备材料，明确未发布。
+AW MCP/CLI 是优先入口，不是实施协议的必要条件。随包 message Skill 提供精确字段、路径和仅有仓库工具时的操作说明，也附可选的标准库 Python/Git 辅助脚本；无 AW 或无 Python 的环境仍可按协议读取、确认和回复。手动写入只使用本会话已明确获授的实例和 Binding。旧布局在同一 main 提交检查资格和消息；新布局先固定消息分支及权限标记，再读取 main 核对 current、Binding 归属/phase 与目标资格，并在消息快照中核对索引和已有 ACK。提交以消息分支的预期版本和权限标记保护；权限已变化时重新读取，不沿用旧资格。不得复制其他入口、修改身份记录或伪造 AW receipt。工具不能安全比较预期版本或没有写权限时只准备材料，明确未发布。
 
 手动回复是真实 from/to 的新 Message，使用新稳定 ID、实际时间和原消息引用。未知发布先核对原 ID、字节与提交；只有明确拒绝或尚未开始的缺失发布可以在重新核对资格后补齐，不盲目重放。跨仓库不是原子事务，入口撤销后本会话停止补写，保留原部分结果供获准端处理。具体步骤见随包 [Message 协议](../src/agent_workspace/resources/skills/message/references/protocol.md)和[仓库操作](../src/agent_workspace/resources/skills/message/references/manual.md)。
 
@@ -649,9 +651,9 @@ handoff 也核对个人 worktree，缺少时使用同一目录准备能力；随
 
 ## 9. Git 存储、同步与本地副本
 
-### 9.1 一个 Workspace 仓库，两类分支
+### 9.1 一个 Workspace 仓库，三类分支
 
-一个 Shared Workspace 使用一个 Git 仓库。`main` 保存共同资料和共享协作事实，`instance/<agent>` 保存各 Agent 的持久工作空间。**创建 Agent 要同时建立 Workspace 内登记和实例分支；分支存在不等于已经启动，也不自动取得执行资格。** 用户通过创建、保存、同步和交接操作使用它，不需要手动切分支。
+一个 Shared Workspace 使用一个 Git 仓库。`main` 保存共同资料、身份与执行资格、Work 和其他低频共享事实；`aw-messages` 保存正式消息及其接收、通知记录；`instance/<agent>` 保存各 Agent 的持久工作空间。只把高频正式消息移出 main，不为其他类别新增长期分支。**创建 Agent 要同时建立 Workspace 内登记和实例分支；分支存在不等于已经启动，也不自动取得执行资格。** 用户通过创建、保存、同步和交接操作使用它，不需要手动切分支。
 
 共享 `main` 的目标目录为：
 
@@ -669,10 +671,6 @@ WorkspaceRoot/
    ├─ sessions/                 原生会话关联记录
    ├─ handoffs/                 交出与接手事实
    ├─ checkpoints/              指向实例确定提交的检查点索引
-   ├─ messages/                 正式 Message 原文
-   ├─ acks/                     正式接收确认
-   ├─ message-index/            消息查询索引
-   ├─ dispatch/                 正式通知尝试记录
    ├─ direct-messages/          可选原生直发留档，与正式 Message 分开
    ├─ work/                     按需使用的 Work 与 Delivery
    ├─ maintenance/              需要共享的维护记录
@@ -681,7 +679,17 @@ WorkspaceRoot/
 
 共同资料属于用户，平台记录由对应操作维护；新空间只建立实际使用的内容。管家模板按第 2.3 节建立，不为用户未使用的 Work、Definition 或 Skill 创建空占位。本机凭据、后台控制及进程状态不因树中有 `maintenance/` 就写入共享仓。
 
-实例分支的根就是第 3.1 节的 Agent 工作根，不在共享 `main` 再复制一套 `instances/` 镜像。main 的检查点区是索引，实例的检查点区是内容；正式 Message 原文在共享区，实例按需保存引用、副本和自己的处理资料，不为每个实例再建一套正式收发仓。原生会话只新增记录段，不每会话、消息或工单新建分支。实例分支不整体合回 main；资产提升只提交明确选定的共享材料，也不把整个 main 合进实例分支来更新 Skill。
+消息分支只保存 `.agentworkspace/messages/`、`acks/`、`message-index/`、`dispatch/` 及布局和权限版本标记。Agent、Worker、Binding、好友关系与默认收件人仍以 main 为准，不在消息分支复制第二套权限记录。原生直发留档继续在 main，不参加正式消息投递。
+
+实例分支的根就是第 3.1 节的 Agent 工作根，不在共享 `main` 再复制一套 `instances/` 镜像。main 的检查点区是索引，实例的检查点区是内容；正式 Message 原文在消息分支，实例按需保存引用、副本和自己的处理资料，不为每个实例再建一套正式收发仓。原生会话只新增记录段，不每会话、消息或工单新建分支。实例分支和消息分支都不整体合回 Workspace main；资产提升只提交明确选定的共享材料，也不把整个 main 合进实例分支来更新 Skill。
+
+#### 9.1.1 消息写入与权限变化
+
+普通 Message、ACK 和通知记录只更新消息分支。操作先读取消息分支和其中的权限版本标记，再读取 main 检查实际执行资格。写入比较最初的权限标记和相关消息记录；其他独立消息抢先发表可以重读补齐，权限标记变化则必须重新核对资格。先读 main、后读消息分支不能保证这项约束。
+
+会改变发收资格或寻址依据的 main 写入，必须同时生成一个新的、不可复用的权限标记，并把 main 与消息分支作为一次真正的双 ref 原子更新发布。两个 ref 都要实际更新：把不变的 main 附在普通 `git push --atomic` 中不能保护它。如果权限变化先发表，旧资格的消息被拒绝；如果消息先发表，权限更新整体冲突，重读后保留新消息再完成。其他普通资料和 Work 变化继续只写 main。
+
+Git transport 使用远端支持的原子多 ref 更新；GitHub API 使用具备预期版本检查的原子多 ref 更新，不能用两次独立 PATCH 代替。不支持该能力的存储明确拒绝启用或执行新布局的相关操作，不静默退化。结果未知时保留原提交并读回两边事实，不直接重放。这里的原子性限于一个 Workspace 仓库；跨 Workspace 消息双写仍按第 6.3 节分别确认。
 
 ### 9.2 保存、共享确认与本地副本
 
@@ -714,6 +722,8 @@ Agent 的当前入口、运行环境、本地副本与原生观察必须说明�
 共享仓迁移前需确认相关写入端已停止旧格式写入或已具备新格式支持；未确认的远端写入端不能被假定兼容。目录布局有明确格式版本，新版工具遇到不支持的格式拒绝写入。Git 手动路径、随包 Skills、索引、资产收集和原操作查询须一起适配，不能只搬文件。
 
 Agent 标识、Workspace 归属、分支名、Message/ACK ID、Binding 和原生会话绑定均保留。已有检查点继续引用原提交与原路径，历史只读按其布局解释，不改写封存提交或旧消息。新提交采用新布局；需要修改当前引用时保留来源。同步前检查本机敏感数据未被跟踪，普通回退不能覆盖迁移后新增的用户资产与业务事实。
+
+消息分支通过独立的显式迁移启用，不因目录迁移、Worker 迁移或软件安装顺带启用。迁移固定源 main 版本，按原字节移入 Message、索引、ACK 和 dispatch，并原子发布消息分支与 main 的新共享格式标记。旧工具必须因不支持新格式而拒写；不能只靠口头要求旧端停止。未知或部分发布保留原操作 ID、正文和回执，不重放业务。实例资料格式、Agent/Worker 归属和现有会话保持原事实；启用消息分支不强迫旧单入口实例转换为 Worker。
 
 ## 10. 公共程序、真实接入与自动看护
 

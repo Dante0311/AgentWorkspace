@@ -91,7 +91,8 @@ aw backend start --open
 ```text
 AgentWorkspace 软件安装
     └─ 管理一个或多个 Shared Workspace
-         ├─ main：登记、定义、Message、Work 等共享事实
+         ├─ main：登记、定义、Work 和共同资料
+         ├─ aw-messages：正式 Message、ACK、消息索引与通知记录
          ├─ instance/steward、sentinel、maintainer：管家各自的持久资产
          └─ instance/<agent>：用户实例的独立资产
 产品仓：实际代码、设计和交付成果，单独关联

@@ -61,7 +61,11 @@ Runtime、Backend、Message 与公共接口已采用同一 Worker 归属：
 
 `message branch-plan` 只读显示当前格式和迁移范围；`message migrate` 是显式用户管理操作，保留原消息字节、旧路径前缀、历史与未完成请求。实例格式不随之变化，旧单入口 Agent 可以继续使用；后续 Worker 映射保留消息布局。已确认的发布拒绝与结果未知分别处理，未知结果只核对原提交，不重复发表。
 
-开发检查覆盖真实本地 Git 的两个 ref 竞争、版本迁移、旧格式写入门禁和不支持原子推送时的拒绝；GitHub API 的原子合同使用协议夹具验证。通信入口、独立脚本与固定安装包的实际结果以本轮确定版本的独立验收为准，不沿用旧 Worker 实机通过来证明这些新增行为。真实 GitHub 多 ref 发布及长期运行尚未实测，日常 Workspace 与安装未迁移或升级。
+开发检查覆盖真实本地 Git 的两个 ref 竞争、版本迁移、旧格式写入门禁和不支持原子推送时的拒绝；GitHub API 的原子合同使用协议夹具验证。
+
+独立 E2E 已完成固定提交 `f162d4ef0bc4d9f1756802ab31d9912a9a031eca` 的五组最小验收，npm SHA256 为 `33cfcf3890cb2384046ca3f8aa4cd43521e181332b87ef060a81cb3d0f39298c`。实际通过公开 HTTP 入口和随包脚本确认新空间收发、领取、ACK 与重复接收只改消息分支；真实 Git 事务同时更新两个 ref，单 ref 被拒时两个 ref 都不变；撤权后的新发送与提前准备的回复被拒绝。旧安装包创建的单入口样本迁移后，13 条原记录字节保持一致，未自动采用 Worker，旧包明确因布局版本 3 门禁拒写。报告区分本轮独立执行与复用的 Core/Runtime 开发检查，见[固定包验收记录](https://github.com/Dante0311/AW-Workspace/blob/4e90cd1ec5e1601975efc24ce988f9ee86fa4c98/development/evidence/2026-10-18-message-branch/results-f162d4e/README.md)。
+
+本轮没有真实模型会话或网页投递。真实 GitHub 多 ref 发布、Desktop 模型确认、controller-cleanup / 日常 Runner 恢复及长期运行尚未实测，日常 Workspace 与安装未迁移或升级。最终组合 CI 和合并状态见 [PR #30](https://github.com/Dante0311/AgentWorkspace/pull/30)，不以先前 Worker 实机通过推定新增行为通过。
 
 ## 模块
 

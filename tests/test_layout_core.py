@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import pytest
 
@@ -36,6 +37,7 @@ def legacy_app(tmp_path):
 
 def publish_unchecked(store, branch, changes, tmp_path):
     """Seed externally tracked unsafe/unknown data, bypassing AW on purpose."""
+    assert Path(store.address).resolve().is_relative_to(tmp_path.resolve())
     parent = store.head(branch)
     environment = dict(os.environ, GIT_INDEX_FILE=str(tmp_path / 'external-index'),
                        GIT_AUTHOR_NAME='Fixture', GIT_AUTHOR_EMAIL='fixture@example.test',
@@ -46,7 +48,7 @@ def publish_unchecked(store, branch, changes, tmp_path):
         store.git('update-index', '--add', '--cacheinfo', f'100644,{sha},{path}', env=environment)
     tree = store.git('write-tree', env=environment).stdout.decode().strip()
     commit = store.git('commit-tree', tree, '-p', parent, data=b'External fixture', env=environment).stdout.decode().strip()
-    store.publish(branch, commit, parent)
+    store.git('push', '--porcelain', 'origin', f'{commit}:refs/heads/{branch}')
     return commit
 
 
@@ -165,12 +167,15 @@ def test_shared_archive_exception_does_not_allow_publishing_local_data(app, tmp_
 
 def test_unknown_shared_layout_blocks_writes_without_erasing_the_marker(app, tmp_path):
     store = app.store('sea')
-    head = publish_unchecked(store, 'main', {layout.MARKER: encode({'version': 99, 'kind': 'workspace'})}, tmp_path)
+    unknown_marker = encode({'version': 99, 'kind': 'workspace'})
+    head = publish_unchecked(store, 'main', {layout.MARKER: unknown_marker}, tmp_path)
+    assert store.snapshot().bytes(layout.MARKER) == unknown_marker
     with pytest.raises(Error):
         store.change('main', {layout.MARKER: None, 'note.md': b'new'}, {'note.md': None}, 'Erase unknown layout')
     with pytest.raises(Error):
         app.agents('sea')
     assert store.head('main') == head
+    assert store.snapshot().bytes(layout.MARKER) == unknown_marker
 
 
 def test_pending_software_update_cannot_be_saved_as_a_checkpoint(app):

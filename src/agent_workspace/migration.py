@@ -18,6 +18,197 @@ def _object(data):
     return value if isinstance(value, dict) else None
 
 
+def workers_migrate(app, workspace, agent_id, worker_id, request_id, *, directory=None,
+                    compatible_writers=None):
+    """Explicitly map one old single-entry Agent; retain every original protocol byte."""
+    from . import instance_worktrees, workers
+    agent_id, worker_id, request_id = slug(agent_id), slug(worker_id), slug(request_id)
+    if compatible_writers != ['worker-v2']:
+        raise Error('Confirm all writers use the Worker version gate with compatible_writers=["worker-v2"].')
+    store = app.store(workspace)
+    locator = app.local()['workspaces'][workspace]['locator']
+    operation_path = app.home / 'worker-migrations' / digest(locator.encode()) / f'{request_id}.json'
+    fingerprint = {'agent': agent_id, 'worker': worker_id, 'directory': directory}
+    with locked(operation_path.with_suffix('.lock')):
+        receipt = read_json(operation_path)
+        if receipt and receipt['request'] != fingerprint:
+            raise Conflict('The Worker migration request ID already selects a different mapping.')
+        snap = store.snapshot()
+        agent = workers.agent_record(snap, agent_id)
+        mp = layout.shared_path(snap, f'worker-mappings/{agent_id}.json')
+        adopted = snap.json(mp)
+        if adopted and (adopted.get('request_id') != request_id or adopted.get('worker') != worker_id):
+            raise Conflict('This Agent already has another explicit Worker migration.')
+        if receipt and receipt['phase'] == 'complete':
+            return {'state': 'mapped', 'agent': agent_id, 'worker': worker_id, 'request_id': request_id,
+                    'instance_revision': receipt['instance_commit'], 'old_protocol_bytes_preserved': True,
+                    'starts_session': False, 'mapping': receipt['mapping']}
+        if layout.version(snap, 'workspace') == 0:
+            raise layout.MigrationRequired('Complete the explicit legacy layout migration before the Worker migration.')
+        registered = app.local()['workspaces'][workspace].get('instances', {}).get(agent_id, [])
+        if directory is not None and len(registered) > 1:
+            raise Conflict('The Worker format applies to this Agent across its registered copies. Sync them and explicitly migrate all local copies together without a single directory selection.')
+        roots = [app.root(workspace, agent_id, directory)] if directory else [Path(p) for p in
+                 app.local()['workspaces'][workspace].get('instances', {}).get(agent_id, [])]
+        if not roots:
+            raise Error('Connect the original instance copy before explicitly mapping its Worker.')
+        with ExitStack() as stack:
+            for root in sorted(roots):
+                names = {'runner.lock', 'files.lock', 'profile.lock', 'inputs.lock',
+                         'records.lock', 'transfer.lock', 'stop-launch.lock'}
+                local = root / '.agentworkspace/local'
+                paths = {layout.local_path(root, name) for name in names}
+                paths.update(local.rglob('*.lock'))
+                # Freeze old writers and the target Worker until its local material
+                # is ready and the shared mapping has been published.
+                paths.update(local / 'workers' / worker_id / path.relative_to(local)
+                             for path in list(paths) if not path.relative_to(local).as_posix().startswith('workers/'))
+                for path in sorted(paths):
+                    stack.enter_context(locked(_safe_file(root, path.relative_to(root).as_posix()), wait=0))
+            if receipt is None:
+                if workers.enabled(snap, agent):
+                    raise Conflict('This Agent already uses Workers; it is not a legacy migration target.')
+                for root in roots:
+                    if layout.version(root, 'instance') != layout.VERSION:
+                        raise layout.MigrationRequired('First finish the explicit legacy layout migration in every selected copy.')
+                saved = store.snapshot(agent['branch'])
+                if layout.version(saved, 'instance') != layout.VERSION:
+                    raise layout.MigrationRequired('The original saved instance layout must be version 1.')
+                root_contexts, local_files = {}, {}
+                for root in roots:
+                    context = read_json(layout.local_path(root, 'context.json'))
+                    if context['agent'] != agent_id or context['locator'] != locator or context['revision'] != saved.revision:
+                        raise Conflict('Sync or resolve the original copy before mapping its Worker.')
+                    repository = instance_worktrees.repository(root, app.local()['workspaces'][workspace]['address'], app.home, agent['branch'])
+                    if repository and instance_worktrees.head(root) != saved.revision:
+                        raise Conflict('The original local Git history must be resolved before migration.')
+                    root_contexts[str(root)] = context
+                    collected = {}
+                    for path in (root / '.agentworkspace/local').rglob('*'):
+                        if path.is_symlink():
+                            raise Conflict('Preserve and classify local symlinks before the Worker migration.')
+                        if path.is_file() and not path.name.endswith('.lock'):
+                            relative = path.relative_to(root / '.agentworkspace/local').as_posix()
+                            if relative.startswith('workers/'):
+                                raise Conflict('Worker-local material already exists without its mapping; preserve it first.')
+                            collected[relative] = base64.b64encode(path.read_bytes()).decode('ascii')
+                    local_files[str(root)] = collected
+                mapping = {'request_id': request_id, 'agent': agent_id, 'worker': worker_id,
+                           'source_revision': snap.revision, 'source_instance_revision': saved.revision,
+                           'bindings': {}, 'checkpoints': {}, 'messages': {}, 'local_operations': {}}
+                for path in snap.entries:
+                    if path.startswith(layout.shared_path(snap, 'bindings/')):
+                        entry = snap.json(path)
+                        if entry['agent'] == agent_id:
+                            mapping['bindings'][entry['id']] = worker_id
+                    elif path.startswith(layout.shared_path(snap, f'checkpoints/{agent_id}/')):
+                        point = snap.json(path)
+                        mapping['checkpoints'][point['id']] = worker_id
+                    elif path.startswith(layout.shared_path(snap, 'direct-messages/')):
+                        message = snap.json(path)
+                        if any(message.get(side, {}).get('agent') == agent_id and
+                               message[side].get('workspace') == locator for side in ('from', 'to')):
+                            mapping['messages'][message['id']] = worker_id
+                message_snapshot = store.message_snapshot().messages
+                for path in message_snapshot.entries:
+                    if path.startswith(layout.shared_path(message_snapshot, 'message-index/')):
+                        message = message_snapshot.json(path)
+                        if any(message.get(side, {}).get('agent') == agent_id and
+                               message[side].get('workspace') == locator for side in ('from', 'to')):
+                            mapping['messages'][message['id']] = worker_id
+                for collected in local_files.values():
+                    for path, encoded in collected.items():
+                        if path.startswith('operations/'):
+                            mapping['local_operations'][path] = worker_id
+                        if path.startswith('operations/checkpoint-operations/') and path.endswith('.json'):
+                            pending = _object(base64.b64decode(encoded))
+                            if pending and pending.get('agent') == agent_id and pending.get('id'):
+                                mapping['checkpoints'][pending['id']] = worker_id
+                worker = workers.record(agent_id, worker_id, '日常工作', agent['description'] or '原单入口负责的事项')
+                worker.update({k: agent[k] for k in ('current', 'has_run', 'handoff')})
+                projected_agent = {k: v for k, v in agent.items() if k not in ('current', 'has_run', 'handoff')}
+                projected_agent.update(worker_schema=1, default_worker=worker_id)
+                marker = layout.marker('instance', version=layout.WORKER_VERSION)
+                commit = store.commit(saved.revision, {layout.MARKER: marker}, 'Enable Worker material version gate')
+                receipt = {'request': fingerprint, 'phase': 'prepared', 'agent_record': projected_agent, 'legacy_agent_record': agent,
+                           'worker_record': worker, 'mapping': mapping, 'instance_commit': commit,
+                           'instance_base': saved.revision, 'roots': root_contexts, 'local_files': local_files}
+                write_json(operation_path, receipt)
+            if receipt['phase'] in ('prepared', 'instance_publishing'):
+                actual = store.head(receipt['agent_record']['branch'])
+                confirmed = actual and store.contains_commit(receipt['instance_commit'], actual)
+                if not confirmed:
+                    if receipt['phase'] == 'instance_publishing':
+                        raise Uncertain('The original Worker layout publication is not confirmed; it was not repeated.')
+                    receipt['phase'] = 'instance_publishing'
+                    write_json(operation_path, receipt)
+                    try:
+                        store.publish(receipt['agent_record']['branch'], receipt['instance_commit'], receipt['instance_base'])
+                    except Conflict:
+                        receipt['phase'] = 'prepared'
+                        write_json(operation_path, receipt)
+                        raise
+                receipt['phase'] = 'instance_published'
+                write_json(operation_path, receipt)
+            if receipt['phase'] == 'instance_published':
+                saved = store.snapshot(revision=receipt['instance_commit'])
+                for root_text, original_context in receipt['roots'].items():
+                    root = Path(root_text)
+                    marker_path = root / layout.MARKER
+                    if layout.version(root, 'instance') == layout.VERSION:
+                        write_bytes(marker_path, saved.bytes(layout.MARKER))
+                    repository = instance_worktrees.repository(root, app.local()['workspaces'][workspace]['address'], app.home,
+                                                              receipt['agent_record']['branch'])
+                    if repository and instance_worktrees.head(root) == receipt['instance_base']:
+                        repository.snapshot(revision=receipt['instance_commit'])
+                        instance_worktrees.record_scoped_saved(root, receipt['agent_record']['branch'],
+                                                              receipt['instance_base'], receipt['instance_commit'])
+                    for path, encoded in receipt['local_files'][root_text].items():
+                        target = root / '.agentworkspace/local/workers' / worker_id / path
+                        raw = base64.b64decode(encoded)
+                        if target.exists() and target.read_bytes() != raw and path != 'operations/context.json':
+                            raise Conflict('Worker-local material differs from the original migration; it was preserved.')
+                        if path != 'operations/context.json':
+                            write_bytes(target, raw)
+                    context = {**original_context, 'revision': saved.revision,
+                               'saved': {p: digest(saved.bytes(p)) for p in saved.entries}}
+                    write_json(layout.local_path(root, 'context.json'), context)
+                    write_json(layout.local_path(root, 'context.json', worker_id), {**context, 'worker': worker_id})
+                receipt['phase'] = 'local_prepared'
+                write_json(operation_path, receipt)
+            snap = store.snapshot()
+            if receipt['phase'] in ('local_prepared', 'shared_publishing'):
+                adopted = snap.json(mp)
+                if adopted != receipt['mapping']:
+                    if receipt['phase'] == 'shared_publishing':
+                        raise Uncertain('The original Worker registration is not confirmed; it was not repeated.')
+                    ap = layout.shared_path(snap, f'agents/{agent_id}.json')
+                    if snap.json(ap) != receipt['legacy_agent_record']:
+                        raise Conflict('The legacy Agent changed during migration; preserve the original request.')
+                    wp = workers.path(snap, agent_id, worker_id)
+                    marker = (encode({**snap.json(layout.MARKER), 'worker_support': True})
+                              if layout.version(snap, 'workspace') == layout.MESSAGE_VERSION
+                              else layout.marker('workspace', version=layout.WORKER_VERSION))
+                    changes = {ap: encode(receipt['agent_record']), wp: encode(receipt['worker_record']),
+                               mp: encode(receipt['mapping']), layout.MARKER: marker}
+                    receipt['phase'] = 'shared_publishing'
+                    write_json(operation_path, receipt)
+                    try:
+                        store.change('main', changes, layout.expected(snap, {ap: snap.entries[ap], wp: None, mp: None}),
+                                     'Map legacy Agent execution to its explicit Worker')
+                    except Conflict:
+                        receipt['phase'] = 'local_prepared'
+                        write_json(operation_path, receipt)
+                        raise
+                receipt['phase'] = 'shared_published'
+                write_json(operation_path, receipt)
+            receipt['phase'] = 'complete'
+            write_json(operation_path, receipt)
+            return {'state': 'mapped', 'agent': agent_id, 'worker': worker_id, 'request_id': request_id,
+                    'instance_revision': receipt['instance_commit'], 'old_protocol_bytes_preserved': True,
+                    'starts_session': False, 'mapping': receipt['mapping']}
+
+
 def _address(value):
     return isinstance(value, dict) and isinstance(value.get('workspace'), str) and isinstance(value.get('agent'), str)
 

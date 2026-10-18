@@ -6,7 +6,7 @@
 
 正式用户路径使用 npm。当前先提供 Windows x64 安装包，需要 Node.js 22+；Git 和所用原生客户端仍由用户自行安装、登录。从所选提交的 GitHub Actions `CI` 获取 `agent-workspace-build` 制品，解压后选择 `.tgz` 文件，并用同目录 `SHA256SUMS` 核对下载内容。制品有保留期限，当前没有 npm Registry 或正式 Release 发布。
 
-包内已带程序、网页、七个 Skills 和固定版本的 Python 运行时，不需要系统 Python，也没有安装后下载运行时的脚本。包内 `build.json` 记录 wheel 与 Python 的版本、来源和 SHA-256。同一个预览版本可能对应不同提交，判断构建来源应看提交和文件校验值。
+包内已带程序、网页、八个 Skills 和固定版本的 Python 运行时，不需要系统 Python，也没有安装后下载运行时的脚本。包内 `build.json` 记录 wheel 与 Python 的版本、来源和 SHA-256。同一个预览版本可能对应不同提交，判断构建来源应看提交和文件校验值。
 
 ```powershell
 npm install --global .\git-native-agent-workspace-0.1.0-alpha.1.tgz
@@ -168,11 +168,13 @@ aw -w demo maintenance grant maintainer
 | `sync-idle` | 实例没有有效入口，取得本机运行器锁后同步；保留文件版本冲突检查。 |
 | `continue-stop` | 指定原 `expected_binding` 和 `expected_checkpoint`，在当前目标授权内复用 Runtime 的停止确认入口。只继续原请求，不创建会话或后继；Runtime 重新核对原会话、checkpoint、controller 及本机归属。 |
 | `runtime-recover` | 指定原 `expected_binding`，复用后台的共同恢复入口；核对原执行目录、当前资格和会话，保留用户暂停，不新建会话或重放未知输入。 |
+| `controller-cleanup` | 指定原 Binding、controller、session、共享快照版本及原清理提交，只接续已退出 Runner 的匹配 controller 清理。复用 Runtime 核验，不启动 Runner、不释放 Binding、不清除暂停。 |
 
 ```sh
 aw -w demo maintenance repair helper --repair-action sync-idle --request-id repair-001
 aw -w demo maintenance repair helper --repair-action continue-stop --expected-binding ORIGINAL_BINDING --expected-checkpoint ORIGINAL_CHECKPOINT --request-id stop-repair-001
 aw -w demo maintenance repair helper --repair-action runtime-recover --expected-binding ORIGINAL_BINDING --request-id runtime-repair-001
+aw -w demo maintenance repair helper --repair-action controller-cleanup --expected-binding ORIGINAL_BINDING --expected-controller ORIGINAL_CONTROLLER --expected-session ORIGINAL_SESSION --expected-revision SHARED_SNAPSHOT_REVISION --cleanup-commit ORIGINAL_CLEANUP_COMMIT --request-id cleanup-repair-001
 ```
 
 维修先保存动作结果，再独立复查。同一请求重试只补缺失/失败的复查，不能因为复查失败重做动作。`applied` 仅表示动作返回，必须查看 `result` 和 `verification`，不能据此宣称 Workspace 全部健康。`attempting`/`outcome_unknown` 保留原记录，不自动再执行。损坏记录会报告异常，不当缓存删除；一个实例的 JSON 读取失败不隐去其他实例的巡检结果。
@@ -180,6 +182,12 @@ aw -w demo maintenance repair helper --repair-action runtime-recover --expected-
 `continue-stop` 的 `result` 保存首次继续请求的返回值，`starting_stop_observer` 或 `runner_present` 表示确认过程已请求或已存在；原入口是否释放要看 `verification.stop.state`。重复同一维修请求只读回固定旧 Binding 的状态、checkpoint 和 session，不重新启动观察进程，也不会跟随新的 Binding；checkpoint 与原请求不符时报告 `request_changed`。即使首次动作结果未知，复查也保留该动作的未知状态；看到旧 Binding 已 `released` 不会擅自启动后继。真实 Desktop 的忙碌、空闲和未知判断仍由 Runtime 的原生观察负责，维护工具不直接调用 `finish_stop`。
 
 `runtime-recover` 的顶层 `state` 保留实际恢复结果：`recovery_paused` 表示尊重已有暂停，`recovery_blocked` 给出缺少来源、配置或其他前提，`starting_runner` 只是启动请求已接受，`runner_present` 只确认原 Runner 存在。`verification.runtime` 观察固定的原 Binding，不把这些状态改写成原生会话或业务正常。重复请求只补观察，不再次执行恢复。
+
+`controller-cleanup` 沿用同一 `maintenance.repair` 目标授权，管家不能自授。执行前用公开 `agent show` 核对原 Binding、session、controller 及失败记录中的原清理提交；用 `workspace doctor` 的顶层 `revision` 取得共享快照版本，不能使用 `agent show` 顶层的 Agent 文件 blob revision 替代。Runtime 按该快照核对原 Binding 文件版本，重新观察本机执行位置、原 Runner 已退出及原生会话；只对仍匹配的 controller 继续清理，不重推旧整笔提交。
+
+此动作保留 Runtime 的实际结果：`controller_cleared` 表示本次清理返回成功，`controller_already_cleared` 表示原 controller 已不存在；`cleanup_blocked`、`cleanup_paused` 及 `reason_code` 保留阻止原因。Conflict 或结果未知不自动重试动作。结果先持久保存，`verification.cleanup` 再独立读取固定旧 Binding 的 session、phase、controller、当前入口及共享快照版本，区分 `controller_present`、`controller_cleared` 和 `request_changed`；后继入口或替换 controller 出现时不对它执行清理。首次结果和稍后的观察可能不同，两者都保留。复查失败只补观察，`attempting`/`outcome_unknown` 不重放清理。
+
+清理成功不表示 Runner 已恢复。只有重新核对现场和授权后，才用另一个明确的稳定 request ID 请求 `runtime-recover`；恢复继续尊重用户暂停、未知输入及原生目录不匹配。同一清理 request ID 的任何原参数都不能变更，重复请求只读取原动作及当前观察，不再清理或启动。
 
 用户显式运行 `aw -w demo runtime start helper` 可以恢复此前停止的运行观察；已有会话与后台自动恢复使用同一套资格检查，新建中的入口仍使用原首次启动过程。自动恢复和 `runtime-recover` 不清除暂停，也不打开已停止的 Watch。从未发送且仍获授权的队列输入沿原规则继续，已提交或结果不明的输入不重发。
 

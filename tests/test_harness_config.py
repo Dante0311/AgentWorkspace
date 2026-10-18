@@ -98,6 +98,7 @@ def test_save_does_not_start_or_replace_active_session(executable, tmp_path):
     app = Mock()
     app.root.return_value = tmp_path
     app.agent.return_value = {"current": "active"}
+    app.workers.return_value = []
     with pytest.raises(Conflict):
         hc.configure_codex(app, "sea", "worker", executable=executable)
     app.configure.assert_not_called()

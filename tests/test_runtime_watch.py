@@ -64,7 +64,7 @@ def test_watch_checker_honors_pause_handoff_and_ownership_without_native_calls(p
     write_json(layout.local_path(root, 'watch.json'), {"enabled": True, "binding": bindings["alice"], "interval": .5})
     polls = []
     monkeypatch.setattr(Messages, "poll", lambda *args, **kwargs: polls.append(kwargs) or {"state": "empty"})
-    key = ("sea", "alice", root.resolve())
+    key = ("sea", "alice", root.resolve(), None)
     for field, state in (("stop", "user_paused"), ("handoff", "handoff_paused")):
         write_json(layout.local_path(root, 'control.json'), {field: bindings["alice"]})
         manager.watches.clear()
@@ -90,7 +90,7 @@ def test_watch_transient_read_attempts_are_bounded_and_explicit_enable_resets_th
         raise RetryableRead("temporary read failure")
 
     monkeypatch.setattr(Messages, "poll", fail)
-    key = ("sea", "alice", root.resolve())
+    key = ("sea", "alice", root.resolve(), None)
     for _ in range(5):
         manager._check_watches()
         manager.watches[key]["next_check"] = 0
@@ -125,6 +125,7 @@ def test_runner_failure_creates_versioned_log_directory(tmp_path):
 
     class FailedRunner:
         root = tmp_path
+        worker_id = None
 
         def run(self):
             raise Error("original connection failed")

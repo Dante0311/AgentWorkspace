@@ -76,57 +76,71 @@ def validate(choice, *, source='Codex configuration'):
     return {field: choice[field] for field in ("model", "effort")}
 
 
-def _document(root):
-    path = layout.instance_path(root, 'config.json')
+def _document(root, worker_id=None):
+    path = layout.instance_path(root, 'config.json', worker_id)
     document = read_json(path, {})
     if not isinstance(document, dict):
         raise Error(f"Instance {path.relative_to(root).as_posix()} must be an object.")
     return document
 
 
-def desired(root):
+def desired(root, worker_id=None):
     """Allow an incomplete saved choice to be inspected without starting anything."""
-    return _document(root).get("codex")
+    document = _document(root, worker_id)
+    if worker_id is not None and 'codex' not in document:
+        return desired(root)
+    return document.get("codex")
 
 
-def migrate(root):
+def runtime_config(root, worker_id=None):
+    """Agent defaults plus an explicit same-Harness Worker override, before adoption."""
+    default = read_json(layout.local_path(root, "runtime.json"), {"kind": "manual"})
+    if worker_id is None:
+        return default
+    override = read_json(layout.local_path(root, "runtime.json", worker_id), {})
+    if override.get("kind", default.get("kind")) != default.get("kind"):
+        return override
+    return {**default, **override}
+
+
+def migrate(root, worker_id=None):
     """Copy an old choice once. Subsequent local capture must not replace it."""
-    with layout.lock(root, "files.lock"):
-        path = layout.local_path(root, "runtime.json")
+    with layout.lock(root, "files.lock", worker_id=worker_id):
+        path = layout.local_path(root, "runtime.json", worker_id)
         config = read_json(path, {"kind": "manual"})
         if config.get("kind") not in CODEX_KINDS:
             return config
         local, choice, origins = split_config(config)
-        document = _document(root)
+        document = _document(root, worker_id)
         if choice:
             # Preserve even partial old choices. Launch validation names the missing field.
             source = {"path": path.relative_to(root).as_posix(), "sha256": digest(path.read_bytes()), "fields": origins,
                       "choice": choice}
             # Keep the old facts even if a subsequent explicit configure replaces
             # the desired section before its first checkpoint is published.
-            history = read_json(layout.local_path(root, "model-migration.json"), [])
+            history = read_json(layout.local_path(root, "model-migration.json", worker_id), [])
             if source not in history:
-                write_json(layout.local_path(root, "model-migration.json"), [*history, source])
+                write_json(layout.local_path(root, "model-migration.json", worker_id), [*history, source])
             if "codex" not in document:
                 document["codex"] = {**choice, "migrated_from": source}
-                write_json(layout.instance_path(root, 'config.json'), document)
+                write_json(layout.instance_path(root, 'config.json', worker_id), document)
             write_json(path, local)
         return local
 
 
-def configure(root, config):
-    migrate(root)
+def configure(root, config, worker_id=None):
+    migrate(root, worker_id)
     local, choice, _ = split_config(config)
-    with layout.lock(root, "files.lock"):
+    with layout.lock(root, "files.lock", worker_id=worker_id):
         if choice:
-            document = _document(root)
+            document = _document(root, worker_id)
             document["codex"] = choice
-            write_json(layout.instance_path(root, 'config.json'), document)
-        write_json(layout.local_path(root, "runtime.json"), local)
+            write_json(layout.instance_path(root, 'config.json', worker_id), document)
+        write_json(layout.local_path(root, "runtime.json", worker_id), local)
 
 
-def selected(root):
-    path = layout.instance_path(root, 'config.json')
+def selected(root, worker_id=None):
+    path = layout.instance_path(root, 'config.json', worker_id)
     data = path.read_bytes() if path.exists() else b"{}"
     try:
         document = json.loads(data)
@@ -134,14 +148,17 @@ def selected(root):
         raise Error(f"Instance {path.relative_to(root).as_posix()} must contain valid JSON.") from exc
     if not isinstance(document, dict):
         raise Error(f"Instance {path.relative_to(root).as_posix()} must be an object.")
+    if worker_id is not None and 'codex' not in document:
+        return selected(root)
     choice = validate(document.get("codex"), source=f'{path.relative_to(root).as_posix()} codex')
     return {**choice, "source": {"path": path.relative_to(root).as_posix(), "section": "codex",
             "sha256": digest(data)}}
 
 
-def adopted(root, binding=None, *, session=None):
+def adopted(root, binding=None, *, session=None, worker_id=None):
     """An entry's snapshot wins over later changes to the desired asset."""
-    record = read_json(layout.local_path(root, "entry.json"), {})
+    entry_path = layout.local_path(root, "entry.json", worker_id)
+    record = read_json(entry_path, {})
     if binding is not None and record.get("binding") not in (None, binding):
         raise Conflict("Model choice belongs to another execution entry.")
     saved = record.get("model_profile")
@@ -153,22 +170,22 @@ def adopted(root, binding=None, *, session=None):
     _, old_choice, _ = split_config(record.get("config", {}))
     if old_choice:
         choice = validate(old_choice)
-        return {**choice, "source": {"path": layout.local_path(root, 'entry.json').relative_to(root).as_posix(), "section": "config",
-                "sha256": digest((layout.local_path(root, "entry.json")).read_bytes())}}
+        return {**choice, "source": {"path": entry_path.relative_to(root).as_posix(), "section": "config",
+                "sha256": digest(entry_path.read_bytes())}}
     if session and record.get("binding"):
         raise Error(f"This native session has no saved adopted Codex choice; handoff before applying {layout.instance_path(root, 'config.json').relative_to(root).as_posix()}.")
-    return selected(root)
+    return selected(root, worker_id)
 
 
-def pin(root, binding, profile):
-    with layout.lock(root, "profile.lock"):
-        path = layout.local_path(root, "entry.json")
+def pin(root, binding, profile, worker_id=None):
+    with layout.lock(root, "profile.lock", worker_id=worker_id):
+        path = layout.local_path(root, "entry.json", worker_id)
         record = read_json(path, {})
         if record.get("binding") != binding:
             raise Conflict("Cannot adopt a model choice for another execution entry.")
         if "model_profile" not in record:
             write_json(path, {**record, "model_profile": profile, "model_adopted_at": now()})
-        return adopted(root, binding)
+        return adopted(root, binding, worker_id=worker_id)
 
 
 def check_catalog(profile, models, *, complete):

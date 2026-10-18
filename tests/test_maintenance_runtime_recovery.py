@@ -72,12 +72,12 @@ def test_recovery_requires_target_grant_current_actor_and_original_binding(recov
     maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
     with pytest.raises(Error):
         commands.execute(app, "maintenance.repair", {**args, "agent_id": "ungranted"}, actor=actor)
-    with pytest.raises(Conflict):
-        commands.execute(app, "maintenance.repair", args, actor=("sea", "maintainer", "old-actor"))
+    with pytest.raises(Error):
+        commands.execute(app, "maintenance.repair", args, actor=("sea", "maintainer", "unknown-actor"))
     with pytest.raises(Error):
         commands.execute(app, "maintenance.repair", {**args, "expected_binding": None}, actor=actor)
-    with pytest.raises(Conflict):
-        commands.execute(app, "maintenance.repair", {**args, "expected_binding": "old-target"}, actor=actor)
+    with pytest.raises(Error):
+        commands.execute(app, "maintenance.repair", {**args, "expected_binding": "unknown-target"}, actor=actor)
     assert read_json(maintenance.folder(app, "sea") / "repairs/original-recovery.json") is None
     maintenance.grant(app, "sea", "maintainer", [], [])
     with pytest.raises(Error):
@@ -112,6 +112,44 @@ def test_failed_recovery_verification_only_retries_observation(recovery_team, mo
     second = commands.execute(app, "maintenance.repair", args, actor=actor)
     assert second["verification"]["runtime"]["state"] == "active"
     assert doctor.call_count == 2
+    recover.assert_called_once()
+
+
+def test_interrupted_recovery_keeps_attempt_and_never_replays(recovery_team, monkeypatch):
+    app, actor, args = recovery_team
+    maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
+    recover = Mock(side_effect=KeyboardInterrupt)
+    monkeypatch.setattr(backend, "recover", recover)
+    with pytest.raises(KeyboardInterrupt):
+        commands.execute(app, "maintenance.repair", args, actor=actor)
+    path = maintenance.folder(app, "sea") / "repairs/original-recovery.json"
+    assert read_json(path)["state"] == "attempting"
+
+    receipt = commands.execute(app, "maintenance.repair", args, actor=actor)
+    assert receipt["state"] == "attempting" and "result" not in receipt
+    assert receipt["verification"]["runtime"]["binding"] == args["expected_binding"]
+    recover.assert_called_once()
+
+
+def test_existing_recovery_receipt_still_requires_current_grant(recovery_team, monkeypatch):
+    app, actor, args = recovery_team
+    maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
+    result = {"state": "starting_runner", "binding": args["expected_binding"]}
+    recover = Mock(return_value=result)
+    monkeypatch.setattr(backend, "recover", recover)
+    commands.execute(app, "maintenance.repair", args, actor=actor)
+    path = maintenance.folder(app, "sea") / "repairs/original-recovery.json"
+    original_receipt = path.read_bytes()
+
+    maintenance.grant(app, "sea", "maintainer", [], [])
+    with pytest.raises(Error):
+        commands.execute(app, "maintenance.repair", args, actor=actor)
+    assert path.read_bytes() == original_receipt
+    recover.assert_called_once()
+
+    maintenance.grant(app, "sea", "maintainer", ["maintenance.repair"], ["alice"])
+    receipt = commands.execute(app, "maintenance.repair", args, actor=actor)
+    assert receipt["result"] == result
     recover.assert_called_once()
 
 

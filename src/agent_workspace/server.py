@@ -71,10 +71,22 @@ def build_state(app):
                         "kind": "local_registry_and_runtime",
                     },
                 )
-                for copy in detail.get("copies", []):
-                    if "observation_error" in copy:
-                        result["errors"].append({"workspace": alias, "agent": agent["id"],
-                                                 "directory": copy["directory"], "error": copy["observation_error"]})
+                if detail.get("workers"):
+                    worker_states = []
+                    for worker in detail["workers"]:
+                        scope = (dict(detail) if worker["id"] == detail.get("worker_id") else
+                                 app.show(alias, agent["id"], snapshot=shared_snapshot, worker_id=worker["id"]))
+                        scope.update(local_ready=bool(scope.get("directories")), observed_at=observed_at,
+                                     snapshot_revision=workspace.get("snapshot_revision"),
+                                     observation_source=detail["observation_source"])
+                        worker_states.append(scope)
+                    detail["worker_states"] = worker_states
+                for scope in detail.get("worker_states", [detail]):
+                    for copy in scope.get("copies", []):
+                        if "observation_error" in copy:
+                            result["errors"].append({"workspace": alias, "agent": agent["id"],
+                                                     "worker": scope.get("worker_id"),
+                                                     "directory": copy["directory"], "error": copy["observation_error"]})
             except (Error, ValueError, OSError, KeyError) as exc:
                 # Keep the known identity, not invented liveness or ownership.
                 error = f"Instance observation failed ({type(exc).__name__}); use workspace doctor."

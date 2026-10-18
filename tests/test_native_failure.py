@@ -71,8 +71,9 @@ def test_runner_reports_disconnected_sdk_even_without_inputs_or_watch(app, monke
     point = app.checkpoint('sea', 'alice', 'Explicit test checkpoint', binding=binding)
 
     class DisconnectedSDK:
-        def __init__(self, *args):
+        def __init__(self, *args, worker_id=None, title=None):
             self.session = 'native-session'
+            self.worker_id = worker_id
             self.completed = queue.Queue()
             self.close = Mock()
 

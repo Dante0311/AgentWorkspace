@@ -6,6 +6,7 @@ import re
 import secrets
 from urllib.parse import urlsplit
 
+from . import workers
 from .layout import shared_path
 from .messages import Messages
 from .util import Conflict, Error, digest, locked, now, read_json, slug, write_json
@@ -44,6 +45,9 @@ def _entry(app, connection):
     workspace, agent, binding = connection["workspace"], connection["agent_id"], connection["binding"]
     snap = app.store(workspace).snapshot()
     _, entry = app.require_binding(workspace, agent, binding, snapshot=snap)
+    actual_worker = workers.binding_worker(app, workspace, agent, entry, snap)
+    if connection.get("worker", actual_worker) != actual_worker:
+        raise Conflict("Web Courier connection belongs to another Worker.")
     if entry["kind"] != "manual" or not entry.get("session"):
         raise Conflict("Web Courier requires this instance's current manual session.")
     session = entry["session"]
@@ -69,7 +73,7 @@ def _public(connection):
     return {key: value for key, value in connection.items() if key != "token"}
 
 
-def connect(app, workspace, agent_id, expected_binding, target_url, extension_id, request_id, *, port=8765):
+def connect(app, workspace, agent_id, expected_binding, target_url, extension_id, request_id, *, port=8765, worker_id=None):
     """User-management action. Return the scoped token only from this explicit call."""
     connection_id = slug(request_id)
     slug(workspace); slug(agent_id); slug(expected_binding)
@@ -81,11 +85,16 @@ def connect(app, workspace, agent_id, expected_binding, target_url, extension_id
     proposed = {"id": connection_id, "workspace": workspace, "agent_id": agent_id,
                 "binding": expected_binding, "target_url": target, "extension_id": extension_id,
                 "backend_url": f"http://127.0.0.1:{port}", "state": "active"}
+    snap = app.store(workspace).snapshot()
+    worker_id = Messages(app)._source(workspace, agent_id, expected_binding, snap, worker_id)
+    if worker_id is not None:
+        proposed["worker"] = worker_id
     path, _ = _paths(app, connection_id)
     with locked(path.with_suffix(".lock")):
         existing = read_json(path)
         if existing:
-            if any(existing.get(key) != value for key, value in proposed.items() if key != "state"):
+            if any(existing.get(key, worker_id if key == "worker" else None) != value
+                   for key, value in proposed.items() if key != "state"):
                 raise Conflict("Connection request ID belongs to different settings.")
             if existing["state"] != "active":
                 raise Conflict("This connection was revoked; its original request cannot reactivate it.")
@@ -96,40 +105,40 @@ def connect(app, workspace, agent_id, expected_binding, target_url, extension_id
         return {**_public(record), "token": record["token"], "connection_id": connection_id}
 
 
-def _attempt_status(app, connection, snap=None):
+def _attempt_status(app, connection):
     _, attempt_path = _paths(app, connection["id"])
     attempt = read_json(attempt_path)
     if attempt is None:
-        return None, None
-    snap = snap or app.store(connection["workspace"]).snapshot()
-    dispatch = snap.json(shared_path(snap, f"dispatch/{connection['agent_id']}.json"), {})
+        return None, None, None
+    state = app.store(connection["workspace"]).message_snapshot()
+    entry = state.main.json(shared_path(state.main, f"bindings/{connection['binding']}.json"))
+    worker_id = workers.binding_worker(app, connection["workspace"], connection["agent_id"], entry, state.main)
+    dispatch = Messages(app)._previous_dispatch(state.messages, state.main, connection["workspace"], connection["agent_id"], worker_id)
     claimed = (attempt.get("claim_state") == "confirmed"
                or (dispatch.get("message_id") == attempt["message_id"]
                    and dispatch.get("binding") == connection["binding"]
                    and dispatch.get("manual_attempt_id") == attempt["attempt_id"]))
     return {"message_id": attempt["message_id"], "attempt_id": attempt["attempt_id"],
             "claim_state": "confirmed" if claimed else "outcome_unknown",
-            "web_fact": attempt.get("web_fact", "unknown"), "attempted_at": attempt["attempted_at"]}, attempt
+            "web_fact": attempt.get("web_fact", "unknown"), "attempted_at": attempt["attempted_at"]}, attempt, state.messages
 
 
 def status(app, connection_id):
     connection = _connection(app, connection_id)
     unknown_reason = None
     try:
-        snap = _entry(app, connection) if connection["state"] == "active" else None
+        if connection["state"] == "active":
+            _entry(app, connection)
         eligible = connection["state"] == "active"
     except Conflict:
-        snap = None
         eligible = False
     except (Error, OSError, ValueError):
-        snap = None
         eligible = None
         unknown_reason = "current_entry_unavailable"
-    safe_attempt, attempt = _attempt_status(app, connection, snap)
+    safe_attempt, attempt, messages = _attempt_status(app, connection)
     ack = None
     if attempt:
-        snap = snap or app.store(connection["workspace"]).snapshot()
-        ack = snap.json(shared_path(snap, f"acks/{attempt['message_id']}.json"))
+        ack = messages.json(shared_path(messages, f"acks/{attempt['message_id']}.json"))
         if ack is not None and ack != {"message_id": attempt["message_id"]}:
             raise Error("The original ACK record is malformed; acknowledgement is unknown.")
     return {**_public(connection), "connection_id": connection["id"], "eligible": eligible,

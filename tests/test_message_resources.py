@@ -45,7 +45,7 @@ def test_new_instance_receives_complete_message_skill_and_template(app):
     fresh = app._resources()
     app.create("sea", "helper")
     root = app.root("sea", "helper")
-    assert len(list(root.glob(".agents/skills/*/SKILL.md"))) == 7
+    assert len(list(root.glob(".agents/skills/*/SKILL.md"))) == 8
     manifest = json.loads((root / ".agentworkspace/software.json").read_bytes())
     for path in MESSAGE_PATHS:
         assert (root / path).read_bytes() == fresh[path]

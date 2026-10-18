@@ -78,11 +78,12 @@ def test_cross_workspace_dual_write(pair,tmp_path):
     app,ids=pair; setup_friend(app,tmp_path)
     binding=app.reserve('sbp','helper')['binding']; app.bind('sbp','helper',binding,'external-session')
     messages=Messages(app); messages.send('sea','alice',ids['alice'],'sbp/helper','question',request_id='cross')
-    a,b=app.store('sea').snapshot(),app.store('sbp').snapshot()
+    left,right=app.store('sea').message_snapshot(),app.store('sbp').message_snapshot()
+    a,b=left.messages,right.messages
     assert a.bytes('.agentworkspace/messages/cross.json')==b.bytes('.agentworkspace/messages/cross.json')
-    assert app.store('sbp').address not in a.bytes('.agentworkspace/workspace.json').decode()
+    assert app.store('sbp').address not in left.main.bytes('.agentworkspace/workspace.json').decode()
     messages.receive('sbp','helper',binding,'cross')
-    assert app.store('sea').snapshot().bytes('.agentworkspace/acks/cross.json')==app.store('sbp').snapshot().bytes('.agentworkspace/acks/cross.json')
+    assert app.store('sea').message_snapshot().messages.bytes('.agentworkspace/acks/cross.json')==app.store('sbp').message_snapshot().messages.bytes('.agentworkspace/acks/cross.json')
 
 
 def test_partial_write_original_bytes(pair,tmp_path,monkeypatch):
@@ -94,10 +95,10 @@ def test_partial_write_original_bytes(pair,tmp_path,monkeypatch):
     monkeypatch.setattr(module,'open_store',unavailable)
     result=Messages(app).send('sea','alice',ids['alice'],'sbp/helper','one',request_id='partial')
     assert result['state']!='published'
-    published=app.store('sea').snapshot().bytes('.agentworkspace/messages/partial.json')
+    published=app.store('sea').message_snapshot().messages.bytes('.agentworkspace/messages/partial.json')
     monkeypatch.setattr(module,'open_store',original)
     assert Messages(app).reconcile('partial')['state']=='published'
-    assert published==app.store('sbp').snapshot().bytes('.agentworkspace/messages/partial.json')
+    assert published==app.store('sbp').message_snapshot().messages.bytes('.agentworkspace/messages/partial.json')
 
 
 def test_archived_no_new_message(pair):

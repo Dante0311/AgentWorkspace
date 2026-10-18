@@ -10,10 +10,15 @@ from .util import Conflict, Error, digest, encode, locked, read_json
 
 
 VERSION = 1
+WORKER_VERSION = 2
+MESSAGE_VERSION = 3
+MESSAGE_BRANCH = 'aw-messages'
+MESSAGE_ROOTS = frozenset(('messages', 'acks', 'message-index', 'dispatch'))
+MESSAGE_GUARD = '.agentworkspace/message-permissions.json'
 MARKER = '.agentworkspace/layout.json'
 SHARED_ROOTS = frozenset(('agents', 'bindings', 'sessions', 'handoffs', 'checkpoints',
                          'messages', 'acks', 'message-index', 'dispatch', 'direct-messages',
-                         'work', 'maintenance', 'migrations'))
+                         'work', 'maintenance', 'migrations', 'workers', 'worker-mappings'))
 INSTANCE_ROOT_FILES = {'source.json': 'source.json', 'config.json': 'runtime.json'}
 LOCAL_OPERATIONS = frozenset(('context.json', 'launch.json', 'input-sequence.json',
                              'inputs', 'checkpoint-operations', 'fork-operations',
@@ -36,10 +41,12 @@ def _relative(name):
     return path.as_posix() + ('/' if name.endswith('/') else '')
 
 
-def marker(kind, **facts):
+def marker(kind, *, version=VERSION, **facts):
     if kind not in ('workspace', 'instance'):
         raise Error('Unknown layout kind.')
-    return encode({**facts, 'version': VERSION, 'kind': kind})
+    if version not in (VERSION, WORKER_VERSION, MESSAGE_VERSION) or (kind == 'instance' and version == MESSAGE_VERSION):
+        raise Error('Unsupported data layout version.')
+    return encode({**facts, 'version': version, 'kind': kind})
 
 
 def version(source, kind):
@@ -57,18 +64,41 @@ def version(source, kind):
         return 0
     if not isinstance(value, dict) or value.get('kind') != kind or type(value.get('version')) is not int:
         raise Error('Invalid data layout marker.')
-    if value['version'] != VERSION:
+    if value['version'] not in (VERSION, WORKER_VERSION, MESSAGE_VERSION) or (kind == 'instance' and value['version'] == MESSAGE_VERSION):
         raise Error(f"Unsupported {kind} layout version: {value['version']}")
     if value.get('state', 'ready') != 'ready':
         raise MigrationRequired('Finish the original layout migration before accessing this copy.')
-    return VERSION
+    if value['version'] == MESSAGE_VERSION:
+        if value.get('platform_prefix') not in ('', '.agentworkspace'):
+            raise Error('Invalid message-layout platform prefix.')
+        if value.get('role') != 'messages' and (value.get('messages_branch') != MESSAGE_BRANCH or
+                                               type(value.get('worker_support')) is not bool):
+            raise Error('Invalid message-layout branch or Worker support declaration.')
+    return value['version']
 
 
 def shared_path(snapshot, name):
     name = _relative(name)
     if name != 'workspace.json' and name.split('/')[0] not in SHARED_ROOTS:
         raise Error('Use the shared path resolver only for AW platform records.')
-    return f'.agentworkspace/{name}' if version(snapshot, 'workspace') else name
+    current = version(snapshot, 'workspace')
+    if current == MESSAGE_VERSION:
+        document = snapshot.get(MARKER) if isinstance(snapshot, Mapping) else snapshot.bytes(MARKER)
+        document = json.loads(document)
+        prefix = document['platform_prefix']
+        if prefix not in ('', '.agentworkspace'):
+            raise Error('Unsupported platform data prefix.')
+        if name.split('/')[0] in MESSAGE_ROOTS and document.get('role') != 'messages':
+            raise Error('Read Message/ACK/index/dispatch through the explicit message snapshot.')
+        return f'{prefix}/{name}' if prefix else name
+    return f'.agentworkspace/{name}' if current else name
+
+
+def worker_support(snapshot):
+    current = version(snapshot, 'workspace')
+    if current == MESSAGE_VERSION:
+        return snapshot.json(MARKER).get('worker_support') is True
+    return current == WORKER_VERSION
 
 
 def expected(snapshot, objects):
@@ -76,8 +106,13 @@ def expected(snapshot, objects):
     return {**objects, MARKER: snapshot.entries.get(MARKER)}
 
 
-def instance_relpath(source, name):
+def instance_relpath(source, name, worker_id=None):
     name = _relative(name)
+    if worker_id is not None:
+        from .util import slug
+        if version(source, 'instance') != WORKER_VERSION:
+            raise MigrationRequired('Explicitly migrate this instance before using Worker paths.')
+        return f'.agentworkspace/workers/{slug(worker_id)}/{name}'
     if name.split('/')[0] in ('local', 'layout.json'):
         raise Error('Use local_path for local state; layout metadata belongs to the migration.')
     if version(source, 'instance'):
@@ -91,8 +126,8 @@ def instance_relpath(source, name):
     return f'.aw/{name}'
 
 
-def instance_path(root, name):
-    return Path(root) / instance_relpath(root, name)
+def instance_path(root, name, worker_id=None):
+    return Path(root) / instance_relpath(root, name, worker_id)
 
 
 def local_relpath(name):
@@ -108,20 +143,25 @@ def local_relpath(name):
     return f'runtime/{name}'
 
 
-def local_path(root, name):
+def local_path(root, name, worker_id=None):
     name = _relative(name)
+    if worker_id is not None:
+        from .util import slug
+        if version(root, 'instance') != WORKER_VERSION:
+            raise MigrationRequired('Explicitly migrate this copy before using Worker runtime paths.')
+        return Path(root) / '.agentworkspace/local/workers' / slug(worker_id) / local_relpath(name)
     if version(root, 'instance'):
         return Path(root) / '.agentworkspace/local' / local_relpath(name)
     return Path(root) / '.aw-local' / name
 
 
 @contextmanager
-def lock(root, name, *, wait=30):
+def lock(root, name, *, wait=30, worker_id=None):
     """Recheck the layout after waiting so an old waiter joins the current mutex."""
     while True:
-        path = local_path(root, name)
+        path = local_path(root, name, worker_id)
         with locked(path, wait=wait):
-            if local_path(root, name) != path:
+            if local_path(root, name, worker_id) != path:
                 continue
             yield
             return
@@ -146,7 +186,7 @@ def resource_files(root=None):
         require_current(root)
     source = package_files('agent_workspace') / 'resources'
     result = {}
-    for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork'):
+    for name in ('workspace', 'work', 'message', 'agent', 'handoff', 'relay', 'fork', 'worker'):
         pending = [(source / 'skills' / name, f'.agents/skills/{name}')]
         while pending:
             directory, prefix = pending.pop()

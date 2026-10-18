@@ -1,0 +1,16 @@
+{
+  "repository": "https://github.com/Dante0311/AgentWorkspace",
+  "commit": "9e1bf44bfd3b3feb941af4dcc81cacb58ede0aa2",
+  "files": {
+    "layout.py": {
+      "source_path": "src/agent_workspace/layout.py",
+      "git_blob": "d9ba53c7cfecbcb01570759bab20cc7137700f5b",
+      "sha256": "fc25b89ded48c5857dfe7053cd3abbb4043a1ce5bbd98314d80558134bb7d70d"
+    },
+    "gitstore.py": {
+      "source_path": "src/agent_workspace/gitstore.py",
+      "git_blob": "46ee41b1ee3f0d82244134bf23322ee5f37eb45c",
+      "sha256": "83d5cc7a5cee7ce87763d1062ac1325a624674a59176b1cf5c1d8884aa5f06c7"
+    }
+  }
+}

@@ -9,9 +9,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_workspace import bridges, commands, runtime
+from agent_workspace import bridges, commands, layout, message_store, runtime
 from agent_workspace.messages import Messages
-from agent_workspace.util import Conflict, Error, encode, read_json, write_json
+from agent_workspace.util import Conflict, Error, digest, encode, read_json, write_json
 
 
 ACTOR = ("sea", "alice", "b-current")
@@ -22,8 +22,14 @@ def local_app(tmp_path):
     app = Mock()
     app.home = tmp_path
     app.root.return_value = tmp_path
-    app.agent.return_value = {"current": ACTOR[2]}
+    app.agent.return_value = {"id": ACTOR[1], "current": ACTOR[2]}
     app.require_binding.return_value = ({}, {"kind": "codex"})
+    app.binding_worker.return_value = None
+    store = app.store.return_value
+    state = message_state(separate=False)
+    store.snapshot.return_value = state.main
+    store.message_snapshot.return_value = state
+    store.message_change.side_effect = partial(message_store.change, store)
     app.checkpoint.return_value = {"revision": "saved"}
     return app
 
@@ -189,12 +195,29 @@ def test_empty_input_pass_does_not_fall_back_to_another_read(local_app, monkeypa
     reads.assert_not_called()
 
 
-def message_snapshot(records=None):
-    values = {"workspace.json": {"locator": "local:sea"}, "agents/alice.json": {}, "bindings/b-current.json": {}}
-    values.update(records or {})
-    return SimpleNamespace(entries={path: path for path in values},
-                           json=lambda path, default=None: values.get(path, default),
-                           bytes=lambda path: encode(values[path]) if path in values else None)
+def message_state(records=None, *, separate, generation=1):
+    main_values = {"workspace.json": {"locator": "local:sea"}, "agents/alice.json": {},
+                   "bindings/b-current.json": {"agent": "alice"}}
+    main_revision = f"{2 * generation:040x}"
+    message_values = dict(records or {})
+    if separate:
+        main_values[layout.MARKER] = json.loads(layout.marker("workspace", version=layout.MESSAGE_VERSION,
+            messages_branch=layout.MESSAGE_BRANCH, platform_prefix="", worker_support=False))
+        message_values[layout.MARKER] = json.loads(layout.marker("workspace", version=layout.MESSAGE_VERSION,
+            role="messages", platform_prefix=""))
+        message_values[layout.MESSAGE_GUARD] = {"main_revision": main_revision, "nonce": f"guard-{generation}"}
+    else:
+        main_values.update(message_values)
+
+    def snapshot(values, revision):
+        return SimpleNamespace(revision=revision,
+                               entries={path: digest(encode(value)) for path, value in values.items()},
+                               json=lambda path, default=None: values.get(path, default),
+                               bytes=lambda path: encode(values[path]) if path in values else None)
+
+    main = snapshot(main_values, main_revision)
+    messages = snapshot(message_values, f"{2 * generation + 1:040x}") if separate else main
+    return message_store.MessageState(main, messages, layout.MESSAGE_BRANCH if separate else "main")
 
 
 def incoming(identifier, target="alice", timestamp="1"):
@@ -202,57 +225,103 @@ def incoming(identifier, target="alice", timestamp="1"):
             "from": {"workspace": "local:sea", "agent": "bob"}, "delivery": "normal", "created_at": timestamp}
 
 
-def test_empty_poll_uses_one_fresh_snapshot(local_app):
+@pytest.mark.parametrize("separate", [False, True])
+def test_empty_poll_uses_one_fresh_snapshot(local_app, separate):
     store = local_app.store.return_value
-    snap = message_snapshot()
-    store.snapshot.return_value = snap
+    state = message_state(separate=separate)
+    store.message_snapshot.return_value = state
     assert Messages(local_app).poll(*ACTOR) == {"state": "empty"}
-    store.snapshot.assert_called_once_with()
-    local_app.require_binding.assert_called_once_with(*ACTOR, snapshot=snap)
+    store.message_snapshot.assert_called_once_with()
+    store.snapshot.assert_not_called()
+    assert local_app.require_binding.call_args_list
+    assert all(call.args == ACTOR and call.kwargs == {"snapshot": state.main}
+               for call in local_app.require_binding.call_args_list)
+    store.message_change.assert_not_called()
     store.change.assert_not_called()
 
 
-def test_list_filtering_and_later_queries_use_fresh_snapshot(local_app):
+@pytest.mark.parametrize("separate", [False, True])
+def test_list_filtering_and_later_queries_use_fresh_snapshot(local_app, separate):
     store = local_app.store.return_value
-    first = message_snapshot({"message-index/z.json": incoming("z", timestamp="1"),
-                              "message-index/a.json": incoming("a", timestamp="2"),
-                              "message-index/other.json": incoming("other", target="someone"),
-                              "acks/z.json": {"message_id": "z"}})
-    store.snapshot.side_effect = [first, message_snapshot()]
+    first = message_state({"message-index/z.json": incoming("z", timestamp="1"),
+                           "message-index/a.json": incoming("a", timestamp="2"),
+                           "message-index/other.json": incoming("other", target="someone"),
+                           "acks/z.json": {"message_id": "z"}}, separate=separate)
+    second = message_state(separate=separate, generation=2)
+    store.message_snapshot.side_effect = [first, second]
     messages = Messages(local_app)
     assert [item["id"] for item in messages.list("sea", "alice", unacked=True)] == ["a"]
     assert messages.list("sea", "alice") == []
-    assert store.snapshot.call_count == 2
+    assert store.message_snapshot.call_count == 2
+    store.snapshot.assert_not_called()
+    store.message_change.assert_not_called()
 
 
 @pytest.mark.parametrize("failure_at", ["binding", "commit", None])
-def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_at):
+@pytest.mark.parametrize("separate", [False, True])
+def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_at, separate):
     store = local_app.store.return_value
-    store.snapshot.return_value = message_snapshot({
+    records = {
         "message-index/m.json": incoming("m"),
         "messages/m.json": {**incoming("m"), "message_refs": [], "content": "fixture message"},
-    })
+    }
+    first = message_state(records, separate=separate)
+    latest = message_state(records, separate=separate, generation=2)
+    store.message_snapshot.side_effect = [first, latest]
     adapter = Mock()
     adapter.status.return_value = "idle"
     if failure_at == "binding":
-        local_app.require_binding.side_effect = [({}, {}), Conflict("new binding")]
-    if failure_at == "commit":
-        store.change.side_effect = Conflict("shared state advanced")
+        def reject_final_read(*args, **kwargs):
+            if "snapshot" not in kwargs:
+                raise Conflict("new binding")
+            return {}, {}
+        local_app.require_binding.side_effect = reject_final_read
+
+    def publish(branch, changes, expected, message):
+        # Publication must already have rechecked qualification against the refreshed main.
+        assert local_app.require_binding.call_args.args == ACTOR
+        assert local_app.require_binding.call_args.kwargs == {"snapshot": latest.main}
+        if failure_at == "commit":
+            raise Conflict("shared state advanced")
+
+    store.change.side_effect = publish
     if failure_at:
         with pytest.raises(Conflict):
             Messages(local_app).poll(*ACTOR, adapter=adapter)
         adapter.notify.assert_not_called()
     else:
         assert Messages(local_app).poll(*ACTOR, adapter=adapter)["state"] == "notified_waiting_ack"
-        expected = store.change.call_args.args[2]
-        assert expected["acks/m.json"] is None
-        assert "agents/alice.json" in expected and "bindings/b-current.json" in expected
-        assert local_app.require_binding.call_count == 3
+        assert local_app.require_binding.call_args.args == ACTOR
+        assert local_app.require_binding.call_args.kwargs == {}
         adapter.notify.assert_called_once()
+    assert store.message_snapshot.call_count == 2
+    store.snapshot.assert_not_called()
+    store.message_change.assert_called_once()
+    claim = store.message_change.call_args
+    assert claim.args[0] is latest
+    expected = claim.args[2]
+    assert expected["acks/m.json"] is None and expected["dispatch/alice.json"] is None
+    assert expected["messages/m.json"] == latest.messages.entries["messages/m.json"]
+    assert expected["message-index/m.json"] == latest.messages.entries["message-index/m.json"]
+    permissions = {path: latest.main.entries[path] for path in ("agents/alice.json", "bindings/b-current.json")}
+    assert claim.kwargs["permission_expected"] == permissions
+    store.change.assert_called_once()
+    branch, changes, published_expected, _ = store.change.call_args.args
+    assert branch == latest.branch
+    assert json.loads(changes["dispatch/alice.json"])["binding"] == ACTOR[2]
+    assert published_expected["acks/m.json"] is None
+    if separate:
+        assert published_expected[layout.MARKER] == latest.messages.entries[layout.MARKER]
+        assert published_expected[layout.MESSAGE_GUARD] == latest.messages.entries[layout.MESSAGE_GUARD]
+        assert not permissions.keys() & published_expected.keys()
+    else:
+        assert permissions.items() <= published_expected.items()
 
 
 def test_unused_bridge_manager_does_no_shared_read(local_app):
     manager = bridges.BridgeManager(local_app, *ACTOR, local_app.root())
+    # Construction resolves the Worker once; idle ticks need no shared reads.
+    local_app.require_binding.reset_mock()
     manager.tick()
     local_app.require_binding.assert_not_called()
 
@@ -275,8 +344,15 @@ def test_bridge_work_still_checks_binding(local_app, pending):
 def test_runner_only_continues_for_observed_ownership_transition(local_app, monkeypatch, transition):
     entry = {"id": ACTOR[2], "kind": "codex", "phase": "active", "session": "existing"}
     # This fixture uses the legacy workspace: an absent layout marker returns None.
+    def snapshot_json(path, default=None):
+        if path == "bindings/b-current.json":
+            return dict(entry)
+        if path == "agents/alice.json":
+            return dict(local_app.agent.return_value)
+        return default
+
     snap = SimpleNamespace(entries={"agents/alice.json": "agent-sha", "bindings/b-current.json": "binding-sha"},
-                           json=lambda path, default=None: dict(entry) if path == "bindings/b-current.json" else default)
+                           json=snapshot_json)
     local_app.store.return_value.snapshot.return_value = snap
 
     def change(branch, changes, *args):
@@ -285,6 +361,7 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
         entry.update(value)
 
     local_app.store.return_value.change.side_effect = change
+    write_json(local_app.root() / ".aw-local/runtime.json", {"kind": "codex"})
     write_json(local_app.root() / ".aw-local/entry.json", {"binding": ACTOR[2], "config": {"kind": "codex"},
                "model_profile": {"model": "fixture-model", "effort": "low", "source": {"path": "runtime.json"}}})
     adapter = Mock(session="existing")
@@ -306,7 +383,7 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
 
     def finish_stop(*args, **kwargs):
         entry["phase"] = "released"
-        local_app.agent.return_value = {"current": None}
+        local_app.agent.return_value["current"] = None
         return {"id": "handoff"}
 
     local_app.finish_stop.side_effect = finish_stop
@@ -317,7 +394,7 @@ def test_runner_only_continues_for_observed_ownership_transition(local_app, monk
             entry["phase"] = "stopping"
             entry["checkpoint"] = "explicit-stop"
         elif transition == "replaced":
-            local_app.agent.return_value = {"current": "successor"}
+            local_app.agent.return_value["current"] = "successor"
         raise failure
 
     runner._inputs = Mock(side_effect=fail)

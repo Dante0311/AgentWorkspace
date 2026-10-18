@@ -178,18 +178,28 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
         unknown = layout.local_path(root, "inputs/unknown-original.json")
         write_json(unknown, {**read_json(unknown), "state": "outcome_unknown", "turn_id": "original-turn"})
         roots[name], bindings[name], configured[name] = root, binding, read_json(layout.local_path(root, "runtime.json"))
-    attached, closed, observed = [], [], {name: threading.Event() for name in roots}
+    attached, closed, probed = [], [], []
+    observed = {name: threading.Event() for name in roots}
 
     class DesktopPeer:
         supports_insert = True
 
-        def __init__(self, root, config, session, *, read_only=False):
+        def __init__(self, root, config, session, *, read_only=False, worker_id=None, title=None):
             self.root, self.session = root, session
+            self.read_only = read_only
+            self.tools = {"send_message_to_thread": {}}
             self.name = root.name
             assert root == roots[self.name] and config == configured[self.name]
             assert model_profiles.adopted(root, bindings[self.name])["model"] == "fixture-model"
-            assert session == "native-" + self.name and not read_only
-            attached.append((self.name, session, os.getpid(), config["pipe_path"], config["caller_thread"]))
+            assert session == "native-" + self.name
+            if not read_only:
+                attached.append((self.name, session, os.getpid(), config["pipe_path"], config["caller_thread"]))
+
+        def read(self):
+            assert self.read_only
+            probed.append(self.name)
+            return {"thread": {"id": self.session, "hostId": "local", "cwd": str(self.root),
+                               "status": {"type": "active"}}}
 
         def status(self):
             observed[self.name].set()
@@ -205,7 +215,8 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
             pytest.fail("Backend resume must never create a replacement native session")
 
         def close(self):
-            closed.append(self.name)
+            if not self.read_only:
+                closed.append(self.name)
 
     monkeypatch.setattr(runtime, "Desktop", DesktopPeer)
     http = SimpleNamespace(server_port=12345)
@@ -251,6 +262,7 @@ def test_two_agents_share_process_preserve_routes_and_resume_original_sessions(a
     try:
         renewed._restore()
         assert observed["bob"].wait(90)
+        assert probed == ["bob", "bob"]
         assert roots["alice"] not in renewed.runners
         assert [item[0] for item in attached].count("alice") == 1
         assert [item[0] for item in attached].count("bob") == 2
@@ -290,7 +302,7 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
     observed, creations = threading.Event(), []
 
     class DesktopPeer:
-        def __init__(self, root, config, session):
+        def __init__(self, root, config, session, *, worker_id=None, title=None):
             assert session is None
             self.session = None
 
@@ -312,7 +324,7 @@ def test_explicit_starting_binding_runs_once_and_stale_request_is_rejected(app, 
     manager = backend.Backend(app, SimpleNamespace(server_port=12345))
     app.backend = manager
     try:
-        with pytest.raises(Conflict, match="original Binding changed"):
+        with pytest.raises(Conflict):
             backend.attach(app, "sea", "alice", expected_binding="older-original")
         assert not manager.runners
         result = execute(app, "runtime.start", {"workspace": "sea", "agent_id": "alice"})

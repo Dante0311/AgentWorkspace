@@ -41,11 +41,12 @@ def prepare_successor(app, monkeypatch):
 def install_native(app, monkeypatch, *, terminal="completed", stop_on_boot=False, late=False, close_error=False, steer_receipt=False):
     """Use the real Runner; emit explicit events, including events drained on close."""
     class Native(runtime.Codex):
-        def __init__(self, app, workspace, aid, binding, root, config, session=None):
+        def __init__(self, app, workspace, aid, binding, root, config, session=None, *, worker_id=None, title=None):
             self.session = session or "session-" + binding
             self.binding, self.root = binding, root
+            self.worker_id = worker_id
             from agent_workspace import model_profiles
-            self.profile = model_profiles.adopted(root, binding)
+            self.profile = model_profiles.adopted(root, binding, worker_id=worker_id)
             self.profile_validation = {"catalog": "fixture_unconfirmed"}
             self.completed = queue.Queue()
             self.turns = 0

@@ -77,11 +77,18 @@ def test_delegated_profiles_cannot_change_executables_or_tool_permissions(team, 
 def test_old_binding_never_inherits_a_grant(team, monkeypatch):
     app, actor = team
     maintenance.grant(app, "sea", "steward", ["agent.start"], ["alice"])
+    point = app.checkpoint("sea", "steward", "Release the original caretaker entry", binding=actor[2])
+    app.stop("sea", "steward", actor[2], point["id"])
+    app.finish_stop("sea", "steward", actor[2], observed_idle=True)
+    current = app.reserve("sea", "steward")["binding"]
+    app.bind("sea", "steward", current, "steward-successor-session")
     start = Mock()
     monkeypatch.setattr(runtime, "start", start)
     with pytest.raises(Conflict):
-        commands.execute(app, "agent.start", {"agent_id": "alice"}, actor=("sea", "steward", "old-binding"))
+        commands.execute(app, "agent.start", {"agent_id": "alice"}, actor=actor)
     start.assert_not_called()
+    assert app.agent("sea", "steward")["current"] == current
+    assert app.agent("sea", "alice")["current"] is None
 
 
 def test_cross_instance_mutations_need_grants_but_own_ops_do_not(team):

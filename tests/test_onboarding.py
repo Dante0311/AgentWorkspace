@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pytest
 
 from agent_workspace.app import App
-from agent_workspace import onboarding
+from agent_workspace import layout, onboarding
 from agent_workspace.gitstore import GitStore, git_env
 from agent_workspace.util import Conflict, Error, Uncertain, read_json
 
@@ -104,10 +104,12 @@ def test_create_three_real_identities_without_model_or_work(fresh):
     assert {a["id"] for a in agents} == set(onboarding.ROLES)
     assert all(a["current"] is None and not a["has_run"] for a in agents)
     assert app.work_list("demo") == []
+    state = app.store('demo').message_snapshot()
+    assert layout.version(state.main, 'workspace') == 3 and state.branch == 'aw-messages'
     for role in onboarding.ROLES:
         root = app.root("demo", role)
         assert read_json(root / ".agentworkspace/source.json")["definition"] == "definitions/caretaker/" + role
-        assert len(list((root / ".agents/skills").glob("*/SKILL.md"))) == 7
+        assert len(list((root / ".agents/skills").glob("*/SKILL.md"))) == 8
         assert not (root / ".agentworkspace/local/runtime/runtime.json").exists()
         assert not (root / ".agentworkspace/local/runtime/watch.json").exists()
 
@@ -181,18 +183,18 @@ def test_branch_published_but_registration_failed_is_resumed(fresh, monkeypatch)
 
 
 def test_initial_branch_success_with_lost_reply_is_not_recreated(fresh, monkeypatch):
-    branch = GitStore.branch
+    publish = GitStore.publish_atomic
     failed = False
 
-    def lose_reply(self, name, *args, **kwargs):
+    def lose_reply(self, updates):
         nonlocal failed
-        revision = branch(self, name, *args, **kwargs)
-        if name == "main" and not failed:
+        result = publish(self, updates)
+        if not updates['main']['before'] and not failed:
             failed = True
             raise Uncertain("server reply lost")
-        return revision
+        return result
 
-    monkeypatch.setattr(GitStore, "branch", lose_reply)
+    monkeypatch.setattr(GitStore, "publish_atomic", lose_reply)
     assert create(fresh)["state"] == "pending"
     assert create(fresh)["state"] == "created"
     assert len(fresh[0].agents("demo")) == 3

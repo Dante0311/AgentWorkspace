@@ -29,7 +29,7 @@ def desktop_owner(app, monkeypatch):
     class DesktopPeer:
         supports_insert = True
 
-        def __init__(self, root, config, session, *, read_only=False):
+        def __init__(self, root, config, session, *, read_only=False, worker_id=None, title=None):
             self.root, self.read_only = root, read_only
             self.session = session
             native["attached"].append(session)
@@ -649,7 +649,7 @@ def test_stop_command_starts_only_stop_observer(desktop_owner, monkeypatch):
     point = app.checkpoint("sea", "alice", "stop via public command", binding=binding)
     launches = []
 
-    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None):
+    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None, worker_id=None):
         launches.append(stop_binding)
         runtime.Runner(app, workspace, agent_id, directory, stop_binding=stop_binding).run()
         return {"pid": 1, "state": "starting_runner"}
@@ -672,7 +672,7 @@ def test_stop_after_public_monitor_pause_confirms_original_idle_session(desktop_
     assert read_json(layout.local_path(root, "control.json"))["stop"] == binding
     launches = []
 
-    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None):
+    def spawn(app, workspace, agent_id, directory=None, *, stop_binding=None, worker_id=None):
         launches.append(stop_binding)
         runtime.Runner(app, workspace, agent_id, directory, stop_binding=stop_binding).run()
         return {"pid": 1, "state": "starting_runner"}
@@ -697,9 +697,16 @@ def test_explicit_stop_repair_resumes_original_observation_and_can_be_cancelled_
     execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
     native["states"] = ["busy"]
     observed = threading.Event()
-    native["on_status"] = observed.set
     manager = backend.Backend(app, SimpleNamespace(server_port=0))
     app.backend = manager
+
+    def wait_for_cancel():
+        observed.set()
+        # Keep this read pending until cancellation signals the live observer.
+        # Otherwise it can exit on control.json before backend.cancel reaches it.
+        assert manager.runners[root]["runner"].stop_event.wait(30)
+
+    native["on_status"] = wait_for_cancel
     monkeypatch.setattr(runtime, "start", Mock(side_effect=AssertionError("No successor during stop recovery")))
     args = {"workspace": "sea", "agent_id": "alice", "action": "continue-stop",
             "request_id": "original-confirmation", "expected_binding": binding, "expected_checkpoint": point["id"]}
@@ -708,6 +715,7 @@ def test_explicit_stop_repair_resumes_original_observation_and_can_be_cancelled_
         assert receipt["state"] == "applied" and observed.wait(30)
         task = manager.runners[root]
         assert task["runner"].stop_only and native["read_only"] == [True]
+        assert task["thread"].is_alive() and not task["runner"].stop_event.is_set()
         cancelled = execute(app, "runtime.stop", {"workspace": "sea", "agent_id": "alice"})
         assert cancelled["observer_signalled"]
         task["thread"].join(30)

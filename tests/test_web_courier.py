@@ -44,11 +44,17 @@ def request(courier, conn, action, **kwargs):
 
 def test_connect_requires_exact_current_manual_session(courier):
     app, _, receiver = courier
+    before = app.store('sea').snapshot()
     with pytest.raises(Conflict):
         web_courier.connect(app, 'sea', 'receiver', receiver, 'https://chatgpt.com/c/another', EXTENSION, 'wrong')
-    with pytest.raises(Conflict):
-        web_courier.connect(app, 'sea', 'receiver', 'old-binding', TARGET, EXTENSION, 'old')
+    with pytest.raises(Error):
+        web_courier.connect(app, 'sea', 'receiver', 'unknown-binding', TARGET, EXTENSION, 'unknown')
+    assert not list((app.home / 'web-courier/connections').glob('*.json'))
+    assert not list((app.home / 'web-courier/attempts').glob('*.json'))
+    assert app.store('sea').snapshot().revision == before.revision
     conn = connect(courier)
+    connection_path = app.home / 'web-courier/connections' / (conn['connection_id'] + '.json')
+    original_connection = connection_path.read_bytes()
     assert conn['backend_url'] == 'http://127.0.0.1:8765'
     assert web_courier.status(app, conn['connection_id'])['eligible'] is True
     assert 'token' not in web_courier.status(app, conn['connection_id'])
@@ -57,6 +63,30 @@ def test_connect_requires_exact_current_manual_session(courier):
     with pytest.raises(Conflict):
         web_courier.connect(app, 'sea', 'receiver', receiver, TARGET, 'b' * 32,
                             conn['connection_id'])
+    assert connection_path.read_bytes() == original_connection
+    assert app.store('sea').snapshot().revision == before.revision
+
+
+def test_released_binding_cannot_connect_in_place_of_its_successor(courier):
+    app, _, receiver = courier
+    checkpoint = app.checkpoint('sea', 'receiver', 'release original manual entry', binding=receiver)
+    app.stop('sea', 'receiver', receiver, checkpoint['id'])
+    app.finish_stop('sea', 'receiver', receiver, observed_idle=True)
+    successor = app.reserve('sea', 'receiver')['binding']
+    successor_target = 'https://chatgpt.com/c/22222222-2222-4222-8222-222222222222'
+    app.bind('sea', 'receiver', successor, successor_target.rsplit('/', 1)[1])
+    before = app.store('sea').snapshot()
+    assert before.json(shared_path(before, f'bindings/{receiver}.json'))['phase'] == 'released'
+
+    with pytest.raises(Conflict):
+        web_courier.connect(app, 'sea', 'receiver', receiver, TARGET, EXTENSION, 'released')
+
+    assert not list((app.home / 'web-courier/connections').glob('*.json'))
+    assert not list((app.home / 'web-courier/attempts').glob('*.json'))
+    assert app.store('sea').snapshot().revision == before.revision
+    assert app.agent('sea', 'receiver')['current'] == successor
+    conn = web_courier.connect(app, 'sea', 'receiver', successor, successor_target, EXTENSION, 'successor')
+    assert conn['binding'] == successor and web_courier.status(app, conn['connection_id'])['eligible'] is True
 
 
 def test_original_multiline_notification_claim_page_fact_and_real_ack(courier):

@@ -11,6 +11,7 @@ import errno
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import urllib.error
@@ -19,7 +20,7 @@ import urllib.request
 
 from . import layout
 from .util import (Conflict, Error, LockBusy, RetryableRead, Uncertain, command_detail,
-                   digest, encode, locked, relpath, run)
+                   digest, encode, locked, read_json, relpath, run, write_json)
 
 
 def _validate_commit(store, parent, changes):
@@ -31,10 +32,22 @@ def _validate_commit(store, parent, changes):
         layout.version({layout.MARKER: original_marker}, document.get('kind') if isinstance(document, dict) else None)
         shared = document['kind'] == 'workspace'
     current_marker = changes.get(layout.MARKER, original_marker)
+    if original_marker and json.loads(original_marker).get('version') == layout.MESSAGE_VERSION and current_marker is None:
+        raise Error('The message layout marker cannot be removed.')
     if current_marker is not None:
         document = json.loads(current_marker)
         layout.version({layout.MARKER: current_marker}, document.get('kind') if isinstance(document, dict) else None)
         shared = shared and document['kind'] == 'workspace'
+        if shared and document['version'] == layout.MESSAGE_VERSION:
+            prefix = document['platform_prefix']
+            message_prefixes = tuple((prefix + '/' if prefix else '') + root + '/' for root in layout.MESSAGE_ROOTS)
+            if document.get('role') == 'messages':
+                if any(p not in (layout.MARKER, layout.MESSAGE_GUARD) and not p.startswith(message_prefixes) for p in changes):
+                    raise Error('The message branch cannot contain permission or instance records.')
+            elif any(p.startswith(message_prefixes) and data is not None for p, data in changes.items()):
+                raise Error('Publish message records through the dedicated message branch.')
+        if original_marker and json.loads(original_marker).get('version') == layout.MESSAGE_VERSION and document['version'] != layout.MESSAGE_VERSION:
+            raise Error('The message layout cannot be downgraded by a normal write.')
     platform_roots = layout.SHARED_ROOTS | {'.aw', '.aw-local', '.agentworkspace'}
     paths = set(previous.entries if previous else ()) | set(changes)
     for path in paths:
@@ -53,17 +66,25 @@ def git_env(env=None):
 
 
 TLS_FAILURES = ("schannel", "sec_e_", "ssl", "tls")
+SCHANNEL_INVALID_TOKEN = "schannel: next initializesecuritycontext failed: sec_e_invalid_token (0x80090308)"
 
 
 def permanent_git_failure(detail: str) -> bool:
     # A partial transfer can mention both a network symptom and invalid data.
     # Do not let the network wording hide an explicit access or integrity failure.
-    return any(word in detail.lower() for word in ("permission denied", "access denied", "authentication failed",
+    detail = detail.lower()
+    if any(word in detail for word in ("permission denied", "access denied", "authentication failed",
             "repository not found", "not a git repository", "certificate", "host key verification failed",
-            "could not read username", "terminal prompts disabled", "corrupt", "bad object",
-            "invalid object", "protocol error", *TLS_FAILURES,
+            "could not read username", "could not read password", "unable to get password from user",
+            "terminal prompts disabled", "corrupt", "bad object",
+            "invalid object", "protocol error",
             "the requested url returned error: 401",
-            "the requested url returned error: 403"))
+            "the requested url returned error: 403")):
+        return True
+    # Retry only the observed handshake failure, with full TLS validation on the new read.
+    # Other TLS diagnostics and explicit access/integrity failures still take precedence.
+    remaining = detail.replace(SCHANNEL_INVALID_TOKEN, "")
+    return any(word in remaining for word in TLS_FAILURES)
 
 
 def temporary_transport_failure(detail: str) -> bool:
@@ -71,12 +92,24 @@ def temporary_transport_failure(detail: str) -> bool:
         return False
     detail = detail.lower()
     return any(word in detail for word in (
+        SCHANNEL_INVALID_TOKEN,
         "could not resolve host", "could not resolve proxy", "could not resolve hostname",
         "temporary failure in name resolution", "failed to connect to", "connection timed out",
         "operation timed out", "connection reset", "connection refused", "network is unreachable",
         "no route to host", "empty reply from server", "remote end hung up unexpectedly",
         "unexpected disconnect while reading sideband packet",
         *(f"the requested url returned error: {code}" for code in (408, 429, 500, 502, 503, 504))))
+
+
+def rejected_ref_update(result, branch, expected):
+    stdout = result.stdout.decode("utf-8", errors="replace")
+    ref = re.escape(f"refs/heads/{branch}")
+    return any(reason in stdout for reason in (
+        "[rejected] (non-fast-forward)", "[rejected] (fetch first)", "[rejected] (stale info)",
+        "[remote rejected] (incorrect old value provided)")) or bool(expected and re.search(
+            rf"^!\t[^\t\r\n]+:{ref}\t\[remote rejected\] \(cannot lock ref '{ref}': "
+            rf"is at (?:[0-9a-f]{{40}}|[0-9a-f]{{64}}) but expected {re.escape(expected)}\)\r?$",
+            stdout, re.MULTILINE))
 
 
 class Snapshot:
@@ -102,8 +135,18 @@ class Snapshot:
 
 
 class GitStore:
+    def message_snapshot(self):
+        from . import message_store
+        return message_store.read(self)
+
+    def message_change(self, state, changes, expected, message, *, permission_expected=None):
+        from . import message_store
+        return message_store.change(self, state, changes, expected, message,
+                                    permission_expected=permission_expected)
+
     def __init__(self, address: str, home: Path, *, root: Path | None = None):
         self.address = address
+        self.operations = Path(home) / 'storage-operations' / digest(address.encode())
         self.root = root if root is not None else home / "git" / digest(address.encode())[:24]
         with self._cache_lock():
             if not self.root.exists():
@@ -213,6 +256,79 @@ class GitStore:
             return self.git(*args, data=message.encode(), env=env).stdout.decode().strip()
 
     def publish(self, branch: str, commit: str, expected: str) -> None:
+        if branch == 'main':
+            from . import message_store
+            if expected and message_store.publish_permissions(self, commit, expected):
+                return
+            if not expected and layout.version(self.snapshot(revision=commit), 'workspace') == layout.MESSAGE_VERSION:
+                raise Error('Initialize the message layout through its atomic two-ref publication.')
+        self._publish_ref(branch, commit, expected)
+
+    def publication_status(self, updates):
+        accepted = []
+        for branch, update in updates.items():
+            head = self.head(branch)
+            accepted.append(bool(head and (head == update['after'] or self.contains_commit(update['after'], head))))
+        if any(accepted) and not all(accepted):
+            raise Uncertain('Only part of the original atomic publication is observable; preserve it and inspect both original refs.')
+        return all(accepted)
+
+    def publish_atomic(self, updates):
+        if len(updates) < 2:
+            raise Error('An atomic permission publication needs two actual ref updates.')
+        for branch, update in updates.items():
+            if update['before'] == update['after'] or not update['after']:
+                raise Error('Every protected ref must receive a new commit.')
+            if update['before'] and not self.contains_commit(update['before'], update['after']):
+                raise Error('Atomic publication must fast-forward every existing ref.')
+        path = self.operations / 'atomic' / (digest(encode(updates)) + '.json')
+        with locked(path.with_suffix('.lock')):
+            receipt = read_json(path)
+            if receipt:
+                if self.publication_status(updates):
+                    return
+                if receipt['phase'] == 'rejected':
+                    raise Conflict('The original atomic publication was rejected; reread its preconditions.')
+                raise Uncertain('The original atomic publication is not confirmed; it was not repeated.')
+            write_json(path, {'updates': updates, 'phase': 'publishing'})
+            try:
+                self._publish_atomic(updates)
+            except (Conflict, Uncertain) as exc:
+                try:
+                    accepted = self.publication_status(updates)
+                except (Error, OSError) as read_error:
+                    raise Uncertain(f'Cannot confirm the original atomic publication: {read_error}') from exc
+                if not accepted:
+                    if isinstance(exc, Conflict):
+                        write_json(path, {'updates': updates, 'phase': 'rejected'})
+                    raise
+            except Error:
+                write_json(path, {'updates': updates, 'phase': 'rejected'})
+                raise
+            write_json(path, {'updates': updates, 'phase': 'published'})
+
+    def _publish_atomic(self, updates):
+        args = ['push', '--atomic', '--porcelain']
+        for branch, update in updates.items():
+            args.append(f"--force-with-lease=refs/heads/{branch}:{update['before']}")
+        args += ['origin', *(f"{u['after']}:refs/heads/{b}" for b, u in updates.items())]
+        try:
+            result = self.git(*args, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise Uncertain('Atomic Git push timed out; inspect both original commits.') from exc
+        if result.returncode == 0:
+            return
+        output = (result.stdout + result.stderr).decode('utf-8', errors='replace')
+        if 'does not support --atomic push' in output or 'does not support atomic push' in output:
+            raise Error('This remote does not support atomic ref updates; the message layout cannot be enabled or changed.')
+        if any(rejected_ref_update(result, branch, update['before']) for branch, update in updates.items()) or any(reason in output for reason in ('[rejected] (stale info)', '[rejected] (fetch first)',
+                '[rejected] (non-fast-forward)', '[rejected] (atomic push failed)', '[remote rejected] (atomic push failure)')):
+            raise Conflict(command_detail(result.stdout + result.stderr))
+        if permanent_git_failure(output) and not any(word in output.lower() for word in TLS_FAILURES):
+            raise Error(command_detail(result.stdout + result.stderr))
+        raise Uncertain(command_detail(result.stdout + result.stderr))
+
+    def _publish_ref(self, branch: str, commit: str, expected: str) -> None:
         args = ["push", "--porcelain"]
         if not expected:
             # This lease only creates an absent ref; it cannot replace an existing branch.
@@ -235,9 +351,7 @@ class GitStore:
             # This is a write with an unknown outcome, never a retryable read.
             known_failure = permanent_git_failure(full_detail) and not any(word in full_detail.lower() for word in TLS_FAILURES)
             failure = Error(detail) if known_failure else Uncertain(detail)
-            rejected = any(reason in result.stdout.decode("utf-8", errors="replace") for reason in (
-                "[rejected] (non-fast-forward)", "[rejected] (fetch first)", "[rejected] (stale info)",
-                "[remote rejected] (incorrect old value provided)"))
+            rejected = rejected_ref_update(result, branch, expected)
             if not isinstance(failure, Uncertain) and not rejected:
                 raise failure
         try:
@@ -295,11 +409,13 @@ class GitHubStore(GitStore):
     """
     def __init__(self, address: str, home: Path):
         self.address = address
+        self.operations = Path(home) / 'storage-operations' / digest(address.encode())
         owner, repo = address.removeprefix("github:").split("/")
         self.api = f"https://api.github.com/repos/{owner}/{repo}"
         self._blobs = {}
 
     def request(self, method: str, path: str, value=None):
+        read_request = method == 'GET' or (path == '/graphql' and value['query'].lstrip().startswith('query'))
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         headers = {"Accept": "application/vnd.github+json", "User-Agent": "agent-workspace"}
         if token:
@@ -307,7 +423,8 @@ class GitHubStore(GitStore):
         data = None if value is None else json.dumps(value).encode()
         if data is not None:
             headers["Content-Type"] = "application/json"
-        req = urllib.request.Request(self.api + path, data, headers, method=method)
+        url = 'https://api.github.com/graphql' if path == '/graphql' else self.api + path
+        req = urllib.request.Request(url, data, headers, method=method)
         try:
             with urllib.request.urlopen(req, timeout=40) as response:
                 return json.load(response)
@@ -317,12 +434,12 @@ class GitHubStore(GitStore):
             if exc.code in (409, 422):
                 raise Conflict("GitHub rejected a stale or invalid Git update.") from None
             if exc.code in (408, 429, 500, 502, 503, 504):
-                if method == "GET":
+                if read_request:
                     raise RetryableRead(f"GitHub HTTP {exc.code}; no shared state was confirmed.") from exc
                 raise Uncertain(f"GitHub HTTP {exc.code}; inspect the original write result.") from exc
             raise Error(f"GitHub HTTP {exc.code}; check token permissions and branch rules.") from None
         except (urllib.error.URLError, TimeoutError) as exc:
-            if method != "GET":
+            if not read_request:
                 raise Uncertain("GitHub write result is unknown; inspect the original operation.") from exc
             reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
             if not permanent_git_failure(str(reason)) and (isinstance(reason, TimeoutError) or (isinstance(reason, OSError) and reason.errno in
@@ -331,16 +448,15 @@ class GitHubStore(GitStore):
                 raise RetryableRead("GitHub read temporarily unavailable; no shared state was confirmed.") from exc
             raise Error("GitHub read failed; no shared state was confirmed.") from exc
 
-    def bootstrap(self, metadata):
+    def bootstrap(self, metadata, *, layout_version=layout.VERSION):
         # GitHub cannot create a ref in a repository with no branches. The Contents
         # endpoint creates the initial commit; omitting sha forbids replacing a file.
+        self.atomic_capability()
         self.request("PUT", "/contents/workspace.json", {"message": "Initialize Agent Workspace",
             "content": base64.b64encode(encode(metadata)).decode(), "branch": "main"})
         snap = self.snapshot()
-        self.change('main', {'workspace.json': None, layout.MARKER: layout.marker('workspace'),
-            '.agentworkspace/workspace.json': snap.bytes('workspace.json')},
-            {'workspace.json': snap.entries['workspace.json'], layout.MARKER: None,
-             '.agentworkspace/workspace.json': None}, 'Initialize AW data layout', base=snap.revision)
+        from . import message_store
+        message_store.initialize(self, metadata, layout_version == layout.WORKER_VERSION, parent=snap.revision)
 
     def head(self, branch):
         ref = self.request("GET", "/git/ref/heads/" + urllib.parse.quote(branch, safe="/"))
@@ -393,7 +509,33 @@ class GitHubStore(GitStore):
         return self.request("POST", "/git/commits", {
             "message": message, "tree": tree, "parents": [parent] if parent else []})["sha"]
 
-    def publish(self, branch, commit, expected):
+    def atomic_capability(self):
+        owner, repo = self.address.removeprefix('github:').split('/')
+        info = self.request('POST', '/graphql', {'query':
+            'query($owner:String!,$name:String!){repository(owner:$owner,name:$name){id} __type(name:"Mutation"){fields{name}}}',
+            'variables': {'owner': owner, 'name': repo}})
+        data = info.get('data') or {}
+        if info.get('errors') or not data.get('repository') or not any(
+                field['name'] == 'updateRefs' for field in (data.get('__type') or {}).get('fields', [])):
+            raise Error('GitHub atomic updateRefs is unavailable; refusing the message layout operation.')
+        return data['repository']['id']
+
+    def _publish_atomic(self, updates):
+        repository = self.atomic_capability()
+        identifier = digest(encode(updates))
+        value = {'repositoryId': repository, 'clientMutationId': identifier,
+                 'refUpdates': [{'name': 'refs/heads/' + branch, 'beforeOid': item['before'] or '0' * 40,
+                                 'afterOid': item['after'], 'force': False} for branch, item in updates.items()]}
+        result = self.request('POST', '/graphql', {'query':
+            'mutation($input:UpdateRefsInput!){updateRefs(input:$input){clientMutationId}}', 'variables': {'input': value}})
+        if result.get('errors'):
+            if all(error.get('type') in ('UNPROCESSABLE', 'CONFLICT') for error in result['errors']):
+                raise Conflict('GitHub rejected the original atomic ref preconditions.')
+            raise Uncertain('GitHub did not confirm the original updateRefs mutation; inspect both original refs.')
+        if ((result.get('data') or {}).get('updateRefs') or {}).get('clientMutationId') != identifier:
+            raise Uncertain('GitHub did not return the original atomic mutation receipt.')
+
+    def _publish_ref(self, branch, commit, expected):
         path = "/git/refs/heads/" + urllib.parse.quote(branch, safe="/")
         try:
             if not expected:

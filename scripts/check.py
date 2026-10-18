@@ -32,9 +32,13 @@ def main():
     result_dir = root / 'test-results'
     result_dir.mkdir(exist_ok=True)
     (result_dir / 'selection.json').write_text(json.dumps({'shard': options.shard, 'files': selected}, indent=2), encoding='utf-8')
-    checks = ([sys.executable, '-m', 'compileall', '-q', 'src'],
-              [sys.executable, '-m', 'pytest', '-v', '--durations=20', '-o', 'faulthandler_timeout=60',
-               '--junitxml=' + str(result_dir / 'results.xml'), *selected])
+    pytest_args = [sys.executable, '-m', 'pytest', '-v', '--durations=20']
+    # Timed thread dumps can crash Windows Python (pytest-dev/pytest#7022).
+    # The CI job timeout still bounds the run; fatal-exception reporting stays enabled.
+    if sys.platform != 'win32':
+        pytest_args.extend(['-o', 'faulthandler_timeout=60'])
+    pytest_args.extend(['--junitxml=' + str(result_dir / 'results.xml'), *selected])
+    checks = ([sys.executable, '-m', 'compileall', '-q', 'src'], pytest_args)
     for args in checks:
         result = subprocess.run(args, cwd=root)
         if result.returncode:

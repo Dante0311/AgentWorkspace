@@ -1,8 +1,16 @@
 # 当前版本支持范围
 
+## Agent 与 Worker
+
+本开发候选支持同一 Agent 下多个持久 Worker。新建 Workspace 默认使用 Worker 数据版本；每个 Agent 自动有一个“日常工作”Worker。`worker` 是第八个可选内置 Skill，可主动建议合理分工，用户决定是否创建和启动；单 Worker 仍是完整用法。
+
+Worker 分别保存执行入口、输入队列、消息和检查点。来源从真实 session/Binding 确定；默认收件 Worker 的变化不转移已保存消息。过程文件放在 `workers/<worker-id>/`，共同文件通过明确的 `shared_paths` 保存。相同 Agent ID 或共用目录不授权同伴的 ACK、停工或检查点操作。
+
+旧单入口数据不会自动迁移，必须通过已授权的 `worker migrate` 显式登记历史映射；不修改旧 Message、ACK 和 Binding 字节，不因升级重建聊天。具体构建的真实 Desktop、跨 Harness 和迁移验收以对应报告为准，源码能力不代替本机实际可用性。
+
 这是当前安装的 AgentWorkspace 的能力说明，不是执行授权，也不代表上游产品永久没有相应接口。设计中的目标不等于本版本已支持。
 
-近期优先 Codex Desktop 与 ChatGPT Web。Web 当前手动收件；已有 Web Courier MVP 已纳入开发与独立 E2E，首批为人工确认的单条正式 Message，尚未完成 AW 接入和真实浏览器验收。tclaude 尚待验证。其他 Harness、模型供应商与企业微信保留已有底层能力，暂缓继续扩展。Windows x64 npm 包包含 Python 后端、网页和七个 Skills，不包含全部可选 SDK。
+近期优先 Codex Desktop 与 ChatGPT Web。Web 当前手动收件；已有 Web Courier MVP 已纳入开发与独立 E2E，首批为人工确认的单条正式 Message，尚未完成 AW 接入和真实浏览器验收。tclaude 尚待验证。其他 Harness、模型供应商与企业微信保留已有底层能力，暂缓继续扩展。Windows x64 npm 包包含 Python 后端、网页和八个 Skills，不包含全部可选 SDK。
 
 ## 状态怎么读
 
@@ -13,6 +21,8 @@
 ## 当前入口与保留的高级接口
 
 持久 Codex 实例在 `.agentworkspace/config.json` 的 `codex` 段明确保存 `model` 与 `effort`；缺项时 AW 不创建原生会话或发送模型输入。`.agentworkspace/local/runtime/runtime.json` 只保存本机连接与服务信息。运行中的入口继续采用原选择，编辑文件或模板不立即切换。请求值、原生接受和实际设置确认分别记录；这项参数合同已提供，真实 Desktop 设置效果仍需受控复验。
+
+当前 Agent 可按用户明确要求用 `agent.model-change-request` 准备有限的未来模型变更，只接受同一 Workspace 内 Codex / Desktop 的 `model`、`effort`。`model-review` / `agent.model-change-review` 打开 Windows 系统确认框，不启后台、Runner 或巡检；用户核对后选择“是”保存，Agent 用 `agent.model-change-show` 及 `agent.show` 读回。“否”或“取消”不写配置；其他平台当前不支持。当前宿主没有参数级聊天批准凭据，仍需一次系统确认，Agent 不得代点、模拟按键或自填确认参数。通用配置、长期管家授权和当前入口采用值保持原规则。
 
 | 入口 | 已提供的能力 | 当前不支持 / 待确认 |
 | --- | --- | --- |
@@ -27,7 +37,11 @@
 
 ## 用户与 Agent 遇到限制时
 
+checkpoint 可在继续工作时单独保存。完成重要阶段、形成关键决定或准备切换任务时，Agent 可按 agent Skill 主动建议保存；已有按阶段保存授权时直接执行。具体内容与提醒频率见 `.agentworkspace/prompts/checkpoints.md`。Codex 可另行配置并信任 `PreCompact` hook，调用 `aw codex-hook` 自动保存当前 AW 会话可取得的原文与实例资料；业务总结仍来自之前已保存的检查点，不能冒充新总结。未配置或未获原生信任时不会自动运行；不承诺导出 Codex 未公开的内部状态或压缩摘要。
+
 每次发送与回复按 message Skill 判断路径：核对自己已获授 Binding 与双方的当次 `runtime.desktop-observe`；确认双方当前 active 且本机 Codex 会话可寻址，才原生直发。缺少读取能力、无法确认同机或其他入口时，首次发送走正式 AW Message；自己已失权时不产生副作用。原生发送已尝试而结果未知只核对原发送，不切换通路重发。`direct-message.record/list/show` 是可选的独立历史，不发送消息、不生成正式 ACK，也不参与投递重试。记录或回执缺失不能推断发送失败或业务未完成。
+
+新空间把正式 Message、ACK、索引和通知记录放在 `aw-messages`，其他共享事实仍在 main。公共工具负责读取两份快照和检查权限，不需要 Agent 手工切分支。旧空间先通过 `message branch-plan` 查看范围，再由用户管理入口显式迁移；软件升级不自动迁移，旧格式工具会拒写新布局。手动 Git 操作必须采用新版 message Skill 的完整协议，不能只替换分支名。发布结果未知只核对原操作，不重新生成消息或重复发表。
 
 先核对目标实例当前 Binding 与所需操作，不从模型名称或安装位置推断能力。仅停止不支持的动作，说明具体限制和可选路径；更换 Harness、投递方式或模型服务须依据用户明确选择，不因为发现限制就中断无关工作。
 
@@ -53,4 +67,4 @@
 
 workspace.read 从所属 Workspace 的同一 Git 快照读取明确材料路径，返回完整 UTF-8 正文及版本；不要求本机检出 main。AGENTS.md 原样保留 @workspace-read 指令，每个新会话（含 relay/fork）必须实际读取，预检成功不证明模型已读或理解；缺文件/网络错误/超限如实失败。没有指令的原定义不变，平台不改写私人职责或产品规则。
 
-workspace.skills 发现共享 skills/ 候选；agent.create 可选 skills，已有实例用 agent.skills 与 skill-install/skill-update。全目录复制、来源按 Skill 保存，不自动全装/覆盖/重载模型。Definition 的专用 Skill、软件七个 Skill 和自有 Skill 保留各自更新边界，来源删除不删实例副本，私人差异与同名冲突须处理。交换未完成先恢复原记录，不发布半成品。实际用户模型、目标 Desktop 分区写入和最终 Windows 安装仍须按对应构建验证，开发夹具不替代实机。
+workspace.skills 发现共享 skills/ 候选；agent.create 可选 skills，已有实例用 agent.skills 与 skill-install/skill-update。全目录复制、来源按 Skill 保存，不自动全装/覆盖/重载模型。Definition 的专用 Skill、软件八个 Skill 和自有 Skill 保留各自更新边界，来源删除不删实例副本，私人差异与同名冲突须处理。交换未完成先恢复原记录，不发布半成品。实际用户模型、目标 Desktop 分区写入和最终 Windows 安装仍须按对应构建验证，开发夹具不替代实机。

@@ -21,7 +21,8 @@ def test_waiting_operation_joins_current_layout_and_retains_original_receipts(tm
     app = SimpleNamespace(home=tmp_path / 'home',
                           root=lambda *a, **k: root,
                           agent=lambda *a, **k: {'current': 'b-original'},
-                          require_binding=lambda *a, **k: None)
+                          store=lambda *a: SimpleNamespace(snapshot=lambda: object()),
+                          require_binding=lambda *a, **k: ({'current': 'b-original'}, {}))
     source = root / '.aw-local'
     lock_name = 'files.lock'
     unknown = {'id': 'i-original', 'binding': 'b-original', 'text': 'original input',
@@ -70,6 +71,7 @@ def test_waiting_operation_joins_current_layout_and_retains_original_receipts(tm
         lock_name = 'records.lock'
         adapter = runtime.Codex.__new__(runtime.Codex)
         adapter.root, adapter.binding = root, 'b-original'
+        adapter.worker_id = None
         adapter.record = root / 'records/b-original/runtime.jsonl'
         write_bytes(adapter.record, b'original-record\n')
         action = lambda: adapter.event({'method': 'fixture-record', 'params': {}})
@@ -152,7 +154,8 @@ def test_waiting_operation_joins_current_layout_and_retains_original_receipts(tm
 def test_pending_migration_refuses_local_writes(tmp_path, operation):
     write_json(tmp_path / layout.MARKER, {'version': 1, 'kind': 'instance', 'state': 'pending'})
     app = SimpleNamespace(root=lambda *a, **k: tmp_path, agent=lambda *a, **k: {'current': 'b-original'},
-                          require_binding=lambda *a, **k: None)
+                          store=lambda *a: SimpleNamespace(snapshot=lambda: object()),
+                          require_binding=lambda *a, **k: ({'current': 'b-original'}, {}))
     with pytest.raises(layout.MigrationRequired):
         if operation == 'input':
             runtime.queue_input(app, 'sea', 'alice', 'original input', request_id='i-original')

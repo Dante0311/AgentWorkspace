@@ -6,32 +6,38 @@ from importlib.resources import files
 from pathlib import Path
 import json
 
-from . import layout
+from . import layout, model_profiles
 from .util import Conflict, Error, Unavailable, Uncertain, digest, locked, now, read_json, slug, write_json
 
 
 HARNESSES = ("codex", "claude", "workbuddy")
 
 
-def _path(app, workspace, agent_id, harness):
+def _path(app, workspace, agent_id, harness, worker_id=None):
     if harness not in HARNESSES:
         raise Error("Choose codex, claude or workbuddy for a desktop project reference.")
     root = app.root(workspace, agent_id)
-    return root, layout.local_path(root, "desktop-projects") / (harness + ".json")
+    return root, layout.local_path(root, "desktop-projects", worker_id) / (harness + ".json")
 
 
-def project_directory(root, harness="codex"):
-    value = read_json(layout.local_path(root, "desktop-projects") / (harness + ".json"), {})
+def project_directory(root, harness="codex", worker_id=None):
+    value = read_json(layout.local_path(root, "desktop-projects", worker_id) / (harness + ".json"))
+    if value is None and worker_id is not None:
+        return project_directory(root, harness)
+    value = value or {}
     return Path(value["project_directory"]).resolve() if "project_directory" in value else root.resolve()
 
 
-def plan(app, workspace, agent_id, harness="codex"):
-    root, path = _path(app, workspace, agent_id, harness)
+def plan(app, workspace, agent_id, harness="codex", worker_id=None):
+    app.agent(workspace, agent_id, worker_id=worker_id)
+    root, path = _path(app, workspace, agent_id, harness, worker_id)
     try:
         data = path.read_bytes()
     except FileNotFoundError:
         data = None
     value = json.loads(data) if data is not None else {}
+    if data is None and worker_id is not None:
+        value = read_json(layout.local_path(root, "desktop-projects", None) / (harness + ".json"), {})
     if not isinstance(value, dict):
         raise Error("Invalid desktop reference; preserve the file and inspect it before changing it.")
     project = {"project_name": f"AW · {workspace} · {agent_id}",
@@ -40,8 +46,8 @@ def plan(app, workspace, agent_id, harness="codex"):
     if (not isinstance(project["product_paths"], list)
             or not all(isinstance(p, str) for p in project["product_paths"])):
         raise Error("Invalid product folder references; the original file was not changed.")
-    project_root = project_directory(root, harness)
-    return {"workspace": workspace, "agent_id": agent_id, "harness": harness,
+    project_root = project_directory(root, harness, worker_id)
+    return {"workspace": workspace, "agent_id": agent_id, "harness": harness, "worker_id": worker_id,
             "primary_folder": str(project_root), "instance_root": str(root),
             "project_mode": "independent" if project_root == root else "shared", "project": project,
             "revision": digest(data) if data is not None else None,
@@ -51,8 +57,9 @@ def plan(app, workspace, agent_id, harness="codex"):
 
 
 def save(app, workspace, agent_id, harness, project_name, section_name="", product_paths=None, revision=None,
-         project_directory=None):
-    root, path = _path(app, workspace, agent_id, harness)
+         project_directory=None, worker_id=None):
+    app.agent(workspace, agent_id, worker_id=worker_id)
+    root, path = _path(app, workspace, agent_id, harness, worker_id)
     for key, value in (("project_name", project_name), ("section_name", section_name)):
         if not isinstance(value, str) or len(value) > 160 or any(ord(c) < 32 for c in value):
             raise Error(f"Invalid {key}; use a short display name without control characters.")
@@ -77,8 +84,8 @@ def save(app, workspace, agent_id, harness, project_name, section_name="", produ
             raise Error("A product folder must be an existing directory distinct from the Agent's primary folder.")
         if str(directory) not in paths:
             paths.append(str(directory))
-    with layout.lock(root, "files.lock"):
-        _, path = _path(app, workspace, agent_id, harness)
+    with layout.lock(root, "files.lock", worker_id=worker_id):
+        _, path = _path(app, workspace, agent_id, harness, worker_id)
         actual = digest(path.read_bytes()) if path.exists() else None
         if revision != actual:
             raise Conflict("Desktop project preferences changed; read them again before saving.")
@@ -87,7 +94,7 @@ def save(app, workspace, agent_id, harness, project_name, section_name="", produ
             previous = {**previous, "project_directory": str(project_directory)}
         write_json(path, {**previous, "project_name": project_name, "section_name": section_name,
                           "product_paths": paths, "updated_at": now()})
-    return {**plan(app, workspace, agent_id, harness), "saved": "local_reference_only",
+    return {**plan(app, workspace, agent_id, harness, worker_id=worker_id), "saved": "local_reference_only",
             "native_project_changed": False, "binding_changed": False}
 
 
@@ -103,11 +110,11 @@ def _supports(adapter, name, arguments=()):
     return all(properties.get(k, {}).get('type') == 'string' for k in arguments)
 
 
-def _discover(adapter, root, preferred):
+def _discover(adapter, root, preferred, worker_id=None):
     if 'list_projects' not in adapter.tools:
         raise Unavailable('The captured connection cannot list local projects.')
     listed = adapter.call('list_projects', {})['projects']
-    project_root = project_directory(root)
+    project_root = project_directory(root, worker_id=worker_id)
     projects = [{k: p.get(k) for k in ('projectId', 'label', 'path')} for p in listed
                 if p.get('projectKind') == 'local' and p.get('hostId') == 'local' and p.get('path')
                 and Path(p['path']).resolve() == project_root]
@@ -133,38 +140,42 @@ def _discover(adapter, root, preferred):
             'section_error': section_error}
 
 
-def discover(app, workspace, agent_id):
+def discover(app, workspace, agent_id, worker_id=None):
     from .runtime import Desktop
-    result = plan(app, workspace, agent_id)
+    result = plan(app, workspace, agent_id, worker_id=worker_id)
+    worker_id = result["worker_id"]
     root = app.root(workspace, agent_id)
-    config = read_json(layout.local_path(root, 'runtime.json'), {})
+    config = model_profiles.runtime_config(root, worker_id)
     if config.get('kind') != 'desktop' or not all(config.get(k) for k in ('command', 'pipe_path', 'caller_thread')):
         return {**result, 'state': 'connection_required', 'projects': [], 'sections': [],
                 'capabilities': {}, 'native_project_verified': False}
-    adapter = Desktop(root, config, None)
+    adapter = Desktop(root, config, None, worker_id=worker_id)
     try:
-        native = _discover(adapter, root, config.get('project_id') or result['project'].get('native_project_id'))
+        native = _discover(adapter, root, config.get('project_id') or result['project'].get('native_project_id'), worker_id)
     finally:
         adapter.close()
     return {**result, **native, 'binding_changed': False}
 
 
 def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=None,
-            create_section=False, revision=None):
+            create_section=False, revision=None, worker_id=None):
     """Adopt one verified project; optional sidebar work never creates a chat."""
     from .runtime import Desktop
+    owner = app.agent(workspace, agent_id, worker_id=worker_id)
+    # Updating Agent defaults must not require stopping a Worker with its own adopted configuration.
+    protect_entry = worker_id is not None or owner.get("worker_id") is None
     slug(request_id)
     if not isinstance(create_section, bool) or (create_section and section_id):
         raise Error('Choose an existing section or explicitly request a new one, not both.')
-    root, preferences = _path(app, workspace, agent_id, 'codex')
+    root, preferences = _path(app, workspace, agent_id, 'codex', worker_id)
     fingerprint = {'project_id': project_id, 'section_id': section_id,
                    'create_section': create_section, 'revision': revision}
     # Serializes shared section names across this installation's Workspace members.
     folder = app.home / 'desktop-preparations' / slug(workspace)
     with locked(folder / 'prepare.lock'):
-        with layout.lock(root, 'files.lock'):
-            _, preferences = _path(app, workspace, agent_id, 'codex')
-            receipt = layout.local_path(root, 'desktop-preparations') / (request_id + '.json')
+        with layout.lock(root, 'files.lock', worker_id=worker_id):
+            _, preferences = _path(app, workspace, agent_id, 'codex', worker_id)
+            receipt = layout.local_path(root, 'desktop-preparations', worker_id) / (request_id + '.json')
             previous = read_json(receipt)
             if previous:
                 if previous['request'] != fingerprint:
@@ -172,20 +183,20 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
                 if previous['state'] == 'completed':
                     return previous['result']
                 raise Uncertain('Preparation was attempted; inspect its original result, do not repeat sidebar writes.')
-            current = plan(app, workspace, agent_id)
+            current = plan(app, workspace, agent_id, worker_id=worker_id)
             if current['revision'] != revision:
                 raise Conflict('Desktop preferences changed; reread before adopting a project.')
-            if app.agent(workspace, agent_id)['current']:
+            if protect_entry and app.agent(workspace, agent_id, worker_id=worker_id)['current']:
                 raise Conflict('Handoff before changing the project of an active instance.')
-            config_path = layout.local_path(root, 'runtime.json')
+            config_path = layout.local_path(root, 'runtime.json', worker_id)
             original = config_path.read_bytes() if config_path.exists() else b'{}'
-            config = json.loads(original)
+            config = model_profiles.runtime_config(root, worker_id)
             if config.get('kind') != 'desktop':
                 raise Unavailable('Capture the real Codex Desktop connection first.')
-            adapter = Desktop(root, config, None)
+            adapter = Desktop(root, config, None, worker_id=worker_id)
             try:
                 preferred = project_id or config.get('project_id') or current['project'].get('native_project_id')
-                native = _discover(adapter, root, preferred)
+                native = _discover(adapter, root, preferred, worker_id)
                 selected = native['selected_project']
                 if selected is None:
                     return {**current, **native, 'saved': False, 'native_project_changed': False}
@@ -221,7 +232,7 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
                         section_state = 'verified'
                     elif chosen_section and native['capabilities']['move_project']:
                         adapter.call('move_project_to_sidebar_section', {'projectId': selected['projectId'], 'sectionId': chosen_section})
-                        observed = _discover(adapter, root, selected['projectId'])
+                        observed = _discover(adapter, root, selected['projectId'], worker_id)
                         membership = next((s for s in observed['sections'] if s['sectionId'] == chosen_section), None)
                         if not membership or item_key not in (membership['itemKeys'] or []):
                             raise Uncertain('Sidebar write returned, but membership was not confirmed. Inspect, do not replay.')
@@ -233,8 +244,9 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
                     section_error = f'Sidebar preparation is unconfirmed ({type(exc).__name__}); inspect the original native result. Project reuse remains available.'
             finally:
                 adapter.close()
-            if (config_path.read_bytes() != original or plan(app, workspace, agent_id)['revision'] != revision
-                    or app.agent(workspace, agent_id)['current']):
+            if ((config_path.read_bytes() if config_path.exists() else b'{}') != original
+                    or plan(app, workspace, agent_id, worker_id=worker_id)['revision'] != revision
+                    or (protect_entry and app.agent(workspace, agent_id, worker_id=worker_id)['current'])):
                 raise Conflict('Local configuration or execution entry changed; preserve the preparation receipt.')
             value = {**current['project'], 'native_project_id': selected['projectId'], 'updated_at': now()}
             if section_state == 'verified':
@@ -242,12 +254,12 @@ def prepare(app, workspace, agent_id, request_id, project_id=None, section_id=No
             # Both stores retain the same native ID. A partial write is visible in the receipt.
             write_json(preferences, value)
         # Core configure owns files.lock; keep its write outside our critical section.
-        app.configure(workspace, agent_id, {**config, 'project_id': selected['projectId']})
-        result = {**plan(app, workspace, agent_id), 'state': 'ready', 'native_project_verified': True,
+        app.configure(workspace, agent_id, {**config, 'project_id': selected['projectId']}, worker_id=worker_id)
+        result = {**plan(app, workspace, agent_id, worker_id=worker_id), 'state': 'ready', 'native_project_verified': True,
                   'native_project_id': selected['projectId'], 'section_state': section_state, 'section_error': section_error,
                   'native_project_changed': False, 'binding_changed': False, 'session_created': False,
                   'product_folders_verified': False}
-        with layout.lock(root, 'files.lock'):
-            receipt = layout.local_path(root, 'desktop-preparations') / (request_id + '.json')
+        with layout.lock(root, 'files.lock', worker_id=worker_id):
+            receipt = layout.local_path(root, 'desktop-preparations', worker_id) / (request_id + '.json')
             write_json(receipt, {**intent, 'state': 'completed', 'result': result})
         return result

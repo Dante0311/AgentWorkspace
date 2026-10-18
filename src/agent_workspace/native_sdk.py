@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict
 import importlib
+import inspect
 import json
 import os
 from pathlib import Path
@@ -16,7 +17,7 @@ import shutil
 import sys
 import threading
 
-from . import layout
+from . import layout, session_titles
 from .util import Conflict, Error, Unavailable, now, uid, write_json
 
 
@@ -82,7 +83,7 @@ def _codebuddy_client(sdk, executable):
     return client
 
 
-def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
+def sdk_options(config, app, workspace, agent_id, binding, root, session=None, worker_id=None):
     """Secrets are read at launch and passed only to the child process."""
     module, client_name, options_name, executable_key = SDK_TYPES[config["kind"]]
     try:
@@ -90,7 +91,7 @@ def sdk_options(config, app, workspace, agent_id, binding, root, session=None):
     except ImportError as exc:
         raise Unavailable(f"Install AgentWorkspace's {config['kind']} extra before launching this entry.") from exc
     env = {"AW_HOME": str(app.home), "AW_WORKSPACE": workspace, "AW_AGENT": agent_id,
-           "AW_BINDING": binding, **sdk_environment(config)}
+           "AW_BINDING": binding, "AW_WORKER": worker_id or "", **sdk_environment(config)}
     # No automatic user/project MCP configuration or broad native permissions.
     options = {"cwd": str(root), executable_key: config["executable"], "env": env,
                "setting_sources": [], "model": config.get("model"), "effort": config.get("effort"),
@@ -109,13 +110,21 @@ class NativeSDK:
     # Streaming input is not evidence of native expected-turn steering semantics.
     supports_insert = False
 
-    def __init__(self, app, workspace, agent_id, binding, root, config, session=None):
+    def __init__(self, app, workspace, agent_id, binding, root, config, session=None, *, title=None, worker_id=None):
         self.app, self.workspace, self.agent_id = app, workspace, agent_id
         self.binding, self.root, self.session = binding, root, session
+        self.worker_id = worker_id
         self.sdk, self.client_type, self.options_type, self.options = sdk_options(
-            config, app, workspace, agent_id, binding, root, session)
+            config, app, workspace, agent_id, binding, root, session, worker_id)
+        self.title_receipt = None
+        if title:
+            supported = "session_name" in inspect.signature(self.options_type).parameters
+            if supported and session is None:
+                self.options["session_name"] = title
+            self.title_receipt = session_titles.receipt(title,
+                "sdk.session_name" if supported else "unsupported_by_installed_sdk_options")
         self.completed = queue.Queue()
-        self.record = layout.instance_path(root, "records") / binding / "runtime.jsonl"
+        self.record = layout.instance_path(root, "records", worker_id) / binding / "runtime.jsonl"
         self.record.parent.mkdir(parents=True, exist_ok=True)
         self.ready, self.observed = threading.Event(), threading.Event()
         self.guard = threading.Lock()
@@ -188,6 +197,11 @@ class NativeSDK:
         try:
             async for message in self.client.receive_messages():
                 data = asdict(message)
+                if self.title_receipt is not None:
+                    reported = data.get("session_name") or data.get("data", {}).get("session_name")
+                    if reported is not None:
+                        self.title_receipt = session_titles.receipt(self.title_receipt["requested"],
+                            self.title_receipt["capability"], accepted=True, reported=reported)
                 actual = data.get("session_id") or data.get("data", {}).get("session_id")
                 completion = None
                 terminal_error = isinstance(message, getattr(self.sdk, "ErrorMessage", ()))
@@ -199,8 +213,8 @@ class NativeSDK:
                         "local_submission_id": submission, "event": data}
                 if completion:
                     item["completion"] = completion
-                with layout.lock(self.root, "records.lock"):
-                    self.record = layout.instance_path(self.root, "records") / self.binding / "runtime.jsonl"
+                with layout.lock(self.root, "records.lock", worker_id=self.worker_id):
+                    self.record = layout.instance_path(self.root, "records", self.worker_id) / self.binding / "runtime.jsonl"
                     self.record.parent.mkdir(parents=True, exist_ok=True)
                     with self.record.open("a", encoding="utf-8") as stream:
                         stream.write(json.dumps(item, ensure_ascii=False) + "\n")
@@ -215,7 +229,7 @@ class NativeSDK:
                     if not self.session:
                         # A requested ID is not a binding. Only the native event confirms it.
                         await asyncio.to_thread(self.app.bind, self.workspace, self.agent_id,
-                                                self.binding, actual, str(self.root))
+                                                self.binding, actual, str(self.root), worker_id=self.worker_id)
                         self.session = actual
                     self.observed.set()
                 if completion:
@@ -258,9 +272,11 @@ class NativeSDK:
         return {"turn": {"id": submission}, "id_source": "local_submission", "session": self.session}
 
     def bootstrap(self, prompt):
-        path = layout.local_path(self.root, "inputs") / f"boot-{self.binding}.json"
+        path = layout.local_path(self.root, "inputs", self.worker_id) / f"boot-{self.binding}.json"
         item = {"id": path.stem, "binding": self.binding, "text": prompt, "delivery": "normal",
                 "purpose": "initial", "state": "dispatching", "sequence": 0, "created_at": now()}
+        if self.worker_id is not None:
+            item["worker"] = self.worker_id
         write_json(path, item)
         response = self.notify(prompt, "normal")
         item.update(state="submitted", result=response)

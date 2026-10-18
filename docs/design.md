@@ -499,7 +499,7 @@ Message 按目标实例的当前 Binding 调用 Harness 接入能力，持续投
 
 进入对方仓库不等于已确认通知。需要真实权限和目标分支允许的提交方式，好友配置不绕过它们。不可直达时 Bridge 可选，不是必需通信基础设施。
 
-新消息布局在 `aw-messages` 分支保存 `.agentworkspace/messages/<id>.json`、`.agentworkspace/message-index/<id>.json`、`.agentworkspace/acks/<id>.json` 与 `.agentworkspace/dispatch/`。索引包含 `id/from/to/created_at/delivery`，独立于正文定位通知。地址中的 Workspace 使用 main 上 `.agentworkspace/workspace.json` 的 locator，不以本机别名、仓库地址或目录替代。Message 与索引的原字节首次保存后固定；跨仓库补齐不重新生成时间或序列化正文。程序按共享布局版本选择完整的分支和路径，旧仓在显式迁移前继续使用 main；迁移后不逐文件回退读取旧副本。分支间的权限检查见第 9.1.1 节。
+新空间在 `aw-messages` 分支保存 `.agentworkspace/messages/<id>.json`、`.agentworkspace/message-index/<id>.json`、`.agentworkspace/acks/<id>.json` 与 `.agentworkspace/dispatch/`。旧仓的显式消息分支迁移保留原来的路径前缀，目录迁移另行处理。索引包含 `id/from/to/created_at/delivery`，独立于正文定位通知。地址中的 Workspace 使用 main 上 Workspace 登记的 locator，不以本机别名、仓库地址或目录替代。Message 与索引的原字节首次保存后固定；跨仓库补齐不重新生成时间或序列化正文。程序按共享布局版本选择完整的分支和路径，旧仓在显式迁移前继续使用 main；迁移后不逐文件回退读取旧副本。分支间的权限检查见第 9.1.1 节。
 
 ### 6.4 队列与有效入口
 
@@ -679,7 +679,7 @@ WorkspaceRoot/
 
 共同资料属于用户，平台记录由对应操作维护；新空间只建立实际使用的内容。管家模板按第 2.3 节建立，不为用户未使用的 Work、Definition 或 Skill 创建空占位。本机凭据、后台控制及进程状态不因树中有 `maintenance/` 就写入共享仓。
 
-消息分支只保存 `.agentworkspace/messages/`、`acks/`、`message-index/`、`dispatch/` 及布局和权限版本标记。Agent、Worker、Binding、好友关系与默认收件人仍以 main 为准，不在消息分支复制第二套权限记录。原生直发留档继续在 main，不参加正式消息投递。
+消息分支只保存 Message、ACK、message-index、dispatch 及布局和权限版本标记；新空间使用 `.agentworkspace/` 前缀，旧空间迁移时保留原前缀。Agent、Worker、Binding、好友关系与默认收件人仍以 main 为准，不在消息分支复制第二套权限记录。原生直发留档继续在 main，不参加正式消息投递。
 
 实例分支的根就是第 3.1 节的 Agent 工作根，不在共享 `main` 再复制一套 `instances/` 镜像。main 的检查点区是索引，实例的检查点区是内容；正式 Message 原文在消息分支，实例按需保存引用、副本和自己的处理资料，不为每个实例再建一套正式收发仓。原生会话只新增记录段，不每会话、消息或工单新建分支。实例分支和消息分支都不整体合回 Workspace main；资产提升只提交明确选定的共享材料，也不把整个 main 合进实例分支来更新 Skill。
 

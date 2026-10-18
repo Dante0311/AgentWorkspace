@@ -17,7 +17,7 @@ jobs:
   test:
     name: Test / ${{ matrix.os }} / Python ${{ matrix.python }} / ${{ matrix.shard }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 50
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

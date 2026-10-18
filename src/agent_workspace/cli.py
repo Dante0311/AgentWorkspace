@@ -412,7 +412,7 @@ def main(argv=None):
             for key in ("value", "target_config"):
                 if key in args:
                     args[key] = parse_json(args[key])
-            if args.get("compatible_writers") is not None:
+            if args.get("compatible_writers") is not None and command != "message.migrate":
                 args["compatible_writers"] = parse_json(args["compatible_writers"])
             if command == "maintenance.repair":
                 args["action"] = args.pop("repair_action")

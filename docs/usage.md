@@ -50,6 +50,22 @@ aw -w sbp workspace friend add --alias sea --address /path/to/sea.git
 
 好友需要双方登记。目录映射仅进入本机 registry，不作为跨机器通用路径。关联和移除关联不修改产品或删除仓库。
 
+### 2.1 正式消息的独立分支
+
+新空间默认把正式 Message、ACK、消息索引和 dispatch 放在 `aw-messages`。身份、Worker、Binding、Work、共同资料和原生直发留档仍在 main；普通发送和确认不再给 main 增加消息提交。实例资料分支保持原状，正常使用 CLI、HTTP 或 MCP 不需要手工切分支。
+
+旧空间的软件升级不会自动迁移消息。先查看原格式、待移动路径和当前版本，再从用户管理入口明确切换：
+
+```sh
+aw -w sea message branch-plan
+aw -w sea message migrate --request-id messages-20261018 --compatible-writer message-v3
+aw -w sea message branch-plan
+```
+
+`--compatible-writer message-v3` 表示已经确认相关写入端支持新格式；旧版工具读到新共享格式后会拒绝写入。迁移保留消息原字节、ID、ACK、通知记录和旧历史引用，也保留原路径前缀，不顺带转换旧单入口 Agent 或移动实例资料。返回的 main 与消息分支版本必须实际可读；仓库不支持原子多 ref 更新时明确失败。
+
+结果未知时用同一个 `request-id` 核对原提交，不换 ID 重发。若返回明确的版本冲突，原请求会保留拒绝事实；查看新的计划并处理并发修改后，再明确发起新迁移请求。Agent 或管家不能把普通业务调用当作用户迁移授权。手动 Git 写入必须使用新版 [Message 协议](../src/agent_workspace/resources/skills/message/references/protocol.md) 和配套脚本，不能只把原脚本中的 `main` 替换成新分支名。
+
 ## 3. 创建、接入、选定资产导入
 
 ```sh

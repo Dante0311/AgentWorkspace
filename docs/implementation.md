@@ -16,6 +16,8 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 
 `Binding.execution.directory` 继续表示个人资料根；`App.bind(..., cwd=None)` 只在调用方提供真实新会话的 cwd 时保存 `execution.cwd`，不从个人资料根推测，也不回填历史。Runtime 已接入所选项目目录、真实会话目录和个人资料根的分离：按真实 session 的索引识别调用者，换命令 cwd 不改变身份或恢复旧资格；Desktop 创建、原建聊核对与手动绑定保存实际 cwd，观察按该事实核对，历史无 cwd 的记录仍按原独立项目规则检查。进入材料明确给出身份、实例分支、职责文件、Skills、所选项目和实际 cwd，并附原交接检查点。
 
+2026-10-19 日常恢复修复允许同一 Desktop 聊天从原项目目录切回该 Agent 已登记的个人资料根，观察仍检查原 Binding、session、本机安装和真实 host；其他目录仍拒绝。`controller-cleanup` 补充了后台意外退出、尚未生成清理提交的路径：要求后台已停止、操作系统 Runner 锁可取得、本机原入口和真实聊天相符，按原共享版本只删除残留 controller。已有清理失败记录仍走原提交核对，不释放 Binding，也不重放输入。这些是实现范围，开发检查和日常实测结果分别记录。
+
 `agent start --here` 核验用户已打开的新 Desktop 聊天，准备个人资料目录并绑定此聊天，直接返回进入材料，不调用建聊或输入发送接口。模型或强度已报告且不符时拒绝绑定；没有原生报告时明确 unconfirmed。未知原创建、已有 controller 或已绑定入口不允许被替换。默认 `agent start` 保持自动建聊路径；准备及捕获、绑定、交接调用公共目录准备接口。
 
 2026-10-15 本机独立 E2E 通过的受测候选是 `9026ad0b1ab47b8c2b99c27ec1b69c4dfe19856e`，Windows x64 npm 包 SHA256 为 `9868cd74c7f7614500f429ce7c22b497be15a9d45aa14cef7b947d32d6c1d760`。两个新测试 Agent 共用既有 Codex 项目，实际文件结果为 13、18，各自资料根与实例分支相符；跨 Agent 写入和未获准管理操作被拒绝。同一 Agent 保存实际检查点并正常释放旧入口后，在原本不存在的新资料位置自动准备 worktree，在已有新聊天执行一次 `--here` 接回身份，从 13 继续到 14 并保存新检查点；旧原生聊天实际发起的受管写入被拒绝，目标文件未产生。

@@ -185,11 +185,15 @@ aw -w demo maintenance repair helper --repair-action controller-cleanup --expect
 
 `controller-cleanup` 沿用同一 `maintenance.repair` 目标授权，管家不能自授。执行前用公开 `agent show` 核对原 Binding、session、controller 及失败记录中的原清理提交；用 `workspace doctor` 的顶层 `revision` 取得共享快照版本，不能使用 `agent show` 顶层的 Agent 文件 blob revision 替代。Runtime 按该快照核对原 Binding 文件版本，重新观察本机执行位置、原 Runner 已退出及原生会话；只对仍匹配的 controller 继续清理，不重推旧整笔提交。
 
+后台被意外终止时，可能没有生成清理提交，最后状态也仍是运行中或共享读取恢复。先确认后台已停止，此时可省略 `--cleanup-commit`：Runtime 必须取得原副本的操作系统 Runner 锁、确认后台已停止、核对原 Binding 的本机记录及真实 Desktop 会话，再按原快照条件删除 controller。已有 `cleanup_errors` 时仍要求提供原清理提交，不能用省略参数跳过未知发布的核对。这个动作只移除已退出的观察器记录，保留原 Binding、聊天、待处理输入和 Watch。
+
 此动作保留 Runtime 的实际结果：`controller_cleared` 表示本次清理返回成功，`controller_already_cleared` 表示原 controller 已不存在；`cleanup_blocked`、`cleanup_paused` 及 `reason_code` 保留阻止原因。Conflict 或结果未知不自动重试动作。结果先持久保存，`verification.cleanup` 再独立读取固定旧 Binding 的 session、phase、controller、当前入口及共享快照版本，区分 `controller_present`、`controller_cleared` 和 `request_changed`；后继入口或替换 controller 出现时不对它执行清理。首次结果和稍后的观察可能不同，两者都保留。复查失败只补观察，`attempting`/`outcome_unknown` 不重放清理。
 
 清理成功不表示 Runner 已恢复。只有重新核对现场和授权后，才用另一个明确的稳定 request ID 请求 `runtime-recover`；恢复继续尊重用户暂停、未知输入及原生目录不匹配。同一清理 request ID 的任何原参数都不能变更，重复请求只读取原动作及当前观察，不再清理或启动。
 
 用户显式运行 `aw -w demo runtime start helper` 可以恢复此前停止的运行观察；已有会话与后台自动恢复使用同一套资格检查，新建中的入口仍使用原首次启动过程。自动恢复和 `runtime-recover` 不清除暂停，也不打开已停止的 Watch。从未发送且仍获授权的队列输入沿原规则继续，已提交或结果不明的输入不重发。
+
+Desktop 原聊天从共用项目切到自己的已登记资料目录后，可以继续核验为同一个本机入口；观察结果返回实际 `native_cwd`，保留原进入时记录。其他目录、其他机器、变化的 Binding 或 session 仍不能通过这一检查。
 
 ## 5. 当前能力与验收边界
 

@@ -485,7 +485,8 @@ def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_c
                 return {**result, "reason_code": "runner_exit_unconfirmed"}
             if cleanup_commit and observation.get("state") not in ("failed", "monitor_stopped"):
                 return {**result, "reason_code": "runner_exit_unconfirmed"}
-            if not cleanup_commit and observation.get("cleanup_errors"):
+            if not cleanup_commit and (observation.get("cleanup_errors")
+                    or observation.get("state") in ("failed", "native_stop_unconfirmed")):
                 return {**result, "reason_code": "original_cleanup_required"}
             if entry["kind"] != "desktop":
                 return {**result, "reason_code": "native_observation_unavailable"}

@@ -193,6 +193,9 @@ def test_user_opened_chat_relays_same_agent_and_saved_business_without_creating_
     observed = runtime.desktop_observe(app, 'sea', 'alice')
     assert observed['local_session_confirmed'] and observed['native_cwd'] == str(common)
     native['thread']['cwd'] = str(root)
+    observed = runtime.desktop_observe(app, 'sea', 'alice')
+    assert observed['local_session_confirmed'] and observed['native_cwd'] == str(root)
+    native['thread']['cwd'] = str(tmp_path / 'unrelated-project')
     assert not runtime.desktop_observe(app, 'sea', 'alice')['local_session_confirmed']
     monkeypatch.setenv('CODEX_THREAD_ID', 'fixture-old-chat')
     assert cli.main(['-w', 'sea', 'asset', 'write', 'alice', '--path', 'notes/stale.txt', '--content', 'wrong']) == 2

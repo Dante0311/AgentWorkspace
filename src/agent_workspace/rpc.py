@@ -9,6 +9,13 @@ import threading
 from .util import Error, Unavailable, child_command
 
 
+class RpcTimeout(Unavailable):
+    def __init__(self, method, timeout, *, tool=None):
+        self.method, self.timeout, self.tool = method, timeout, tool
+        operation = f"{method} ({tool})" if tool else method
+        super().__init__(f"RPC timeout for {operation} after {timeout} seconds; a write may already have happened.")
+
+
 class Rpc:
     def __init__(self, command, *, cwd, env=None, on_event=None, on_request=None, jsonrpc=False):
         self.process = subprocess.Popen(child_command(command), cwd=cwd, env=env, stdin=subprocess.PIPE,
@@ -79,7 +86,8 @@ class Rpc:
             try:
                 value = target.get(timeout=timeout)
             except queue.Empty:
-                raise Unavailable(f"RPC timeout for {method}; a write may already have happened.") from None
+                tool = (params or {}).get("name") if method == "tools/call" else None
+                raise RpcTimeout(method, timeout, tool=tool) from None
             if "error" in value:
                 raise Unavailable(str(value["error"]))
             return value["result"]

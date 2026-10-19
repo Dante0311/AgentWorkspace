@@ -17,7 +17,7 @@ from . import __version__
 from . import backend, model_profiles, software, session_titles, workers
 from .messages import Messages
 from .shared import requirements
-from .rpc import Rpc
+from .rpc import Rpc, RpcTimeout
 from .native_sdk import NativeSDK, SDK_TYPES, sdk_options
 from . import layout
 from .util import (Conflict, Error, LockBusy, RetryableRead, Unavailable, Uncertain, digest, encode,
@@ -1556,8 +1556,15 @@ class Runner:
                         continue
                     raise
                 except (Unavailable, OSError) as exc:
+                    # A delayed read reply does not mean the stdio connection
+                    # closed. Keep this adapter; only repeat the failed read.
+                    if isinstance(exc, RpcTimeout) and exc.tool == "read_thread":
+                        read_failures += 1
+                        self._wait_shared_read(stage, exc, read_failures)
+                        continue
                     failures += 1
-                    self.status(state="connection_failed", reason=str(exc), attempts=failures)
+                    self.status(state="connection_failed", stage=stage, kind=entry["kind"],
+                                session=self.adapter.session, reason=str(exc), attempts=failures)
                     if entry["kind"] != "desktop" or failures >= 5:
                         break
                     if self.stop_event.wait(min(2 **failures, 30)):

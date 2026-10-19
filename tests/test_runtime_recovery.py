@@ -11,6 +11,7 @@ import pytest
 from agent_workspace import backend, model_profiles, runtime
 from agent_workspace.commands import execute
 from agent_workspace.gitstore import GitStore
+from agent_workspace.rpc import RpcTimeout
 from agent_workspace.util import (Conflict, Error, LockBusy, RetryableRead, Unavailable, Uncertain,
                                   encode, locked, read_json, write_json)
 
@@ -138,6 +139,41 @@ def test_read_retry_retains_original_session_binding_and_single_input(desktop_ow
     item = read_json(layout.local_path(root, "inputs/one-input.json"))
     assert item["binding"] == binding and item["state"] == "submitted"
     assert item["result"]["turn"]["id"] == "original-turn"
+
+
+def test_desktop_read_timeouts_keep_observer_and_never_resend_unknown_input(desktop_owner, monkeypatch):
+    app, root, binding, native = desktop_owner
+    for request in ("unknown-send", "later-input"):
+        runtime.queue_input(app, "sea", "alice", request, request_id=request)
+    runner = runtime.Runner(app, "sea", "alice")
+    delays = fast_wait(runner, monkeypatch)
+    remaining = 6
+
+    def read_status():
+        nonlocal remaining
+        if len(native["sent"]) == 1 and remaining:
+            remaining -= 1
+            raise RpcTimeout("tools/call", 30, tool="read_thread")
+
+    def notified():
+        if len(native["sent"]) == 1:
+            raise RpcTimeout("tools/call", 30, tool="send_message_to_thread")
+        runner.stop_event.set()
+
+    native.update(on_status=read_status, on_notify=notified)
+    runner.run()
+    assert remaining == 0
+    assert delays.count(30) == 2
+    # One reconnect for the uncertain write; all six reads keep that connection.
+    assert native["attached"] == ["original-chat", "original-chat"]
+    assert len(native["sent"]) == 2
+    assert "unknown-send" in native["sent"][0][1]
+    assert "later-input" in native["sent"][1][1]
+    assert read_json(layout.local_path(root, "inputs/unknown-send.json"))["state"] == "outcome_unknown"
+    assert read_json(layout.local_path(root, "inputs/later-input.json"))["state"] == "submitted"
+    entry = app.show("sea", "alice")["binding"]
+    assert entry["phase"] == "active" and entry["session"] == "original-chat"
+    assert not entry.get("controller")
 
 
 def test_recovered_read_checks_new_stop_before_dispatch(desktop_owner, monkeypatch):

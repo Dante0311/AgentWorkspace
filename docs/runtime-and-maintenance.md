@@ -87,6 +87,8 @@ aw -w demo message watch helper start --interval 5
 
 SDK 事件流断开或收到独立的终止错误时，运行器保存失败状态并停止，不继续显示为正常运行。错误事实保留在原会话记录中，不伪造成功检查点、不自动重发输入。关闭受管客户端后的 controller 清理不等于释放 Binding；交接中断也必须按原记录检查。
 
+Desktop 正常运行时，`read_thread` 的 RPC 超时只表示该次读取未及时返回。Runner 保留原连接、Binding 和 session，使用可取消的读取退避等待（最长间隔 30 秒，无总次数上限），不会因五次读超时退出。RPC 连接实际关闭仍按连接失败处理；发送超时仍保留原输入 `outcome_unknown`，不重新发送。超时诊断记录具体原生工具名和 RPC 等待期限，连接失败状态保留 stage/session。RPC 默认 30 秒期限不变。
+
 Claude/CodeBuddy 托管入口默认只放行指定的平台 MCP；其他原生工具按用户明确提供的 `--allowed-tool` 开启。默认不加载用户/产品目录中的任意 SDK 配置、MCP 或钩子。实例材料通过进入提示和平台资料工具加载，不宣称原生 SDK 自动识别全部 Skill 目录。平台授权检查不是 OS 沙箱；不要给不受信任实例宽泛的文件/进程权限。
 
 Windows 使用 CodeBuddy SDK 时，用户明确选择的 `.js/.cjs/.mjs` CLI 入口通过已安装的 Node 启动，沿用 SDK 原有参数、权限和通信。Node 需在实际运行器的 PATH 中；缺失或只有 `.cmd/.bat` 包装会在预留新入口或 handoff 前报错。选定的原生 `.exe` 继续直接启动，不自动切换为 SDK 自带程序。此改动只补启动方式，不复制桌面凭据、不切换模型服务或自动登录；返回 `/login` 只说明当前入口需要认证，真实 Windows/WorkBuddy 接手需单独验证。见 [定向复测说明](https://github.com/Dante0311/AW-Workspace/blob/c37ef2e92189adf357dc0e351aff48da9308377f/development/archive/2026-10-09-product-repository/docs/e2e-repair-acceptance.md#e2e-002-单独验证)。

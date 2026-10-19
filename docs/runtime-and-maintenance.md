@@ -42,6 +42,10 @@ aw -w demo layout migrate --agent helper --request-id layout-move-001
 
 保留原 `request-id` 和返回记录。发表结果未知时先核对原操作，继续时使用原参数，只补原计划缺失的步骤；中途修改的文件保留并报告冲突，不能换一个 ID 从头搬迁。只读计划可供 Agent 查询，实际迁移属于用户显式管理操作。
 
+本机尚未保存到实例分支的旧 `messages/*.json` 副本也会检查；只有文件名、消息 ID、完整正式消息及收件 Workspace/Agent 都能证明归属时，才迁入 `.agentworkspace/messages/`。计划中的 `local_paths` 列出这些本机候选，无法证明归属的候选列入 `unclassified_local_files` 并留在原处。正式消息从当前消息布局的明确快照读取，不更改消息或 ACK。
+
+已完成旧迁移但仍遗漏这类副本或可证明归属的 Desktop 记录时，先重新查看计划，再用新的明确 `request-id` 补迁。原完成回执与布局标记保持不变；目标字节不同会报冲突，相同则保留原字节并移除旧位置副本。新补迁若中断，仍须继续该补迁原请求。
+
 默认应用数据在 `~/.agent-workspace`，可用 `--home` 或 `AW_HOME` 指定。软件安装目录、Workspace 数据仓与产品代码仓应分开。检测和 Git 认证规则见 [首次配置](first-use.md)。
 
 wheel 与旧隔离安装脚本保留为 Python 开发和底层构建检查，不再是另一条正式用户安装路线。npm 预览包没有随包安装 Claude、CodeBuddy、企业微信的可选 SDK；这些既有能力的扩展验证不在本轮用户路径内。

@@ -11,7 +11,7 @@ import pytest
 
 from agent_workspace import bridges, commands, layout, message_store, runtime
 from agent_workspace.messages import Messages
-from agent_workspace.util import Conflict, Error, digest, encode, read_json, write_json
+from agent_workspace.util import Conflict, Error, Uncertain, digest, encode, read_json, write_json
 
 
 ACTOR = ("sea", "alice", "b-current")
@@ -267,7 +267,7 @@ def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_
     }
     first = message_state(records, separate=separate)
     latest = message_state(records, separate=separate, generation=2)
-    store.message_snapshot.side_effect = [first, latest]
+    store.message_snapshot.side_effect = [first, latest, latest] if failure_at == "commit" else [first, latest]
     adapter = Mock()
     adapter.status.return_value = "idle"
     if failure_at == "binding":
@@ -294,7 +294,7 @@ def test_poll_rechecks_ownership_and_conditional_publication(local_app, failure_
         assert local_app.require_binding.call_args.args == ACTOR
         assert local_app.require_binding.call_args.kwargs == {}
         adapter.notify.assert_called_once()
-    assert store.message_snapshot.call_count == 2
+    assert store.message_snapshot.call_count == (3 if failure_at == "commit" else 2)
     store.snapshot.assert_not_called()
     store.message_change.assert_called_once()
     claim = store.message_change.call_args
@@ -324,6 +324,53 @@ def test_unused_bridge_manager_does_no_shared_read(local_app):
     local_app.require_binding.reset_mock()
     manager.tick()
     local_app.require_binding.assert_not_called()
+
+
+@pytest.mark.parametrize("progress", ["ack", "messages", "message-index", "binding", "guard", "dispatch",
+                                     "revoked", "no-ack", "unknown"])
+def test_poll_only_absorbs_confirmed_ack_progress(local_app, progress):
+    store = local_app.store.return_value
+    records = {"message-index/m.json": incoming("m"),
+               "messages/m.json": {**incoming("m"), "message_refs": [], "content": "fixture message"}}
+    first = message_state(records, separate=True)
+    before = message_state(records, separate=True, generation=2)
+    observed_records = dict(records)
+    if progress != "no-ack":
+        observed_records["acks/m.json"] = {"message_id": "m"}
+    if progress in ("messages", "message-index"):
+        path = f"{progress}/m.json"
+        observed_records[path] = {**observed_records[path], "future_field": "changed"}
+    observed = message_state(observed_records, separate=True, generation=2)
+    if progress == "binding":
+        observed.main.entries["bindings/b-current.json"] = "changed-binding"
+    elif progress == "guard":
+        observed.messages.entries[layout.MESSAGE_GUARD] = "changed-permission-guard"
+    elif progress == "dispatch":
+        observed.messages.entries["dispatch/alice.json"] = "another-dispatch"
+    failure = Uncertain("Original write outcome unknown") if progress == "unknown" else Conflict("Publication condition changed")
+    revoked = Conflict("Calling entry was revoked")
+
+    def binding(*args, **kwargs):
+        if progress == "revoked" and kwargs.get("snapshot") is observed.main:
+            raise revoked
+        return {}, {"kind": "codex"}
+
+    local_app.require_binding.side_effect = binding
+    store.message_snapshot.side_effect = [first, before, observed]
+    store.change.side_effect = failure
+    adapter = Mock()
+    adapter.status.return_value = "idle"
+    if progress == "ack":
+        assert Messages(local_app).poll(*ACTOR, adapter=adapter) == {"state": "acknowledged", "message_id": "m"}
+    else:
+        with pytest.raises(type(failure)) as error:
+            Messages(local_app).poll(*ACTOR, adapter=adapter)
+        assert error.value is (revoked if progress == "revoked" else failure)
+    assert store.message_snapshot.call_count == (2 if progress == "unknown" else 3)
+    store.message_change.assert_called_once()
+    store.change.assert_called_once()
+    store.snapshot.assert_not_called()
+    adapter.notify.assert_not_called()
 
 
 @pytest.mark.parametrize("pending", ["config", "process", "event"])

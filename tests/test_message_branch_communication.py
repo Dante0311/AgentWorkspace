@@ -149,8 +149,11 @@ def test_claim_preserves_ack_and_original_record_conditions_on_message_branch(br
 
     monkeypatch.setattr(GitStore, "message_change", race)
     adapter = Adapter()
-    with pytest.raises(Conflict):
-        messages.poll("sea", "team", ids["topic"], adapter=adapter)
+    if raced_record == "ack":
+        assert messages.poll("sea", "team", ids["topic"], adapter=adapter) == {"state": "acknowledged", "message_id": "head"}
+    else:
+        with pytest.raises(Conflict):
+            messages.poll("sea", "team", ids["topic"], adapter=adapter)
     assert injected == [raced_record] and adapter.calls == []
     after = store.message_snapshot()
     assert after.main.revision == before.main.revision

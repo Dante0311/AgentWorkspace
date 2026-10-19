@@ -10,7 +10,7 @@ from importlib.resources import files as package_files
 
 from . import workers
 from .gitstore import open_store
-from .layout import expected as expected_layout, instance_path, lock as layout_lock, shared_path
+from .layout import MARKER, MESSAGE_GUARD, expected as expected_layout, instance_path, lock as layout_lock, shared_path
 from .util import Conflict, Error, RetryableRead, Uncertain, digest, encode, locked, now, read_json, slug, uid, write_json
 
 
@@ -489,6 +489,8 @@ class Messages:
         state = store.message_snapshot()
         snap, main = state.messages, state.main
         self.app.require_binding(workspace, agent_id, binding, snapshot=main)
+        if snap.json(shared_path(snap, f"acks/{message['id']}.json")) == {"message_id": message["id"]}:
+            return {"state": "acknowledged", "message_id": message["id"]}
         previous = self._previous_dispatch(snap, main, workspace, agent_id, worker_id)
         if previous.get("message_id") == message["id"] and previous.get("manual_attempt_id"):
             return {"state": "waiting_ack", "message_id": message["id"]}
@@ -501,7 +503,30 @@ class Messages:
                 return {"state": "notification_retry_exhausted", "message_id": message["id"]}
         prompt = self._notification(snap, message)
         # A shared attempt record arbitrates separate local copies, not just one process's lock.
-        self._dispatch(state, workspace, agent_id, binding, message, attempts + 1)
+        try:
+            self._dispatch(state, workspace, agent_id, binding, message, attempts + 1)
+        except Conflict:
+            latest = store.message_snapshot()
+            self._source(workspace, agent_id, binding, latest.main, worker_id)
+            if latest.messages.json(shared_path(latest.messages, f"acks/{message['id']}.json")) != {"message_id": message["id"]}:
+                raise
+            # Only the original ACK may advance these notification conditions.
+            paths = [MARKER, MESSAGE_GUARD, self._dispatch_path(snap, agent_id, worker_id),
+                     shared_path(snap, f"messages/{message['id']}.json"),
+                     shared_path(snap, f"message-index/{message['id']}.json")]
+            if worker_id is not None:
+                paths.append(shared_path(snap, f"dispatch/{agent_id}.json"))
+            if latest.branch != state.branch:
+                raise
+            for path in paths:
+                if latest.messages.entries.get(path) != snap.entries.get(path):
+                    raise
+            permissions = {MARKER: main.entries.get(MARKER),
+                           **self._entry_expected(workspace, main, agent_id, binding, worker_id)}
+            for path, expected in permissions.items():
+                if latest.main.entries.get(path) != expected:
+                    raise
+            return {"state": "acknowledged", "message_id": message["id"]}
         self.app.require_binding(workspace, agent_id, binding)
         try:
             adapter.notify(prompt, message["delivery"])

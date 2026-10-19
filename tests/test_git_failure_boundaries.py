@@ -35,6 +35,27 @@ def test_only_known_transport_read_failures_are_retryable(store, monkeypatch, co
         store.git(command, "origin")
 
 
+@pytest.mark.parametrize("command", ["ls-remote", "fetch"])
+@pytest.mark.parametrize("stdout,stderr", [(b"", b""), (b" \n", b"\t\r\n")])
+def test_empty_128_read_uses_existing_read_backoff(store, monkeypatch, command, stdout, stderr):
+    monkeypatch.setattr(gitstore, "run", lambda *a, **k: subprocess.CompletedProcess(a[0], 128, stdout, stderr))
+    with pytest.raises(RetryableRead) as error:
+        store.git(command, "origin")
+    assert "128" in str(error.value)
+    assert f"stdout_bytes={len(stdout)}" in str(error.value)
+    assert f"stderr_bytes={len(stderr)}" in str(error.value)
+
+
+@pytest.mark.parametrize("command,code", [("ls-remote", 1), ("fetch", 129), ("push", 128), ("commit-tree", 128)])
+def test_other_empty_failures_do_not_gain_read_retries(store, monkeypatch, command, code):
+    result = subprocess.CompletedProcess([], code, b"", b"")
+    monkeypatch.setattr(gitstore, "run", lambda *a, **k: result)
+    with pytest.raises(Error) as error:
+        store.git(command, "origin")
+    assert not isinstance(error.value, RetryableRead)
+    assert store.git(command, "origin", check=False) is result
+
+
 @pytest.mark.parametrize("detail", [
     b"Permission denied; connection timed out", b"SSL certificate problem; connection reset",
     b"schannel: SEC_E_INVALID_TOKEN", b"The requested URL returned error: 403",

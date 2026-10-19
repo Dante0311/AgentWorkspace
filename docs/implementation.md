@@ -179,6 +179,8 @@ Windows Codex Desktop 的限定实测覆盖自动创建、目录和身份绑定�
 
 只对已观察到的 `schannel: next InitializeSecurityContext failed: SEC_E_INVALID_TOKEN (0x80090308)`，允许 `ls-remote` / `fetch` 进入既有读取退避；不修改调用方的次数或等待规则，Runner 等待仍可由停止请求取消。新请求仍完整执行 TLS 校验，其他 TLS 诊断、证书、认证或完整性错误优先阻止重试。这不是已查明 TLS 根因或保证下一次读取成功；该错误码只说明输入令牌格式无效，参见 [Microsoft Schannel 说明](https://learn.microsoft.com/en-us/windows/win32/secauthn/initializesecuritycontext--schannel)。
 
+日常现场另观察到 `ls-remote` 返回 128、stdout/stderr 没有可用诊断的读取失败。仅当 `ls-remote` / `fetch` 返回 128 且两份输出都为空白时，按 `RetryableRead` 进入既有读取退避；空诊断补充命令名、退出码和输出字节数，不记录完整参数或凭据。Runner 现有等待间隔最高 30 秒，可取消，没有新增总次数上限；其他调用方策略不变。这是针对实际现象的有限范围分类，不代表已确定 TLS、认证或网络根因。非空未知错误、其他退出码及所有写入不因这项改动获得重试。
+
 Git push 超时或 TLS 失败仍按原提交只读核对，确认原提交或其后继包含该提交才成功，否则保留 `outcome_unknown`。明确的远端并发拒绝（包含本次目标 ref 和预期版本匹配的 `cannot lock ref ... is at ... but expected ...`）也先核对原提交；确认未发布后才返回 `Conflict`，由 `change` 重新读取并验证原文件版本，不能覆盖别人已改动的对象或重推旧提交。无法核对时仍为 `outcome_unknown`；其他锁失败不套用并发重试。
 
 `finish_stop` 可接收 `expected_controller`、`expected_checkpoint` 和 `expected_session`。受管调用方应传入实际停止观测所对应的值，核心在同一共享快照中核对入口、检查点归属和材料，并将相关版本纳入条件提交。重复 stop 不改变原检查点，重复或并发确认只返回匹配的既有 handoff；原入口的已发布结果读回不会改变后继入口。发布结果核对包含快照及 Binding/handoff 内容读取；发布可能发生后的内容读取暂时失败保留 `outcome_unknown`，不能作为停止前读取重试。兼容旧调用方省略观测字段，但不把这一兼容路径当作实际原生观测证明。运行循环已对可恢复读取故障退避并保留原输入进度。独立停止观察过程只继续既有请求；正常启动、`agent.stop`、维护 `continue-stop` 与工作台均可复用该入口，仍须由真实 Harness 确认忙碌、空闲或未知，不以协议夹具代替 Desktop 实测。

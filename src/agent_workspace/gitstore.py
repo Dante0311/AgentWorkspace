@@ -174,7 +174,12 @@ class GitStore:
             raise Error(message) from exc
         if check and result.returncode:
             output = result.stdout + result.stderr
-            detail = command_detail(output) or f"Git {args[0]} exited {result.returncode}"
+            detail = command_detail(output) or (
+                f"Git {args[0]} exited {result.returncode} "
+                f"(stdout_bytes={len(result.stdout)}, stderr_bytes={len(result.stderr)})")
+            if (args[0] in ("ls-remote", "fetch") and result.returncode == 128
+                    and not result.stdout.strip() and not result.stderr.strip()):
+                raise RetryableRead(detail)
             if args[0] in ("ls-remote", "fetch") and temporary_transport_failure(output.decode("utf-8", errors="replace")):
                 raise RetryableRead(detail)
             raise Error(detail)

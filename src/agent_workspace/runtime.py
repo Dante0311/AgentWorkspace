@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import sys
 import threading
@@ -1107,6 +1108,35 @@ def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="u
     return record
 
 
+def _input_notice_matches(turn, workspace, agent_id, binding, worker_id, session, request_id, source_thread):
+    for item in turn.get("items", []):
+        if (item.get("type") != "functionCallOutput" or item.get("namespace") != "codex_app"
+                or item.get("name") != "send_message_to_thread"):
+            continue
+        output = item.get("output", {})
+        if not isinstance(output, dict) or output.get("truncated") or not isinstance(output.get("text"), str):
+            continue
+        notice = re.fullmatch(r"<codex_delegation>\s*<source_thread_id>([^<]+)</source_thread_id>\s*"
+                              r"<input>(.*)</input>\s*</codex_delegation>", output["text"].strip(), re.DOTALL)
+        if not notice or notice[1] != source_thread:
+            continue
+        blocks = notice[2].strip().split("\n\n")
+        try:
+            context, command = json.loads(blocks[0]), json.loads(blocks[-1])
+            if not isinstance(context, dict) or not isinstance(command, list) or len(command) < 3:
+                continue
+            arguments = json.loads(command[-1])
+        except (ValueError, TypeError):
+            continue
+        if (all(context.get(key) == value for key, value in {
+                "workspace": workspace, "agent": agent_id, "binding": binding,
+                "worker_id": worker_id, "session": session}.items())
+                and command[-3:-1] == ["runtime.receive-input", "--arguments"]
+                and arguments == {"request_id": request_id}):
+            return True
+    return False
+
+
 def receive_input(app, workspace, agent_id, binding, request_id, directory=None, worker_id=None):
     """Associate a delivered Desktop input with its actual executing native turn."""
     if desktop_actor(app, workspace, agent_id) != (workspace, agent_id, binding):
@@ -1118,22 +1148,29 @@ def receive_input(app, workspace, agent_id, binding, request_id, directory=None,
     with layout.lock(root, "files.lock", worker_id=worker_id):
         path = layout.local_path(root, "inputs", worker_id) / (identifier + ".json")
         item = read_json(path)
-        if not item or item["binding"] != binding or item["state"] not in ("dispatching", "submitted"):
+        if not item or item["binding"] != binding or item["state"] not in ("dispatching", "submitted", "outcome_unknown"):
             raise Conflict("This input is not awaiting this Desktop session.")
         if item.get("result", {}).get("turn", {}).get("id"):
             return {"request_id": request_id, "already_received": True,
                     "instruction": "Do not repeat execution; the original receipt is retained."}
+        if item["state"] == "outcome_unknown" and not item.get("notification_source_thread"):
+            raise Unavailable("The original notification source was not recorded; its outcome remains unknown.")
         adopted = read_json(layout.local_path(root, "entry.json", worker_id))
         config = adopted["config"] if worker_id is not None else model_profiles.runtime_config(root)
         adapter = Desktop(root, config, os.environ["CODEX_THREAD_ID"], worker_id=worker_id)
         try:
-            result = adapter.read()
+            options = {"includeOutputs": True, "maxOutputCharsPerItem": 6000} if item["state"] == "outcome_unknown" else {}
+            result = adapter.read(**options)
         finally:
             adapter.close()
         turns = result.get("turns", [])
         if result["thread"]["status"]["type"] != "active" or not turns or turns[0].get("status") != "inProgress":
             raise Unavailable("Desktop cannot identify the active native turn; no input receipt was recorded.")
-        app.require_binding(workspace, agent_id, binding)
+        if item["state"] == "outcome_unknown" and not _input_notice_matches(
+                turns[0], workspace, agent_id, binding, worker_id, entry["session"], identifier,
+                item["notification_source_thread"]):
+            raise Unavailable("The active native turn does not prove this original input notice; its outcome remains unknown.")
+        app.require_binding(workspace, agent_id, binding, worker_id=worker_id)
         item.update(state="submitted", result={**item.get("result", {}), "turn": {"id": turns[0]["id"]}})
         write_json(path, item)
         return {"request_id": request_id, "text": item["text"]}
@@ -1726,6 +1763,7 @@ class Runner:
             if isinstance(self.adapter, Desktop):
                 profile, validation = self.adapter.model_choice("send_message_to_thread", self.binding)
                 item["model_profile"] = model_profiles.receipt(profile, validation)
+                item["notification_source_thread"] = self.adapter.config["caller_thread"]
             elif isinstance(self.adapter, Codex):
                 item["model_profile"] = model_profiles.receipt(self.adapter.profile, self.adapter.profile_validation)
             item.update(state="dispatching", attempted_at=now())

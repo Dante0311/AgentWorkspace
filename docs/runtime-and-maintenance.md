@@ -199,6 +199,8 @@ aw -w demo maintenance repair helper --repair-action controller-cleanup --expect
 
 Desktop 原聊天从共用项目切到自己的已登记资料目录后，可以继续核验为同一个本机入口；观察结果返回实际 `native_cwd`，保留原进入时记录。其他目录、其他机器、变化的 Binding 或 session 仍不能通过这一检查。
 
+Desktop 输入发送超时后仍保留 `outcome_unknown`，不重新发送。新发送在调用原生工具前保存捕获连接的发送聊天来源；迟到的 `runtime.receive-input` 只有在原会话的当前活动轮次中，找到完整原通知，且发送来源、请求 ID、Binding、Worker 与 session 全部匹配时，才能领取一次正文并关联该实际轮次。仅讨论相同 ID、转述通知、其他聊天发送的相同正文、截断内容或已结束轮次都不能据此认领。旧记录没有可信原发送来源时保持未知；不能从当前配置倒填，不能将已结束的拒绝领取轮次当成业务完成。此路径不补发通知、不直接完成业务，也不重写原超时与尝试时间。
+
 ## 5. 当前能力与验收边界
 
 用户与 Agent 共用一份随包维护的[当前版本支持范围](../src/agent_workspace/resources/prompts/capabilities.md)，不在这里另存一张可能漂移的矩阵。工作台与首次配置页可打开 `/capabilities` 查看本机安装版本，不需要 Git、账号或额外服务。

@@ -31,6 +31,7 @@ def desktop_owner(app, monkeypatch):
 
         def __init__(self, root, config, session, *, read_only=False, worker_id=None, title=None):
             self.root, self.read_only = root, read_only
+            self.config = config
             self.session = session
             native["attached"].append(session)
             native.setdefault("read_only", []).append(read_only)
@@ -113,7 +114,11 @@ def test_read_retry_retains_original_session_binding_and_single_input(desktop_ow
     runtime.queue_input(app, "sea", "alice", "explicit test input", request_id="one-input")
     runner = runtime.Runner(app, "sea", "alice")
     delays = fast_wait(runner, monkeypatch)
-    native["on_notify"] = runner.stop_event.set
+    def notified():
+        pending = read_json(layout.local_path(root, "inputs/one-input.json"))
+        assert pending["state"] == "dispatching" and pending["notification_source_thread"] == "caller"
+        runner.stop_event.set()
+    native["on_notify"] = notified
     original_head = GitStore.head
     remaining = 2
 

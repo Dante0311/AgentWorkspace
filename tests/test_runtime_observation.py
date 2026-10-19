@@ -41,6 +41,7 @@ def original_entry(app, monkeypatch, request):
         def __init__(self, directory, config, session, *, read_only=False, worker_id=None, title=None):
             assert directory == root and session == "original-chat"
             assert config["pipe_path"] == "original-pipe"
+            self.config = config
             self.session = session
             self.read_only = read_only
             self.tools = {"send_message_to_thread": {}}

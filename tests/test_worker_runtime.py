@@ -1,5 +1,6 @@
 """Same-Agent Worker isolation using real Git and protocol-only native peers."""
 import json
+import threading
 import time
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -75,6 +76,7 @@ def test_worker_overrides_and_adopted_configuration_remain_independent(team):
 def test_two_controllers_pause_and_recover_only_the_original_worker(team, monkeypatch):
     app, root, bindings = team
     sent, connected, probed = [], [], []
+    ready = {worker: threading.Event() for worker in bindings}
 
     class DesktopPeer:
         supports_insert = True
@@ -87,6 +89,7 @@ def test_two_controllers_pause_and_recover_only_the_original_worker(team, monkey
             assert config == read_json(layout.local_path(root, "entry.json", worker_id))["config"]
             if not read_only:
                 connected.append((worker_id, session, config["kind"]))
+                ready[worker_id].set()
 
         def read(self):
             assert self.read_only
@@ -122,12 +125,20 @@ def test_two_controllers_pause_and_recover_only_the_original_worker(team, monkey
     try:
         for worker, binding in bindings.items():
             assert service.recover("team", "owner", expected_binding=binding)["state"] == "starting_runner"
+        # Claiming a controller publishes the real main/message permission refs.
+        # Wait for that startup before timing input delivery, rather than making
+        # two concurrent Git publications share the input's short deadline.
+        for worker in bindings:
+            assert ready[worker].wait(60), service.status()
         until(lambda: all(read_json(layout.local_path(root, "inputs/one.json", worker))["state"] == "submitted"
                           for worker in bindings))
         assert len(service.runners) == 2
         assert {item["worker_id"] for item in service.status()["runners"]} == set(bindings)
         assert service.cancel(root, bindings["default"], worker_id="default")
-        service.runners[(root, "default")]["thread"].join(10)
+        # Exiting also publishes controller removal; joining the native mock
+        # alone would leave real Git cleanup running into the next recovery.
+        service.runners[(root, "default")]["thread"].join(60)
+        assert not service.runners[(root, "default")]["thread"].is_alive(), service.status()
         assert service.runners[(root, "topic")]["thread"].is_alive()
         # A submitted result belongs to the original turn. Restarting observation
         # must not reset it to queued, even when current Agent defaults changed.
@@ -145,8 +156,8 @@ def test_two_controllers_pause_and_recover_only_the_original_worker(team, monkey
         for task in service.threads:
             task["runner"].stop_event.set()
         for task in service.threads:
-            task["thread"].join(10)
-        assert not any(task["thread"].is_alive() for task in service.threads)
+            task["thread"].join(60)
+        assert not any(task["thread"].is_alive() for task in service.threads), service.status()
 
 
 def test_unknown_transfer_preserves_peer_and_original_launch(team, monkeypatch):

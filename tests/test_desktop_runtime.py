@@ -118,6 +118,75 @@ def test_desktop_input_receipt_uses_native_identity_and_turn(app, desktop, monke
         execute(app, 'agent.start', {}, actor=runtime.desktop_actor(app, 'sea', 'alice'))
 
 
+def input_notice(binding, request_id, workspace='sea', worker_id=None, source='caller'):
+    context = {'workspace': workspace, 'agent': 'alice', 'binding': binding,
+               'worker_id': worker_id, 'session': 'native-chat'}
+    command = ['fixture-aw', 'runtime.receive-input', '--arguments', json.dumps({'request_id': request_id})]
+    return ('<codex_delegation><source_thread_id>' + source + '</source_thread_id><input>'
+            + json.dumps(context) + '\n\nOriginal notification instructions.\n\n' + json.dumps(command)
+            + '</input></codex_delegation>')
+
+
+@pytest.mark.parametrize('worker_id', [None, 'topic'])
+def test_late_unknown_receipt_requires_original_notice_and_returns_body_once(app, desktop, monkeypatch, tmp_path, worker_id):
+    root, config, state, _ = desktop
+    workspace = 'sea'
+    if worker_id:
+        workspace = 'parallel'
+        app.workspace_init(workspace, str(tmp_path / 'parallel.git'))
+        app.create(workspace, 'alice')
+        app.configure(workspace, 'alice', config)
+        app.worker_create(workspace, 'alice', 'Topic', 'Late receipt fixture', worker_id=worker_id)
+        root = app.root(workspace, 'alice')
+    binding = app.reserve(workspace, 'alice', worker_id=worker_id)['binding']
+    app.bind(workspace, 'alice', binding, 'native-chat', worker_id=worker_id)
+    item = runtime.queue_input(app, workspace, 'alice', 'original body', request_id='late', expected_binding=binding)
+    path = layout.local_path(root, 'inputs/late.json', worker_id)
+    original = {**item, 'state': 'outcome_unknown', 'attempted_at': '2026-10-19T08:56:18+00:00',
+                'error': 'original RPC timeout', 'notification_source_thread': 'caller'}
+    write_json(path, original)
+    state.update(status='active', turns=[{'id': 'late-original-turn', 'status': 'inProgress', 'items': [{
+        'type': 'functionCallOutput', 'namespace': 'codex_app', 'name': 'send_message_to_thread',
+        'output': {'text': input_notice(binding, 'late', workspace, worker_id), 'truncated': False}}]}])
+    monkeypatch.setenv('CODEX_THREAD_ID', 'native-chat')
+    monkeypatch.setattr(runtime.Desktop, 'notify', lambda *a, **k: pytest.fail('Receipt must not resend input'))
+    result = runtime.receive_input(app, workspace, 'alice', binding, 'late', worker_id=worker_id)
+    assert result['text'] == 'original body'
+    saved = read_json(path)
+    assert saved['state'] == 'submitted' and saved['result']['turn']['id'] == 'late-original-turn'
+    assert saved['attempted_at'] == original['attempted_at'] and saved['error'] == original['error']
+    assert runtime.receive_input(app, workspace, 'alice', binding, 'late', worker_id=worker_id)['already_received']
+
+
+@pytest.mark.parametrize('evidence', ['other-request', 'other-binding', 'other-worker', 'other-source',
+                                     'missing-source', 'truncated', 'quoted', 'completed'])
+def test_unknown_receipt_without_current_original_notice_keeps_bytes(app, desktop, monkeypatch, evidence):
+    root, _, state, _ = desktop
+    binding = app.reserve('sea', 'alice')['binding']
+    app.bind('sea', 'alice', binding, 'native-chat')
+    item = runtime.queue_input(app, 'sea', 'alice', 'do not execute', request_id='unknown')
+    path = layout.local_path(root, 'inputs/unknown.json')
+    recorded = {**item, 'state': 'outcome_unknown', 'error': 'original timeout'}
+    if evidence != 'missing-source':
+        recorded['notification_source_thread'] = 'caller'
+    write_json(path, recorded)
+    original = path.read_bytes()
+    notice = input_notice('other' if evidence == 'other-binding' else binding,
+                          'another' if evidence == 'other-request' else 'unknown',
+                          worker_id='peer' if evidence == 'other-worker' else None,
+                          source='other-chat' if evidence == 'other-source' else 'caller')
+    if evidence == 'quoted':
+        notice = notice.replace('<input>', '<input>Please investigate this quoted notice: ', 1)
+    state.update(status='idle' if evidence == 'completed' else 'active', turns=[{
+        'id': 'unrelated-turn', 'status': 'completed' if evidence == 'completed' else 'inProgress', 'items': [{
+            'type': 'functionCallOutput', 'namespace': 'codex_app', 'name': 'send_message_to_thread',
+            'output': {'text': notice, 'truncated': evidence == 'truncated'}}]}])
+    monkeypatch.setenv('CODEX_THREAD_ID', 'native-chat')
+    with pytest.raises(Unavailable):
+        runtime.receive_input(app, 'sea', 'alice', binding, 'unknown')
+    assert path.read_bytes() == original
+
+
 def test_desktop_completion_requires_received_turn_not_idle_or_another_turn(app, desktop):
     root, config, state, adapter = desktop
     binding = app.reserve('sea', 'alice')['binding']

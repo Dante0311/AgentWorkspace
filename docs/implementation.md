@@ -16,6 +16,8 @@ Core 已接入 `App.prepare_agent_directory(workspace, agent_id, directory=None)
 
 `Binding.execution.directory` 继续表示个人资料根；`App.bind(..., cwd=None)` 只在调用方提供真实新会话的 cwd 时保存 `execution.cwd`，不从个人资料根推测，也不回填历史。Runtime 已接入所选项目目录、真实会话目录和个人资料根的分离：按真实 session 的索引识别调用者，换命令 cwd 不改变身份或恢复旧资格；Desktop 创建、原建聊核对与手动绑定保存实际 cwd，观察按该事实核对，历史无 cwd 的记录仍按原独立项目规则检查。进入材料明确给出身份、实例分支、职责文件、Skills、所选项目和实际 cwd，并附原交接检查点。
 
+2026-10-19 日常恢复修复允许同一 Desktop 聊天从原项目目录切回该 Agent 已登记的个人资料根，观察仍检查原 Binding、session、本机安装和真实 host；其他目录仍拒绝。`controller-cleanup` 补充了后台意外退出、尚未生成清理提交的路径：要求后台已停止、操作系统 Runner 锁可取得、本机原入口和真实聊天相符，按原共享版本只删除残留 controller。已有清理失败记录仍走原提交核对，不释放 Binding，也不重放输入。这些是实现范围，开发检查和日常实测结果分别记录。
+
 `agent start --here` 核验用户已打开的新 Desktop 聊天，准备个人资料目录并绑定此聊天，直接返回进入材料，不调用建聊或输入发送接口。模型或强度已报告且不符时拒绝绑定；没有原生报告时明确 unconfirmed。未知原创建、已有 controller 或已绑定入口不允许被替换。默认 `agent start` 保持自动建聊路径；准备及捕获、绑定、交接调用公共目录准备接口。
 
 2026-10-15 本机独立 E2E 通过的受测候选是 `9026ad0b1ab47b8c2b99c27ec1b69c4dfe19856e`，Windows x64 npm 包 SHA256 为 `9868cd74c7f7614500f429ce7c22b497be15a9d45aa14cef7b947d32d6c1d760`。两个新测试 Agent 共用既有 Codex 项目，实际文件结果为 13、18，各自资料根与实例分支相符；跨 Agent 写入和未获准管理操作被拒绝。同一 Agent 保存实际检查点并正常释放旧入口后，在原本不存在的新资料位置自动准备 worktree，在已有新聊天执行一次 `--here` 接回身份，从 13 继续到 14 并保存新检查点；旧原生聊天实际发起的受管写入被拒绝，目标文件未产生。
@@ -176,6 +178,10 @@ Windows Codex Desktop 的限定实测覆盖自动创建、目录和身份绑定�
 当前公共存储已区分读取故障，并补齐停止条件。`RetryableRead` 只表示当前 Git 读取可重试，不能据此重跑投递或整个业务操作；缓存锁忙与普通运行锁冲突分开，权限、TLS、损坏和未知错误不默认重试。GitHub GET 的明确暂时故障采用同一分类，写入及其核对失败不会降成读取重试。
 
 只对已观察到的 `schannel: next InitializeSecurityContext failed: SEC_E_INVALID_TOKEN (0x80090308)`，允许 `ls-remote` / `fetch` 进入既有读取退避；不修改调用方的次数或等待规则，Runner 等待仍可由停止请求取消。新请求仍完整执行 TLS 校验，其他 TLS 诊断、证书、认证或完整性错误优先阻止重试。这不是已查明 TLS 根因或保证下一次读取成功；该错误码只说明输入令牌格式无效，参见 [Microsoft Schannel 说明](https://learn.microsoft.com/en-us/windows/win32/secauthn/initializesecuritycontext--schannel)。
+
+日常现场另观察到 `ls-remote` 返回 128、stdout/stderr 没有可用诊断的读取失败。仅当 `ls-remote` / `fetch` 返回 128 且两份输出都为空白时，按 `RetryableRead` 进入既有读取退避；空诊断补充命令名、退出码和输出字节数，不记录完整参数或凭据。Runner 现有等待间隔最高 30 秒，可取消，没有新增总次数上限；其他调用方策略不变。这是针对实际现象的有限范围分类，不代表已确定 TLS、认证或网络根因。非空未知错误、其他退出码及所有写入不因这项改动获得重试。
+
+本地 blob 读取出现退出码 1 且 stdout/stderr 都为零字节时，`GitStore.blob` 额外读取同一对象一次；只有读取成功、没有诊断且完整内容的 Git 对象哈希与原 SHA 一致，才按 `RetryableRead` 交给调用方退避并重新检查执行资格。校验失败、对象缺失或损坏继续报错，JSON 格式错误由原解析位置报告。失败诊断包含对象 SHA、退出码与输出字节数，便于追查原对象。正常读取、写入及其结果核对规则保持原样。
 
 Git push 超时或 TLS 失败仍按原提交只读核对，确认原提交或其后继包含该提交才成功，否则保留 `outcome_unknown`。明确的远端并发拒绝（包含本次目标 ref 和预期版本匹配的 `cannot lock ref ... is at ... but expected ...`）也先核对原提交；确认未发布后才返回 `Conflict`，由 `change` 重新读取并验证原文件版本，不能覆盖别人已改动的对象或重推旧提交。无法核对时仍为 `outcome_unknown`；其他锁失败不套用并发重试。
 

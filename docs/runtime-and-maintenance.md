@@ -42,6 +42,10 @@ aw -w demo layout migrate --agent helper --request-id layout-move-001
 
 保留原 `request-id` 和返回记录。发表结果未知时先核对原操作，继续时使用原参数，只补原计划缺失的步骤；中途修改的文件保留并报告冲突，不能换一个 ID 从头搬迁。只读计划可供 Agent 查询，实际迁移属于用户显式管理操作。
 
+本机尚未保存到实例分支的旧 `messages/*.json` 副本也会检查；只有文件名、消息 ID、完整正式消息及收件 Workspace/Agent 都能证明归属时，才迁入 `.agentworkspace/messages/`。计划中的 `local_paths` 列出这些本机候选，无法证明归属的候选列入 `unclassified_local_files` 并留在原处。正式消息从当前消息布局的明确快照读取，不更改消息或 ACK。
+
+已完成旧迁移但仍遗漏这类副本或可证明归属的 Desktop 记录时，先重新查看计划，再用新的明确 `request-id` 补迁。原完成回执与布局标记保持不变；目标字节不同会报冲突，相同则保留原字节并移除旧位置副本。新补迁若中断，仍须继续该补迁原请求。
+
 默认应用数据在 `~/.agent-workspace`，可用 `--home` 或 `AW_HOME` 指定。软件安装目录、Workspace 数据仓与产品代码仓应分开。检测和 Git 认证规则见 [首次配置](first-use.md)。
 
 wheel 与旧隔离安装脚本保留为 Python 开发和底层构建检查，不再是另一条正式用户安装路线。npm 预览包没有随包安装 Claude、CodeBuddy、企业微信的可选 SDK；这些既有能力的扩展验证不在本轮用户路径内。
@@ -82,6 +86,8 @@ aw -w demo message watch helper start --interval 5
 `starting_runner` 只表示已请求启动运行任务，真实 Session 和 active Binding 必须由原生事件确认；初始化完成还需初始检查点。统一后台在同一进程内管理这些任务。收到 Message 通知不等于业务完成，ACK 必须由当前实例的 `message.receive` 实际保存。
 
 SDK 事件流断开或收到独立的终止错误时，运行器保存失败状态并停止，不继续显示为正常运行。错误事实保留在原会话记录中，不伪造成功检查点、不自动重发输入。关闭受管客户端后的 controller 清理不等于释放 Binding；交接中断也必须按原记录检查。
+
+Desktop 正常运行时，`read_thread` 的 RPC 超时只表示该次读取未及时返回。Runner 保留原连接、Binding 和 session，使用可取消的读取退避等待（最长间隔 30 秒，无总次数上限），不会因五次读超时退出。RPC 连接实际关闭仍按连接失败处理；发送超时仍保留原输入 `outcome_unknown`，不重新发送。超时诊断记录具体原生工具名和 RPC 等待期限，连接失败状态保留 stage/session。RPC 默认 30 秒期限不变。
 
 Claude/CodeBuddy 托管入口默认只放行指定的平台 MCP；其他原生工具按用户明确提供的 `--allowed-tool` 开启。默认不加载用户/产品目录中的任意 SDK 配置、MCP 或钩子。实例材料通过进入提示和平台资料工具加载，不宣称原生 SDK 自动识别全部 Skill 目录。平台授权检查不是 OS 沙箱；不要给不受信任实例宽泛的文件/进程权限。
 
@@ -185,11 +191,17 @@ aw -w demo maintenance repair helper --repair-action controller-cleanup --expect
 
 `controller-cleanup` 沿用同一 `maintenance.repair` 目标授权，管家不能自授。执行前用公开 `agent show` 核对原 Binding、session、controller 及失败记录中的原清理提交；用 `workspace doctor` 的顶层 `revision` 取得共享快照版本，不能使用 `agent show` 顶层的 Agent 文件 blob revision 替代。Runtime 按该快照核对原 Binding 文件版本，重新观察本机执行位置、原 Runner 已退出及原生会话；只对仍匹配的 controller 继续清理，不重推旧整笔提交。
 
+后台被意外终止时，可能没有生成清理提交，最后状态也仍是运行中或共享读取恢复。先确认后台已停止，此时可省略 `--cleanup-commit`：Runtime 必须取得原副本的操作系统 Runner 锁、确认后台已停止、核对原 Binding 的本机记录及真实 Desktop 会话，再按原快照条件删除 controller。已有 `cleanup_errors`，或状态已记录为 `failed` / `native_stop_unconfirmed` 时，仍须核对原失败及清理提交；唯一的清理失败可能不会进入 `cleanup_errors`，不能因列表为空跳过未知发布的核对。这个动作只移除已退出的观察器记录，保留原 Binding、聊天、待处理输入和 Watch。
+
 此动作保留 Runtime 的实际结果：`controller_cleared` 表示本次清理返回成功，`controller_already_cleared` 表示原 controller 已不存在；`cleanup_blocked`、`cleanup_paused` 及 `reason_code` 保留阻止原因。Conflict 或结果未知不自动重试动作。结果先持久保存，`verification.cleanup` 再独立读取固定旧 Binding 的 session、phase、controller、当前入口及共享快照版本，区分 `controller_present`、`controller_cleared` 和 `request_changed`；后继入口或替换 controller 出现时不对它执行清理。首次结果和稍后的观察可能不同，两者都保留。复查失败只补观察，`attempting`/`outcome_unknown` 不重放清理。
 
 清理成功不表示 Runner 已恢复。只有重新核对现场和授权后，才用另一个明确的稳定 request ID 请求 `runtime-recover`；恢复继续尊重用户暂停、未知输入及原生目录不匹配。同一清理 request ID 的任何原参数都不能变更，重复请求只读取原动作及当前观察，不再清理或启动。
 
 用户显式运行 `aw -w demo runtime start helper` 可以恢复此前停止的运行观察；已有会话与后台自动恢复使用同一套资格检查，新建中的入口仍使用原首次启动过程。自动恢复和 `runtime-recover` 不清除暂停，也不打开已停止的 Watch。从未发送且仍获授权的队列输入沿原规则继续，已提交或结果不明的输入不重发。
+
+Desktop 原聊天从共用项目切到自己的已登记资料目录后，可以继续核验为同一个本机入口；观察结果返回实际 `native_cwd`，保留原进入时记录。其他目录、其他机器、变化的 Binding 或 session 仍不能通过这一检查。
+
+Desktop 输入发送超时后仍保留 `outcome_unknown`，不重新发送。新发送在调用原生工具前保存捕获连接的发送聊天来源；迟到的 `runtime.receive-input` 只有在原会话的当前活动轮次中，找到完整原通知，且发送来源、请求 ID、Binding、Worker 与 session 全部匹配时，才能领取一次正文并关联该实际轮次。仅讨论相同 ID、转述通知、其他聊天发送的相同正文、截断内容或已结束轮次都不能据此认领。旧记录没有可信原发送来源时保持未知；不能从当前配置倒填，不能将已结束的拒绝领取轮次当成业务完成。此路径不补发通知、不直接完成业务，也不重写原超时与尝试时间。
 
 ## 5. 当前能力与验收边界
 

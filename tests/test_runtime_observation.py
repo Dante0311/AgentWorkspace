@@ -41,6 +41,7 @@ def original_entry(app, monkeypatch, request):
         def __init__(self, directory, config, session, *, read_only=False, worker_id=None, title=None):
             assert directory == root and session == "original-chat"
             assert config["pipe_path"] == "original-pipe"
+            self.config = config
             self.session = session
             self.read_only = read_only
             self.tools = {"send_message_to_thread": {}}
@@ -139,6 +140,22 @@ def test_recovery_refuses_changed_native_cwd_without_moving_chat_or_claiming_con
     assert result["state"] == "recovery_blocked" and result["reason_code"] == "native_local_copy_unconfirmed"
     assert not manager.runners and not peer["attached"] and not peer["inputs"]
     assert store.snapshot().entries == before.entries
+
+
+def test_original_chat_moved_to_its_registered_material_directory_is_confirmed(original_entry):
+    app, root, binding, peer = original_entry
+    store = app.store("sea")
+    snap = store.snapshot()
+    path = layout.shared_path(snap, f"bindings/{binding}.json")
+    entry = snap.json(path)
+    entry["execution"]["cwd"] = str(root.parent / "original-shared-project")
+    store.change("main", {path: encode(entry)}, {path: snap.entries[path]}, "Original shared-project observation")
+    before = store.snapshot()
+    result = runtime.desktop_observe(app, "sea", "alice")
+    assert result["local_session_confirmed"] and result["session"] == "original-chat"
+    assert result["native_cwd"] == str(root)
+    assert store.snapshot().entries == before.entries
+    assert not peer["attached"] and not peer["inputs"]
 
 
 def test_pause_arriving_during_native_observation_prevents_recovery(original_entry, monkeypatch):

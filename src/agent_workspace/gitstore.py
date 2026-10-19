@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import errno
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -174,7 +175,12 @@ class GitStore:
             raise Error(message) from exc
         if check and result.returncode:
             output = result.stdout + result.stderr
-            detail = command_detail(output) or f"Git {args[0]} exited {result.returncode}"
+            detail = command_detail(output) or (
+                f"Git {args[0]} exited {result.returncode} "
+                f"(stdout_bytes={len(result.stdout)}, stderr_bytes={len(result.stderr)})")
+            if (args[0] in ("ls-remote", "fetch") and result.returncode == 128
+                    and not result.stdout.strip() and not result.stderr.strip()):
+                raise RetryableRead(detail)
             if args[0] in ("ls-remote", "fetch") and temporary_transport_failure(output.decode("utf-8", errors="replace")):
                 raise RetryableRead(detail)
             raise Error(detail)
@@ -225,7 +231,28 @@ class GitStore:
         return Snapshot(self, sha, entries)
 
     def blob(self, sha: str) -> bytes:
-        return self.git("cat-file", "blob", sha).stdout
+        result = self.git("cat-file", "blob", sha, check=False)
+        if not result.returncode:
+            return result.stdout
+        failure = (f"Git cat-file blob {sha} exited {result.returncode} "
+                   f"(stdout_bytes={len(result.stdout)}, stderr_bytes={len(result.stderr)})")
+        if result.returncode == 1 and not result.stdout and not result.stderr:
+            # An empty process failure does not prove a readable object. Verify the
+            # same immutable blob before asking the caller to reobserve ownership.
+            try:
+                verified = self.git("cat-file", "blob", sha, check=False)
+            except Error as exc:
+                raise Error(f"{failure}; object verification failed: {exc}") from exc
+            if not verified.returncode and not verified.stderr:
+                content = b"blob " + str(len(verified.stdout)).encode() + b"\0" + verified.stdout
+                actual = hashlib.new("sha256" if len(sha) == 64 else "sha1", content).hexdigest()
+                if actual != sha:
+                    raise Error(f"{failure}; object verification returned a different content hash")
+                raise RetryableRead(f"{failure}; the same object was verified in a fresh read")
+            detail = command_detail(verified.stdout + verified.stderr)
+            raise Error(f"{failure}; object verification exited {verified.returncode}: {detail}")
+        detail = command_detail(result.stdout + result.stderr)
+        raise Error(f"{failure}: {detail}" if detail else failure)
 
     def contains_commit(self, commit, head):
         result = self.git('merge-base', '--is-ancestor', commit, head, check=False)

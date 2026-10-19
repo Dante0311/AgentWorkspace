@@ -2,18 +2,18 @@
 
 controller 是 Binding 中对运行器的占用记录。运行器退出时删除自己的记录，不代表释放 Agent 的 Binding，也不会关闭原生聊天。清理发布失败后，普通恢复保留 `original_controller_remains`，不自动替换旧占用者。
 
-`runtime.cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_controller, expected_session, expected_revision, cleanup_commit, directory=None, worker_id=None)` 只接续这一项清理，由 `maintenance.repair` 按既有用户管理/管家授权调用。它不是新的无权限 CLI，也不启动后台或运行器。
+`runtime.cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_controller, expected_session, expected_revision, cleanup_commit=None, directory=None, worker_id=None)` 只接续这一项清理，由 `maintenance.repair` 按既有用户管理/管家授权调用。它不是新的无权限 CLI，也不启动后台或运行器。
 
 Worker 版本从原 Binding 确定实际 Worker；显式 `worker_id` 不一致会拒绝。清理只读取该 Worker 的 entry、状态、暂停标记与锁，同时比较该 Worker 和 Agent 的版本。共用资料根中另一 Worker 的运行器不会被当成本 Worker 的运行器，维修回执也固定原 Worker，不随默认收件 Worker 改变。
 
 - `expected_binding/controller/session` 使用原入口的真实登记。
 - `expected_revision` 使用公开 `workspace.doctor.revision`，或成功 `runtime.desktop-observe` 的 `snapshot_revision`；二者都是共享快照版本。`agent.show.revision` 是 Agent 文件 blob，不能用于此参数。函数在所给快照中解析 Binding 文件版本，不要求使用者读取内部 blob。无关共享文件的更新不使这个前提失效。
-- `cleanup_commit` 是原 controller 清理提交的 SHA，用于核对原结果；不是要重新推送的提交。
+- `cleanup_commit` 是原 controller 清理提交的 SHA，用于核对原结果；不是要重新推送的提交。只有后台意外中断、未生成清理提交，且没有已保存的终止失败时，才可省略，条件见下文。
 - `directory` 省略时采用 Binding 登记的原资料根；提供时必须匹配。
 
-函数取得原资料根的运行器 OS 锁，并核对后台线程已经退出、本机 entry/status、安装来源、原生 Desktop session 与 cwd。暂停或交出标记保留，状态不明确时不写入。当前接续仅支持可只读确认的本机 Desktop 入口。
+函数取得原资料根的运行器 OS 锁，并核对后台线程已经退出、本机 entry/status、安装来源、原生 Desktop session 与 cwd。暂停或交出标记保留。省略清理提交时还要求后台确认为已停止；本机状态必须匹配原 Binding，且不能有 `cleanup_errors` 或已记录的 `failed` / `native_stop_unconfirmed`。这些终止失败可能只在 `reason` 中保存唯一的清理失败，列表为空不代表没有原发布需要核对。当前接续仅支持可只读确认的本机 Desktop 入口。
 
-随后读取当前共享快照与原清理提交。controller 已不在时返回 `controller_already_cleared`。需要写入时，原提交必须准确表示该 Binding 的 controller 删除，并且与当前 main 已分叉，确认旧快进推送不能再生效。若当前 main 仍是原提交的祖先，原推送仍可能完成，抛出 `Uncertain`，不新推送。合法接续从当前版本生成只删除匹配 controller 的新提交，以 Binding 和 Agent 文件版本为条件；不重推旧整笔提交。
+随后读取当前共享快照；已提供清理提交时，必须核对它准确表示该 Binding 的 controller 删除。controller 已不在时返回 `controller_already_cleared`。需要写入且已有原提交时，它必须与当前 main 已分叉，确认旧快进推送不能再生效。若当前 main 仍是原提交的祖先，原推送仍可能完成，抛出 `Uncertain`，不新推送。合法接续从当前版本生成只删除匹配 controller 的新提交，以 Binding 和 Agent 文件版本为条件；不重推旧整笔提交。无原提交的合法中断路径返回 `original_outcome=no_cleanup_commit`，不推断一个不存在的原发布结果。
 
 成功清理返回 `controller_cleared`；安全阻止返回 `cleanup_blocked` 或 `cleanup_paused` 及 `reason_code`。正常结果都包含原 `binding/session/controller/cleanup_commit` 与 `runner_started=false`、`binding_released=false`；成功结果另外包含共享 `revision`，`original_published` 只描述原清理提交是否在观测到的 main 历史中。绑定、controller 或文件版本改变抛 `Conflict`。未知发布交给原维修回执核对，不换 request ID 重发。
 

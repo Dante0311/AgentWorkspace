@@ -290,8 +290,8 @@ def repair(app, workspace, agent_id, action, request_id, operation_id=None, brid
     if action == "runtime-recover" and not expected_binding:
         raise Error("Runtime recovery requires the original expected_binding.")
     if action == "controller-cleanup" and not all((expected_binding, expected_controller, expected_session,
-                                                  expected_revision, cleanup_commit)):
-        raise Error("Controller cleanup requires the original Binding, controller, session, snapshot revision and cleanup commit.")
+                                                  expected_revision)):
+        raise Error("Controller cleanup requires the original Binding, controller, session and snapshot revision.")
     path = folder(app, workspace) / "repairs" / (slug(request_id) + ".json")
     payload = {"agent_id": agent_id, "action": action, "operation_id": operation_id, "bridge": bridge,
                "expected_binding": expected_binding, "expected_generation": expected_generation}

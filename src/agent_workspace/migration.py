@@ -269,7 +269,7 @@ def shared_mapping(snapshot):
     return mapping, sorted(unclassified)
 
 
-def owned_instance_files(files, shared, agent_id, *, local_files=None):
+def owned_instance_files(files, shared, agent_id, *, local_files=None, messages=None):
     """Recognize generated copies by shared facts, not by a directory's name."""
     bindings = {}
     binding_prefix = layout.shared_path(shared, 'bindings/')
@@ -281,6 +281,7 @@ def owned_instance_files(files, shared, agent_id, *, local_files=None):
                 bindings[entry['id']] = entry
     owned = set()
     receipts = files if local_files is None else local_files
+    messages = shared if messages is None else messages
     for path, data in files.items():
         parts = path.split('/')
         if len(parts) == 3 and parts[0] == 'records' and parts[1] in bindings and parts[2] == 'runtime.jsonl':
@@ -308,8 +309,9 @@ def owned_instance_files(files, shared, agent_id, *, local_files=None):
             copy = _object(data)
             if copy is None or copy.get('message_id') != parts[1][:-5] or not isinstance(copy.get('message'), dict):
                 continue
-            message = shared.json(layout.shared_path(shared, f"messages/{copy['message_id']}.json"))
+            message = messages.json(layout.shared_path(messages, f"messages/{copy['message_id']}.json"))
             if (copy['message'] == message and isinstance(message, dict)
+                    and message.get('id') == copy['message_id']
                     and message.get('to') == {'workspace': shared.json(layout.shared_path(shared, 'workspace.json'))['locator'], 'agent': agent_id}):
                 owned.add(path)
         elif parts[0] == 'channels' and path.endswith('.json'):
@@ -344,8 +346,9 @@ def instance_files(files, *, owned=(), operation=None):
         mapping = {}
         for source in sorted(owned):
             parts = source.split('/')
-            if (source not in result or len(parts) != 4 or parts[0] != 'records'
-                    or parts[2] != 'desktop-turns' or not parts[3].endswith('.json')):
+            desktop = len(parts) == 4 and parts[0] == 'records' and parts[2] == 'desktop-turns' and parts[3].endswith('.json')
+            message = len(parts) == 2 and parts[0] == 'messages' and parts[1].endswith('.json')
+            if source not in result or not (desktop or message):
                 continue
             target = '.agentworkspace/' + source
             if target in result and result[target] != result[source]:
@@ -452,6 +455,19 @@ def _channel_files(root):
     return result
 
 
+def _message_copy_files(root):
+    """Read root-level candidates; a formal Message must still prove ownership."""
+    directory = root / 'messages'
+    if (not directory.is_dir() or directory.is_symlink()
+            or getattr(directory.lstat(), 'st_file_attributes', 0) & 0x400):
+        return {}
+    result = {}
+    for path in directory.glob('*.json'):
+        if path.is_file() and not path.is_symlink() and not getattr(path.lstat(), 'st_file_attributes', 0) & 0x400:
+            result[path.relative_to(root).as_posix()] = path.read_bytes()
+    return result
+
+
 def _desktop_turn_files(root):
     """Inspect candidate legacy files; ownership still comes from shared facts."""
     directory = root / 'records'
@@ -477,7 +493,8 @@ def plan(app, workspace, agent_ids=None):
     if agent_ids is not None and (not isinstance(agent_ids, list) or not all(isinstance(value, str) for value in agent_ids)):
         raise Error('Select Agent IDs as a list, or omit it for the Workspace.')
     store = app.store(workspace)
-    shared = store.snapshot()
+    state = store.message_snapshot()
+    shared, messages = state.main, state.messages
     agents = app.agents(workspace, snapshot=shared)
     selected = sorted({item['id'] for item in agents} if agent_ids is None else {slug(value) for value in agent_ids})
     known = {item['id']: item for item in agents}
@@ -513,7 +530,8 @@ def plan(app, workspace, agent_ids=None):
         identity = snapshot.json(layout.instance_relpath(snapshot, 'identity.json'))
         if not isinstance(identity, dict) or identity.get('agent') != name or identity.get('workspace') != app.local()['workspaces'][workspace]['locator']:
             raise Conflict('The instance branch identity does not match the selected Workspace and Agent.')
-        owned = owned_instance_files(files, shared, name)
+        owned = owned_instance_files(files, shared, name, messages=messages)
+        local_paths, local_unknown = {}, {}
         for directory in registry.get(name, []):
             root = Path(directory).expanduser().resolve()
             current_version = layout.version(root, 'instance')
@@ -523,19 +541,23 @@ def plan(app, workspace, agent_ids=None):
             if not current_version:
                 local = _local_files(root, owned)
                 channels = _channel_files(root)
-                confirmed = owned_instance_files(channels, shared, name, local_files=local)
+                confirmed = owned_instance_files(channels, shared, name, local_files=local, messages=messages)
                 owned.update(path for path in confirmed if files.get(path) == channels[path])
-            desktop = _desktop_turn_files(root)
-            confirmed_desktop = owned_instance_files(desktop, shared, name)
-            owned.update(path for path in confirmed_desktop if path not in files or files[path] == desktop[path])
+            candidates = {**_desktop_turn_files(root), **_message_copy_files(root)}
+            confirmed = owned_instance_files(candidates, shared, name, messages=messages)
+            owned.update(path for path in confirmed if path not in files or files[path] == candidates[path])
+            local_paths[str(root)] = {path: '.agentworkspace/' + path for path in sorted(confirmed)}
+            local_unknown[str(root)] = sorted(set(candidates) - confirmed)
         _, paths, unknown = instance_files(files, owned=owned)
         instances.append({'agent_id': name, 'branch': known[name]['branch'], 'revision': snapshot.revision,
                           'layout_version': layout.version(snapshot, 'instance'), 'paths': paths,
                           'owned_records': sorted(owned), 'unclassified_files': unknown,
+                          'local_paths': local_paths, 'unclassified_local_files': local_unknown,
                           'tracked_local_files': sorted(path for path in files if local_asset_path(path)),
                           'directories': list(registry.get(name, []))})
     return {'workspace': workspace, 'locator': locator,
-            'shared_revision': shared.revision, 'shared_layout_version': layout.version(shared, 'workspace'),
+            'shared_revision': shared.revision, 'message_revision': messages.revision,
+            'shared_layout_version': layout.version(shared, 'workspace'),
             'shared_paths': mapping, 'unclassified_shared_files': unclassified,
             'current_writers': sorted(item['current'] for item in agents if item.get('current')),
             'instances': instances, 'pending_migrations': pending, 'writes_performed': False}
@@ -559,6 +581,7 @@ def _prepare(app, workspace, request_id, agent_ids, migrate_shared, compatible_w
     original = plan(app, workspace, agent_ids)
     store = app.store(workspace)
     shared = store.snapshot(revision=original['shared_revision'])
+    messages = store.snapshot(revision=original['message_revision'])
     tasks, roots = [], []
     if migrate_shared and original['shared_layout_version'] == 0:
         if (not isinstance(compatible_writers, dict) or compatible_writers.get('shared_revision') != shared.revision
@@ -609,20 +632,20 @@ def _prepare(app, workspace, request_id, agent_ids, migrate_shared, compatible_w
                 software_operation = read_json(layout.local_path(root, 'software-update.json'), {})
                 if software_operation.get('state') == 'pending':
                     raise Conflict('Complete the original software material update before migrating this copy.')
-                desktop = _desktop_turn_files(root)
+                candidates = {**_desktop_turn_files(root), **_message_copy_files(root)}
                 if current_version:
                     local_files = {layout.MARKER: _safe_file(root, layout.MARKER).read_bytes()}
-                    for source in desktop:
+                    for source in candidates:
                         target = _safe_file(root, '.agentworkspace/' + source)
                         if target.is_file():
                             local_files['.agentworkspace/' + source] = target.read_bytes()
                 else:
                     local_files = _local_files(root, instance['owned_records'])
                     local_files.update(_channel_files(root))
-                local_files.update(desktop)
-                confirmed = owned_instance_files(local_files, shared, instance['agent_id'], local_files=local_files)
-                # A saved Desktop record does not prove a locally replaced JSON still belongs to AW.
-                local_owned = (set(instance['owned_records']) - set(desktop)) | confirmed
+                local_files.update(candidates)
+                confirmed = owned_instance_files(local_files, shared, instance['agent_id'], local_files=local_files, messages=messages)
+                # A saved record does not prove a locally replaced JSON still belongs to AW.
+                local_owned = (set(instance['owned_records']) - set(candidates)) | confirmed
                 local_projected, local_mapping, local_unknown = instance_files(local_files, owned=local_owned, operation=request_id)
                 if current_version and not local_mapping and not mapping:
                     continue

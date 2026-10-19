@@ -7,7 +7,7 @@ import pytest
 
 from agent_workspace import backend, layout, maintenance, runtime
 from agent_workspace.commands import execute
-from agent_workspace.util import Conflict, Error, LockBusy, Uncertain, encode, write_json
+from agent_workspace.util import Conflict, Error, LockBusy, Uncertain, encode, read_json, write_json
 
 
 @pytest.fixture
@@ -73,6 +73,90 @@ def test_original_publication_is_reconciled_before_any_new_write(exited_runner, 
     publish.assert_not_called()
 
 
+def test_interrupted_observer_without_cleanup_commit_is_repaired_once(exited_runner, monkeypatch):
+    app, root, store, path, args, native = exited_runner
+    args.pop("cleanup_commit")
+    monkeypatch.setattr(backend, "status", lambda app: {"state": "stopped"})
+    write_json(layout.local_path(root, "status.json"), {
+        "binding": args["expected_binding"], "state": "shared_read_recovered", "pid": 123})
+    before = store.snapshot()
+    inputs = {p: p.read_bytes() for p in layout.local_path(root, "inputs").glob("*.json")}
+    status = layout.local_path(root, "status.json").read_bytes()
+    cleanup = Mock(wraps=runtime.cleanup_controller)
+    monkeypatch.setattr(runtime, "cleanup_controller", cleanup)
+    request = {"workspace": "sea", "agent_id": "alice", "action": "controller-cleanup",
+               "request_id": "interrupted-observer", **args}
+    first = execute(app, "maintenance.repair", request)
+    after = store.snapshot()
+    assert first["result"]["state"] == "controller_cleared"
+    assert first["result"]["original_outcome"] == "no_cleanup_commit"
+    assert after.json(path) == {k: v for k, v in before.json(path).items() if k != "controller"}
+    assert all(after.entries[p] == blob for p, blob in before.entries.items() if p != path)
+    assert layout.local_path(root, "status.json").read_bytes() == status
+    assert all(p.read_bytes() == data for p, data in inputs.items())
+    assert not app.backend.runners
+    assert execute(app, "maintenance.repair", request)["result"] == first["result"]
+    cleanup.assert_called_once()
+
+
+def test_missing_cleanup_commit_does_not_bypass_saved_cleanup_failure(exited_runner, monkeypatch):
+    app, root, store, path, args, native = exited_runner
+    args.pop("cleanup_commit")
+    monkeypatch.setattr(backend, "status", lambda app: {"state": "stopped"})
+    write_json(layout.local_path(root, "status.json"), {
+        "binding": args["expected_binding"], "state": "failed", "cleanup_errors": ["original push unknown"]})
+    before = store.snapshot()
+    assert runtime.cleanup_controller(app, "sea", "alice", **args)["reason_code"] == "original_cleanup_required"
+    assert store.snapshot().entries == before.entries
+
+
+def test_interrupted_observer_cleanup_requires_confirmed_backend_stop(exited_runner):
+    app, root, store, path, args, native = exited_runner
+    args.pop("cleanup_commit")
+    before = store.snapshot()
+    assert runtime.cleanup_controller(app, "sea", "alice", **args)["reason_code"] == "backend_stop_required"
+    assert store.snapshot().entries == before.entries
+
+
+def test_missing_commit_preserves_a_primary_cleanup_failure(exited_runner, monkeypatch):
+    app, root, store, path, args, native = exited_runner
+    runner = runtime.Runner(app, "sea", "alice", expected_binding=args["expected_binding"])
+    runner.controller = args["expected_controller"]
+    monkeypatch.setattr(runner, "_run_owned", Mock(return_value=None))
+    change = store.change
+
+    def unknown_cleanup(branch, changes, expected, message, **kwargs):
+        if message == "Release binding runner":
+            raise Uncertain("original cleanup publication outcome unknown")
+        return change(branch, changes, expected, message, **kwargs)
+
+    monkeypatch.setattr(store, "change", unknown_cleanup)
+    with pytest.raises(Uncertain):
+        runner.run()
+    saved = read_json(layout.local_path(root, "status.json"))
+    assert saved["state"] == "failed" and saved["cleanup_errors"] == []
+    monkeypatch.setattr(backend, "status", Mock(return_value={"state": "stopped"}))
+    before = store.snapshot()
+    args["cleanup_commit"] = None
+    assert runtime.cleanup_controller(app, "sea", "alice", **args)["reason_code"] == "original_cleanup_required"
+    assert store.snapshot().entries == before.entries
+    assert store.snapshot().json(path)["controller"] == args["expected_controller"]
+    assert read_json(layout.local_path(root, "status.json")) == saved
+    native.assert_not_called()
+
+
+def test_unconfirmed_native_stop_without_cleanup_errors_is_not_an_interruption(exited_runner, monkeypatch):
+    app, root, store, path, args, native = exited_runner
+    args["cleanup_commit"] = None
+    monkeypatch.setattr(backend, "status", Mock(return_value={"state": "stopped"}))
+    write_json(layout.local_path(root, "status.json"), {
+        "binding": args["expected_binding"], "state": "native_stop_unconfirmed", "cleanup_errors": []})
+    before = store.snapshot()
+    assert runtime.cleanup_controller(app, "sea", "alice", **args)["reason_code"] == "original_cleanup_required"
+    assert store.snapshot().entries == before.entries
+    native.assert_not_called()
+
+
 @pytest.mark.parametrize("condition", ["controller", "revision", "binding", "session", "execution", "native_cwd", "pause", "exit_unknown"])
 def test_changed_preconditions_do_not_clear_or_resume(exited_runner, condition):
     app, root, store, path, args, native = exited_runner
@@ -105,15 +189,21 @@ def test_changed_preconditions_do_not_clear_or_resume(exited_runner, condition):
     assert store.snapshot().entries == before.entries and not app.backend.runners
 
 
-def test_live_backend_thread_prevents_cleanup_even_before_it_acquires_runner_lock(exited_runner):
+@pytest.mark.parametrize("has_cleanup_commit", [True, False])
+def test_live_backend_thread_prevents_cleanup_even_before_it_acquires_runner_lock(exited_runner, has_cleanup_commit):
     app, root, store, path, args, native = exited_runner
+    if not has_cleanup_commit:
+        args.pop("cleanup_commit")
     app.backend.runners[root] = {"workspace": "sea", "agent_id": "alice", "binding": args["expected_binding"],
                                  "thread": threading.current_thread()}
     assert runtime.cleanup_controller(app, "sea", "alice", **args)["reason_code"] == "runner_present"
 
 
-def test_runner_os_lock_prevents_cleanup_from_another_process(exited_runner):
+@pytest.mark.parametrize("has_cleanup_commit", [True, False])
+def test_runner_os_lock_prevents_cleanup_from_another_process(exited_runner, has_cleanup_commit):
     app, root, store, path, args, native = exited_runner
+    if not has_cleanup_commit:
+        args.pop("cleanup_commit")
     with layout.lock(root, "runner.lock", wait=0):
         with pytest.raises(LockBusy):
             runtime.cleanup_controller(app, "sea", "alice", **args)

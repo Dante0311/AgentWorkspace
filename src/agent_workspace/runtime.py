@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import sys
 import threading
@@ -16,7 +17,7 @@ from . import __version__
 from . import backend, model_profiles, software, session_titles, workers
 from .messages import Messages
 from .shared import requirements
-from .rpc import Rpc
+from .rpc import Rpc, RpcTimeout
 from .native_sdk import NativeSDK, SDK_TYPES, sdk_options
 from . import layout
 from .util import (Conflict, Error, LockBusy, RetryableRead, Unavailable, Uncertain, digest, encode,
@@ -415,7 +416,10 @@ def desktop_observe(app, workspace, agent_id, directory=None, worker_id=None):
     result.update(native_state=desktop_native_state(native), native_host=thread.get("hostId"),
                   native_cwd=thread.get("cwd"), observed_at=now())
     native_root = Path(execution["cwd"]).resolve() if "cwd" in execution else root
-    if thread.get("hostId") != "local" or not thread.get("cwd") or Path(thread["cwd"]).resolve() != native_root:
+    # A Desktop chat may be moved from its shared project to its own registered
+    # material directory. Both locations identify this same local entry.
+    if (thread.get("hostId") != "local" or not thread.get("cwd")
+            or Path(thread["cwd"]).resolve() not in (native_root, root)):
         return {**result, "unknown_reason": "native_local_copy_unconfirmed"}
     if not can_send or result["native_state"] == "unknown":
         return {**result, "unknown_reason": "native_control_unconfirmed"}
@@ -429,11 +433,11 @@ def desktop_observe(app, workspace, agent_id, directory=None, worker_id=None):
 
 
 def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_controller,
-                       expected_session, expected_revision, cleanup_commit, directory=None, worker_id=None):
-    """Finish one exited runner's cleanup, never resume its work or old push."""
+                       expected_session, expected_revision, cleanup_commit=None, directory=None, worker_id=None):
+    """Clear one absent observer, never release its chat or replay its old push."""
     from .maintenance import installation_id
-    if not all((expected_binding, expected_controller, expected_session, expected_revision, cleanup_commit)):
-        raise Error("Controller cleanup requires the original Binding, controller, session, snapshot revision and cleanup commit.")
+    if not all((expected_binding, expected_controller, expected_session, expected_revision)):
+        raise Error("Controller cleanup requires the original Binding, controller, session and snapshot revision.")
     store = app.store(workspace)
     expected = store.snapshot(revision=expected_revision)
     expected_path = layout.shared_path(expected, f"bindings/{expected_binding}.json")
@@ -468,6 +472,8 @@ def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_c
                  and (row.get("worker_id") == worker_id or row.get("binding") == expected_binding)]
         if any(row["runner_alive"] for row in tasks):
             return {**result, "reason_code": "runner_present"}
+        if not cleanup_commit and status["state"] != "stopped":
+            return {**result, "reason_code": "backend_stop_required"}
         with layout.lock(root, "files.lock", worker_id=worker_id):
             local = read_json(layout.local_path(root, "entry.json", worker_id), {})
             control = read_json(layout.local_path(root, "control.json", worker_id), {})
@@ -476,9 +482,13 @@ def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_c
                 raise Conflict("This copy is not attached to the original Binding.")
             if control.get("stop") == expected_binding or control.get("handoff") == expected_binding:
                 return {**result, "state": "cleanup_paused", "reason_code": "user_paused"}
-            if (observation.get("binding") != expected_binding
-                    or observation.get("state") not in ("failed", "monitor_stopped")):
+            if observation.get("binding") != expected_binding:
                 return {**result, "reason_code": "runner_exit_unconfirmed"}
+            if cleanup_commit and observation.get("state") not in ("failed", "monitor_stopped"):
+                return {**result, "reason_code": "runner_exit_unconfirmed"}
+            if not cleanup_commit and (observation.get("cleanup_errors")
+                    or observation.get("state") in ("failed", "native_stop_unconfirmed")):
+                return {**result, "reason_code": "original_cleanup_required"}
             if entry["kind"] != "desktop":
                 return {**result, "reason_code": "native_observation_unavailable"}
             native = desktop_observe(app, workspace, agent_id, str(root), worker_id=worker_id)
@@ -491,12 +501,14 @@ def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_c
             if any(latest.entries.get(p) != snap.entries[p] for p in (path, agent_path, owner_path)):
                 raise Conflict("The Binding or owner changed during cleanup observation; read it again.")
             snap = latest
-            original = store.snapshot(revision=cleanup_commit)
-            cleaned = original.json(layout.shared_path(original, f"bindings/{expected_binding}.json"))
             without_controller = {key: value for key, value in entry.items() if key != "controller"}
-            if cleaned != without_controller:
-                raise Conflict("The original cleanup commit does not describe this Binding's controller removal.")
-            published = store.contains_commit(cleanup_commit, snap.revision)
+            published = None
+            if cleanup_commit:
+                original = store.snapshot(revision=cleanup_commit)
+                cleaned = original.json(layout.shared_path(original, f"bindings/{expected_binding}.json"))
+                if cleaned != without_controller:
+                    raise Conflict("The original cleanup commit does not describe this Binding's controller removal.")
+                published = store.contains_commit(cleanup_commit, snap.revision)
             if not entry.get("controller"):
                 return {**result, "state": "controller_already_cleared", "original_published": published,
                         "revision": snap.revision}
@@ -504,15 +516,16 @@ def cleanup_controller(app, workspace, agent_id, *, expected_binding, expected_c
                 raise Conflict("The original controller or Binding file version changed; read it again.")
             if published:
                 raise Conflict("The original cleanup was published but the controller is present again; inspect its ownership.")
-            if store.contains_commit(snap.revision, cleanup_commit):
+            if cleanup_commit and store.contains_commit(snap.revision, cleanup_commit):
                 raise Uncertain("The original cleanup push can still fast-forward; its outcome is not confirmed.")
-            # Diverged history cannot accept the old fast-forward push. Publish
-            # only the removal, against freshly checked owner and Binding blobs.
+            # A killed process may leave no cleanup commit or terminal status.
+            # The held OS lock, backend observation and native session prove
+            # that only its absent observer is being replaced, not the chat.
             revision = store.change("main", {path: encode(without_controller)},
                 layout.expected(snap, {path: expected_blob, agent_path: snap.entries[agent_path],
                                       owner_path: snap.entries[owner_path]}), "Continue original runner cleanup")
-            return {**result, "state": "controller_cleared", "original_published": False,
-                    "original_outcome": "diverged", "revision": revision}
+            return {**result, "state": "controller_cleared", "original_published": False if cleanup_commit else None,
+                    "original_outcome": "diverged" if cleanup_commit else "no_cleanup_commit", "revision": revision}
 
 
 def launch_show(app, workspace, agent_id, directory=None, worker_id=None):
@@ -1095,6 +1108,35 @@ def queue_input(app, workspace, agent_id, text, *, delivery="normal", purpose="u
     return record
 
 
+def _input_notice_matches(turn, workspace, agent_id, binding, worker_id, session, request_id, source_thread):
+    for item in turn.get("items", []):
+        if (item.get("type") != "functionCallOutput" or item.get("namespace") != "codex_app"
+                or item.get("name") != "send_message_to_thread"):
+            continue
+        output = item.get("output", {})
+        if not isinstance(output, dict) or output.get("truncated") or not isinstance(output.get("text"), str):
+            continue
+        notice = re.fullmatch(r"<codex_delegation>\s*<source_thread_id>([^<]+)</source_thread_id>\s*"
+                              r"<input>(.*)</input>\s*</codex_delegation>", output["text"].strip(), re.DOTALL)
+        if not notice or notice[1] != source_thread:
+            continue
+        blocks = notice[2].strip().split("\n\n")
+        try:
+            context, command = json.loads(blocks[0]), json.loads(blocks[-1])
+            if not isinstance(context, dict) or not isinstance(command, list) or len(command) < 3:
+                continue
+            arguments = json.loads(command[-1])
+        except (ValueError, TypeError):
+            continue
+        if (all(context.get(key) == value for key, value in {
+                "workspace": workspace, "agent": agent_id, "binding": binding,
+                "worker_id": worker_id, "session": session}.items())
+                and command[-3:-1] == ["runtime.receive-input", "--arguments"]
+                and arguments == {"request_id": request_id}):
+            return True
+    return False
+
+
 def receive_input(app, workspace, agent_id, binding, request_id, directory=None, worker_id=None):
     """Associate a delivered Desktop input with its actual executing native turn."""
     if desktop_actor(app, workspace, agent_id) != (workspace, agent_id, binding):
@@ -1106,22 +1148,29 @@ def receive_input(app, workspace, agent_id, binding, request_id, directory=None,
     with layout.lock(root, "files.lock", worker_id=worker_id):
         path = layout.local_path(root, "inputs", worker_id) / (identifier + ".json")
         item = read_json(path)
-        if not item or item["binding"] != binding or item["state"] not in ("dispatching", "submitted"):
+        if not item or item["binding"] != binding or item["state"] not in ("dispatching", "submitted", "outcome_unknown"):
             raise Conflict("This input is not awaiting this Desktop session.")
         if item.get("result", {}).get("turn", {}).get("id"):
             return {"request_id": request_id, "already_received": True,
                     "instruction": "Do not repeat execution; the original receipt is retained."}
+        if item["state"] == "outcome_unknown" and not item.get("notification_source_thread"):
+            raise Unavailable("The original notification source was not recorded; its outcome remains unknown.")
         adopted = read_json(layout.local_path(root, "entry.json", worker_id))
         config = adopted["config"] if worker_id is not None else model_profiles.runtime_config(root)
         adapter = Desktop(root, config, os.environ["CODEX_THREAD_ID"], worker_id=worker_id)
         try:
-            result = adapter.read()
+            options = {"includeOutputs": True, "maxOutputCharsPerItem": 6000} if item["state"] == "outcome_unknown" else {}
+            result = adapter.read(**options)
         finally:
             adapter.close()
         turns = result.get("turns", [])
         if result["thread"]["status"]["type"] != "active" or not turns or turns[0].get("status") != "inProgress":
             raise Unavailable("Desktop cannot identify the active native turn; no input receipt was recorded.")
-        app.require_binding(workspace, agent_id, binding)
+        if item["state"] == "outcome_unknown" and not _input_notice_matches(
+                turns[0], workspace, agent_id, binding, worker_id, entry["session"], identifier,
+                item["notification_source_thread"]):
+            raise Unavailable("The active native turn does not prove this original input notice; its outcome remains unknown.")
+        app.require_binding(workspace, agent_id, binding, worker_id=worker_id)
         item.update(state="submitted", result={**item.get("result", {}), "turn": {"id": turns[0]["id"]}})
         write_json(path, item)
         return {"request_id": request_id, "text": item["text"]}
@@ -1507,8 +1556,15 @@ class Runner:
                         continue
                     raise
                 except (Unavailable, OSError) as exc:
+                    # A delayed read reply does not mean the stdio connection
+                    # closed. Keep this adapter; only repeat the failed read.
+                    if isinstance(exc, RpcTimeout) and exc.tool == "read_thread":
+                        read_failures += 1
+                        self._wait_shared_read(stage, exc, read_failures)
+                        continue
                     failures += 1
-                    self.status(state="connection_failed", reason=str(exc), attempts=failures)
+                    self.status(state="connection_failed", stage=stage, kind=entry["kind"],
+                                session=self.adapter.session, reason=str(exc), attempts=failures)
                     if entry["kind"] != "desktop" or failures >= 5:
                         break
                     if self.stop_event.wait(min(2 **failures, 30)):
@@ -1714,6 +1770,7 @@ class Runner:
             if isinstance(self.adapter, Desktop):
                 profile, validation = self.adapter.model_choice("send_message_to_thread", self.binding)
                 item["model_profile"] = model_profiles.receipt(profile, validation)
+                item["notification_source_thread"] = self.adapter.config["caller_thread"]
             elif isinstance(self.adapter, Codex):
                 item["model_profile"] = model_profiles.receipt(self.adapter.profile, self.adapter.profile_validation)
             item.update(state="dispatching", attempted_at=now())
